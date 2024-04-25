@@ -1,0 +1,37 @@
+export const YearStyle = {
+  margin: "auto",
+  marginTop: "10%",
+  width: "90%",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  boxStyle: {
+        backgroundImage: "url(/images/classroom.png)",
+    backgroundPosition: "center",
+    backgroundSize: "contain",
+    backgroundRepeat: "no-repeat",
+    opacity: "0.8",
+    width: "100%",
+    borderRadius: "20px",
+    height: "170px",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "RGBA(128, 128, 128, 0.7)",
+  },
+  linkStyle: {
+    width: "250px",
+    textDecoration: "none",
+    color: "black",
+  },
+  headStyle: {
+    textAlign: "center",
+  },
+//   boxStyle: {
+//     backgroundImage: "url(/images/classroom.png)",
+//     backgroundPosition: "center",
+//     backgroundSize: "contain",
+    // backgroundRepeat: "no-repeat",
+//     opacity: "0.8",
+//   },
+};
