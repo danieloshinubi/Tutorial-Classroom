@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { fetchCoursesForLevel } from "../../lib/api";
+import { useSchool } from "../../context/SchoolContext";
 import { Page, Grid, Empty, Notice, Button, bandClass } from "../../Components/UI";
 
 // One data-driven page for every year. The four hand-written pages this
@@ -9,16 +10,18 @@ import { Page, Grid, Empty, Notice, Button, bandClass } from "../../Components/U
 // that only covered the first few — so most courses never rendered.
 const LevelCourses = () => {
   const { year } = useParams();
+  const { schoolId } = useSchool();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!schoolId) return undefined;
     let active = true;
     setLoading(true);
     setError("");
 
-    fetchCoursesForLevel(Number(year))
+    fetchCoursesForLevel({ schoolId, year: Number(year) })
       .then((data) => {
         if (active) setCourses(data);
       })
@@ -32,7 +35,7 @@ const LevelCourses = () => {
     return () => {
       active = false;
     };
-  }, [year]);
+  }, [year, schoolId]);
 
   return (
     <div className="shell">

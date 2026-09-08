@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import {
   createCourse,
   updateCourse,
-  fetchLevels,
+  fetchLevelsForSchool,
   fetchAllCourses,
 } from "../../lib/api";
 import {
@@ -22,6 +23,7 @@ const CourseForm = () => {
   const isEditing = Boolean(courseId);
 
   const { user } = useAuth();
+  const { schoolId } = useSchool();
   const navigate = useNavigate();
 
   const [levels, setLevels] = useState([]);
@@ -36,10 +38,11 @@ const CourseForm = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchLevels()
+    if (!schoolId) return;
+    fetchLevelsForSchool(schoolId)
       .then(setLevels)
-      .catch(() => setLevels([{ year: 100, label: "100 lvl" }]));
-  }, []);
+      .catch(() => setLevels([]));
+  }, [schoolId]);
 
   useEffect(() => {
     if (!isEditing) return;
@@ -81,6 +84,7 @@ const CourseForm = () => {
         title: form.title.trim(),
         description: form.description.trim() || null,
         level_year: Number(form.level_year),
+        school_id: schoolId,
       };
 
       if (isEditing) {

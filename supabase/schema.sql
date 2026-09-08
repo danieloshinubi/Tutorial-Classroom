@@ -434,45 +434,13 @@ create policy "authors and course managers delete messages"
   using (auth.uid() = user_id or classroom.can_manage_course(course_id));
 
 -- =============================================================================
--- Seed data — levels and the course catalogue
+-- No seed data.
+--
+-- Class levels and courses belong to each school and are created through the
+-- app, not shipped in this file. A fresh tenant starts empty and its
+-- administrator defines the structure that school actually uses.
 -- =============================================================================
-insert into classroom.levels (year, label) values
-  (100, '100 lvl'),
-  (200, '200 lvl'),
-  (300, '300 lvl'),
-  (400, '400 lvl');
 
-insert into classroom.courses (code, level_year) values
-  ('STAT101', 100), ('GEDS131', 100), ('MATH101', 100), ('COSC108', 100),
-  ('GEDS101', 100), ('COSC107', 100), ('PHYS101', 100), ('CHEM101', 100),
-  ('COSC111', 100), ('GEDS107', 100), ('GEDS126', 100), ('COSC112', 100),
-  ('PHYS102', 100), ('MATH102', 100), ('MATH104', 100), ('GEDS112', 100),
-  ('GEDS105', 100), ('GEDS132', 100), ('GEDS134', 100),
-
-  ('GEDS221', 200), ('COSC205', 200), ('STAT201', 200), ('MATH203', 200),
-  ('GEDS215', 200), ('COSC209', 200), ('COSC203', 200), ('GEDS260', 200),
-  ('COSC206', 200), ('MATH206', 200), ('GEDS270', 200), ('COSC222', 200),
-  ('STAT202', 200), ('COSC226', 200), ('COSC212', 200), ('GEDS200', 200),
-  ('GEDS222', 200),
-
-  ('COSC303', 300), ('GEDS317', 300), ('COSC335', 300), ('COSC327', 300),
-  ('GEDS280', 300), ('COSC309', 300), ('COSC325', 300), ('COSC305', 300),
-  ('ITGY307', 300), ('COSC317', 300), ('COSC312', 300), ('COSC302', 300),
-  ('GEDS312', 300), ('COSC360', 300), ('COSC328', 300), ('COSC306', 300),
-
-  ('GEDS400', 400), ('COSC333', 400), ('SENG400', 400), ('COSC401', 400),
-  ('COSC427', 400), ('COSC409', 400), ('ITGY401', 400), ('COSC423', 400),
-  ('COSC425', 400), ('GEDS420', 400), ('COSC430', 400), ('COSC408', 400),
-  ('SENG412', 400), ('COSC424', 400), ('COSC490', 400), ('COSC402', 400);
-
-update classroom.courses set title = 'Introduction to Statistics'        where code = 'STAT101';
-update classroom.courses set title = 'Introduction to Computer Science'  where code = 'COSC108';
-update classroom.courses set title = 'General Mathematics I'             where code = 'MATH101';
-update classroom.courses set title = 'Biblical Principles in Personal and Professional Life' where code = 'GEDS131';
-update classroom.courses set title = 'Data Structures and Algorithms'    where code = 'COSC205';
-update classroom.courses set title = 'Operating Systems'                 where code = 'COSC303';
-update classroom.courses set title = 'Software Engineering'              where code = 'SENG400';
-update classroom.courses set title = 'Final Year Project'                where code = 'COSC490';
 
 notify pgrst, 'reload schema';
 

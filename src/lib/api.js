@@ -8,19 +8,13 @@ const PROFILE_FIELDS = "id, first_name, surname, username, email, role, avatar_u
 /* levels & courses                                                           */
 /* -------------------------------------------------------------------------- */
 
-export const fetchLevels = async () => {
-  const { data, error } = await supabase
-    .from("levels")
-    .select("year, label")
-    .order("year");
-  if (error) throw error;
-  return data;
-};
-
-export const fetchCoursesForLevel = async (year) => {
+// Scoped by school as well as level: two schools may both use level 1, and
+// someone who belongs to both would otherwise see the two mixed together.
+export const fetchCoursesForLevel = async ({ schoolId, year }) => {
   const { data, error } = await supabase
     .from("courses")
     .select("id, code, title, level_year, archived")
+    .eq("school_id", schoolId)
     .eq("level_year", year)
     .eq("archived", false)
     .order("code");
@@ -38,10 +32,12 @@ export const fetchAllCourses = async () => {
   return data;
 };
 
-export const fetchCourseByCode = async (code) => {
+// Course codes are unique per school, not globally.
+export const fetchCourseByCode = async ({ schoolId, code }) => {
   const { data, error } = await supabase
     .from("courses")
-    .select(`id, code, title, description, level_year, archived, owner_id, owner:profiles!courses_owner_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`id, code, title, description, level_year, archived, owner_id, school_id, owner:profiles!courses_owner_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("school_id", schoolId)
     .eq("code", code)
     .maybeSingle();
   if (error) throw error;
@@ -842,4 +838,58 @@ export const inviteSchoolUser = async ({ schoolId, email, firstName, surname, ro
     throw new Error(detail?.error || error.message || "Could not create that user.");
   }
   return data;
+};
+
+/* -------------------------------------------------------------------------- */
+/* class levels — defined by each school, never seeded                        */
+/* -------------------------------------------------------------------------- */
+
+export const fetchLevelsForSchool = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("levels")
+    .select("year, label, school_id")
+    .eq("school_id", schoolId)
+    .order("year");
+  if (error) throw error;
+  return data;
+};
+
+export const createLevel = async ({ schoolId, year, label }) => {
+  const { data, error } = await supabase
+    .from("levels")
+    .insert({ school_id: schoolId, year, label })
+    .select("year, label")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const renameLevel = async ({ schoolId, year, label }) => {
+  const { error } = await supabase
+    .from("levels")
+    .update({ label })
+    .eq("school_id", schoolId)
+    .eq("year", year);
+  if (error) throw error;
+};
+
+export const deleteLevel = async ({ schoolId, year }) => {
+  const { error } = await supabase
+    .from("levels")
+    .delete()
+    .eq("school_id", schoolId)
+    .eq("year", year);
+  if (error) throw error;
+};
+
+// How many courses sit on a level. Deleting a level cascades to its courses,
+// so the UI has to warn before it happens.
+export const countCoursesOnLevel = async ({ schoolId, year }) => {
+  const { count, error } = await supabase
+    .from("courses")
+    .select("id", { count: "exact", head: true })
+    .eq("school_id", schoolId)
+    .eq("level_year", year);
+  if (error) throw error;
+  return count || 0;
 };

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
+import LevelsPanel from "./LevelsPanel";
 import {
   fetchSchoolMembers,
   updateMemberRole,
@@ -453,12 +454,15 @@ const SchoolAdmin = () => {
         <Tabs
           tabs={[
             { id: "people", label: "People" },
+            { id: "levels", label: "Class levels" },
             { id: "settings", label: "School settings" },
           ]}
           active={tab}
           onChange={setTab}
         />
-        {tab === "people" ? <PeoplePanel /> : <SettingsPanel />}
+        {tab === "people" ? <PeoplePanel /> : null}
+        {tab === "levels" ? <LevelsPanel /> : null}
+        {tab === "settings" ? <SettingsPanel /> : null}
       </Page>
     </div>
   );

@@ -1,18 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
-import { fetchLevels } from "../../lib/api";
+import { fetchLevelsForSchool } from "../../lib/api";
+import { useSchool } from "../../context/SchoolContext";
 import { Page, Grid, Empty, Notice, bandClass } from "../../Components/UI";
 
 const Levels = () => {
+  const { schoolId, isAdmin } = useSchool();
   const [levels, setLevels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!schoolId) return undefined;
     let active = true;
 
-    fetchLevels()
+    fetchLevelsForSchool(schoolId)
       .then((data) => {
         if (active) setLevels(data);
       })
@@ -26,7 +29,7 @@ const Levels = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [schoolId]);
 
   return (
     <div className="shell">
@@ -35,7 +38,17 @@ const Levels = () => {
         <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading levels..."}</Empty> : null}
         {!loading && !error && levels.length === 0 ? (
-          <Empty>{"No levels yet — run supabase/schema.sql to seed the catalogue."}</Empty>
+          <Empty>
+            {isAdmin ? (
+              <>
+                {"No class levels yet. "}
+                <Link to="/School">{"Set up your classes"}</Link>
+                {" before adding courses."}
+              </>
+            ) : (
+              "This school has not set up its classes yet."
+            )}
+          </Empty>
         ) : null}
 
         <Grid>

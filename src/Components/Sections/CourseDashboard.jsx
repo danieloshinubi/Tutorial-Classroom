@@ -8,6 +8,7 @@ import AssignmentsTab from "./AssignmentsTab";
 import ExamsTab from "./ExamsTab";
 import PeopleTab from "./PeopleTab";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import {
   fetchCourseByCode,
   fetchMyEnrollment,
@@ -19,6 +20,7 @@ import { Page, Button, Badge, Notice, Empty, Tabs } from "../UI";
 const CourseDashboard = () => {
   const { code } = useParams();
   const { user, profile } = useAuth();
+  const { schoolId, isAdmin: isSchoolAdmin } = useSchool();
 
   const [course, setCourse] = useState(null);
   const [membership, setMembership] = useState(null);
@@ -29,6 +31,7 @@ const CourseDashboard = () => {
 
   // A tutor who owns this course, or any admin, can author its content.
   const canManage =
+    isSchoolAdmin ||
     profile?.role === "admin" ||
     (course && course.owner_id && course.owner_id === user?.id);
 
@@ -36,7 +39,7 @@ const CourseDashboard = () => {
     setLoading(true);
     setError("");
     try {
-      const data = await fetchCourseByCode(code);
+      const data = await fetchCourseByCode({ schoolId, code });
       if (!data) {
         setError(`No course found with the code ${code}.`);
         setCourse(null);
@@ -51,7 +54,7 @@ const CourseDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [code, user]);
+  }, [code, user, schoolId]);
 
   useEffect(() => {
     load();
