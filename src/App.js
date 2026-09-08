@@ -1,9 +1,11 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import { SchoolProvider } from "./context/SchoolContext";
 import ConfigNotice from "./Components/ConfigNotice";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import RoleRoute from "./Components/RoleRoute";
+import SchoolRoute from "./Components/SchoolRoute";
 import Login from "./Pages/Login/Login";
 import Signup from "./Pages/Signup/Signup";
 import SignupTutor from "./Pages/Signup/SignupTutor";
@@ -22,6 +24,7 @@ import Profile from "./Pages/Profile/Profile";
 import Teach from "./Pages/Teach/Teach";
 import CourseForm from "./Pages/Teach/CourseForm";
 import Admin from "./Pages/Admin/Admin";
+import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
 import "typeface-poppins";
 import "./styles/theme.css";
 
@@ -29,7 +32,8 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <ConfigNotice />
+        <SchoolProvider>
+          <ConfigNotice />
         <Routes>
           <Route path="/" element={<Navigate to="/Dashboard" replace />} />
           <Route path="/Login" element={<Login />} />
@@ -63,10 +67,16 @@ function App() {
             <Route element={<RoleRoute allow={["admin"]} />}>
               <Route path="/Admin" element={<Admin />} />
             </Route>
+
+            {/* School administration — gated on this subdomain's membership */}
+            <Route element={<SchoolRoute require="admin" />}>
+              <Route path="/School" element={<SchoolAdmin />} />
+            </Route>
           </Route>
 
           <Route path="*" element={<Navigate to="/Dashboard" replace />} />
         </Routes>
+        </SchoolProvider>
       </AuthProvider>
     </Router>
   );

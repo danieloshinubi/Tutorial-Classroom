@@ -764,3 +764,82 @@ export const countAttempts = async (examId) => {
   if (error) throw error;
   return count || 0;
 };
+
+/* -------------------------------------------------------------------------- */
+/* tenancy — schools and membership                                           */
+/* -------------------------------------------------------------------------- */
+
+export const fetchSchool = async (slug) => {
+  const { data, error } = await supabase
+    .from("schools")
+    .select("id, name, slug, logo_url, address, phone, email, timezone, currency, plan, is_active")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const updateSchool = async (id, changes) => {
+  const { data, error } = await supabase
+    .from("schools")
+    .update(changes)
+    .eq("id", id)
+    .select("id, name, slug, logo_url, address, phone, email, timezone, currency")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// The school's people. profiles is embedded through the membership's own
+// foreign key so the join is unambiguous.
+export const fetchSchoolMembers = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("school_members")
+    .select(`id, role, is_active, created_at, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data.filter((row) => row.profiles);
+};
+
+export const updateMemberRole = async ({ memberId, role }) => {
+  const { error } = await supabase
+    .from("school_members")
+    .update({ role })
+    .eq("id", memberId);
+  if (error) throw error;
+};
+
+export const setMemberActive = async ({ memberId, isActive }) => {
+  const { error } = await supabase
+    .from("school_members")
+    .update({ is_active: isActive })
+    .eq("id", memberId);
+  if (error) throw error;
+};
+
+export const removeMember = async (memberId) => {
+  const { error } = await supabase.from("school_members").delete().eq("id", memberId);
+  if (error) throw error;
+};
+
+// Creating a login for someone else needs the service_role key, which must
+// never reach the browser — so it runs in an Edge Function that checks the
+// caller administers this school. See supabase/functions/create-school-user.
+export const inviteSchoolUser = async ({ schoolId, email, firstName, surname, role }) => {
+  const { data, error } = await supabase.functions.invoke("create-school-user", {
+    body: {
+      school_id: schoolId,
+      email: email.trim().toLowerCase(),
+      first_name: firstName.trim(),
+      surname: surname.trim(),
+      role,
+    },
+  });
+  if (error) {
+    // Edge Function errors arrive wrapped; surface the real message.
+    const detail = await error.context?.json?.().catch(() => null);
+    throw new Error(detail?.error || error.message || "Could not create that user.");
+  }
+  return data;
+};

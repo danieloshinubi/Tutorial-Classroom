@@ -565,3 +565,12 @@ table.data tr:last-child td { border-bottom: none; }
   border-radius: var(--r); background: var(--surface); font-size: 14px;
 }
 .file-meta { color: var(--ink-3); font-size: 12.5px; }
+
+/* A school name can be long; clamp it so it never pushes the nav around. */
+.brand-name {
+  max-width: 210px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 860px) { .brand-name { max-width: 130px; } }
