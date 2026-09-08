@@ -36,7 +36,7 @@ const Tutors = () => {
   }, []);
 
   return (
-    <>
+    <div className="shell">
       <Navbar />
       <Page title="Tutors">
         <Notice tone="error">{error}</Notice>
@@ -75,7 +75,7 @@ const Tutors = () => {
           ))}
         </Grid>
       </Page>
-    </>
+    </div>
   );
 };
 

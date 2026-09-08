@@ -167,7 +167,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
             </div>
 
             <span style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-              {isOverdue(assignment.due_at) ? <Badge tone="admin">{"past due"}</Badge> : null}
+              {isOverdue(assignment.due_at) ? <Badge tone="danger">{"past due"}</Badge> : null}
               <Link to={`/Assignments/${assignment.id}`}>
                 <Button variant="secondary" style={{ padding: "6px 12px", fontSize: "14px" }}>
                   {canManage ? "Review" : "Open"}

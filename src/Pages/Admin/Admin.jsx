@@ -17,22 +17,10 @@ import {
   Badge,
   Notice,
   Empty,
+  Tabs,
   displayName,
   formatDate,
 } from "../../Components/UI";
-
-const tabStyle = (active) => ({
-  cursor: "pointer",
-  border: "none",
-  background: "none",
-  fontFamily: "inherit",
-  fontSize: "16px",
-  padding: "10px 4px",
-  borderBottom: active ? "3px solid #333" : "3px solid transparent",
-  fontWeight: active ? 600 : 400,
-});
-
-const cellStyle = { padding: "10px 8px", borderBottom: "1px solid #eee", textAlign: "left" };
 
 const UsersTab = () => {
   const { user } = useAuth();
@@ -105,15 +93,16 @@ const UsersTab = () => {
       {!loading && filtered.length === 0 ? <Empty>{"No users match."}</Empty> : null}
 
       {filtered.length > 0 ? (
-        <Card style={{ padding: "6px 12px", overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "620px" }}>
+        <Card className="pad-0" style={{ padding: "6px 16px" }}>
+          <div className="table-wrap">
+          <table className="data">
             <thead>
               <tr>
-                <th style={cellStyle}>{"Name"}</th>
-                <th style={cellStyle}>{"Email"}</th>
-                <th style={cellStyle}>{"Role"}</th>
-                <th style={cellStyle}>{"Joined"}</th>
-                <th style={cellStyle}>{""}</th>
+                <th>{"Name"}</th>
+                <th>{"Email"}</th>
+                <th>{"Role"}</th>
+                <th>{"Joined"}</th>
+                <th>{""}</th>
               </tr>
             </thead>
             <tbody>
@@ -121,7 +110,7 @@ const UsersTab = () => {
                 const isSelf = row.id === user?.id;
                 return (
                   <tr key={row.id}>
-                    <td style={cellStyle}>
+                    <td>
                       {displayName(row)}
                       {isSelf ? (
                         <span style={{ marginLeft: "8px" }}>
@@ -129,8 +118,8 @@ const UsersTab = () => {
                         </span>
                       ) : null}
                     </td>
-                    <td style={cellStyle}>{row.email || "—"}</td>
-                    <td style={cellStyle}>
+                    <td>{row.email || "—"}</td>
+                    <td>
                       {/* Changing your own role away from admin would lock you
                           out of this page, so it is disabled for yourself. */}
                       <select
@@ -144,15 +133,15 @@ const UsersTab = () => {
                         <option value="admin">{"admin"}</option>
                       </select>
                     </td>
-                    <td style={cellStyle}>
+                    <td>
                       {formatDate(row.created_at, { withTime: false })}
                     </td>
-                    <td style={cellStyle}>
+                    <td>
                       <Button
                         variant="danger"
                         disabled={isSelf}
                         onClick={() => handleDelete(row)}
-                        style={{ padding: "6px 12px", fontSize: "14px" }}
+                        size="sm"
                       >
                         {"Remove"}
                       </Button>
@@ -162,6 +151,7 @@ const UsersTab = () => {
               })}
             </tbody>
           </table>
+          </div>
         </Card>
       ) : null}
     </>
@@ -219,21 +209,22 @@ const CoursesTab = () => {
       {loading ? <Empty>{"Loading courses..."}</Empty> : null}
 
       {courses.length > 0 ? (
-        <Card style={{ padding: "6px 12px", overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "680px" }}>
+        <Card className="pad-0" style={{ padding: "6px 16px" }}>
+          <div className="table-wrap">
+          <table className="data">
             <thead>
               <tr>
-                <th style={cellStyle}>{"Code"}</th>
-                <th style={cellStyle}>{"Title"}</th>
-                <th style={cellStyle}>{"Level"}</th>
-                <th style={cellStyle}>{"Owner"}</th>
-                <th style={cellStyle}>{""}</th>
+                <th>{"Code"}</th>
+                <th>{"Title"}</th>
+                <th>{"Level"}</th>
+                <th>{"Owner"}</th>
+                <th>{""}</th>
               </tr>
             </thead>
             <tbody>
               {courses.map((course) => (
                 <tr key={course.id}>
-                  <td style={cellStyle}>
+                  <td>
                     <Link
                       to={`/Levels/${course.level_year}/Courses/${course.code}`}
                       style={{ color: "inherit" }}
@@ -242,21 +233,21 @@ const CoursesTab = () => {
                     </Link>
                     {course.archived ? (
                       <span style={{ marginLeft: "8px" }}>
-                        <Badge tone="admin">{"archived"}</Badge>
+                        <Badge tone="warn">{"archived"}</Badge>
                       </span>
                     ) : null}
                   </td>
-                  <td style={cellStyle}>{course.title || "—"}</td>
-                  <td style={cellStyle}>{course.level_year}</td>
-                  <td style={cellStyle}>
+                  <td>{course.title || "—"}</td>
+                  <td>{course.level_year}</td>
+                  <td>
                     {course.owner ? displayName(course.owner) : "Catalogue"}
                   </td>
-                  <td style={cellStyle}>
+                  <td>
                     <span style={{ display: "flex", gap: "8px" }}>
                       <Link to={`/Teach/${course.id}/Edit`}>
                         <Button
                           variant="secondary"
-                          style={{ padding: "6px 12px", fontSize: "14px" }}
+                          size="sm"
                         >
                           {"Edit"}
                         </Button>
@@ -264,14 +255,14 @@ const CoursesTab = () => {
                       <Button
                         variant="secondary"
                         onClick={() => handleArchiveToggle(course)}
-                        style={{ padding: "6px 12px", fontSize: "14px" }}
+                        size="sm"
                       >
                         {course.archived ? "Unarchive" : "Archive"}
                       </Button>
                       <Button
                         variant="danger"
                         onClick={() => handleDelete(course)}
-                        style={{ padding: "6px 12px", fontSize: "14px" }}
+                        size="sm"
                       >
                         {"Delete"}
                       </Button>
@@ -281,6 +272,7 @@ const CoursesTab = () => {
               ))}
             </tbody>
           </table>
+          </div>
         </Card>
       ) : null}
     </>
@@ -291,21 +283,24 @@ const Admin = () => {
   const [tab, setTab] = useState("users");
 
   return (
-    <>
+    <div className="shell">
       <Navbar />
-      <Page title="Admin portal">
-        <div style={{ display: "flex", gap: "20px", borderBottom: "1px solid #eee" }}>
-          <button style={tabStyle(tab === "users")} onClick={() => setTab("users")}>
-            {"Users"}
-          </button>
-          <button style={tabStyle(tab === "courses")} onClick={() => setTab("courses")}>
-            {"Courses"}
-          </button>
-        </div>
+      <Page
+        title="Admin portal"
+        subtitle="Manage every account and every course on the platform."
+      >
+        <Tabs
+          tabs={[
+            { id: "users", label: "Users" },
+            { id: "courses", label: "Courses" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
 
         {tab === "users" ? <UsersTab /> : <CoursesTab />}
       </Page>
-    </>
+    </div>
   );
 };
 

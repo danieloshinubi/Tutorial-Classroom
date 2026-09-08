@@ -329,7 +329,7 @@ const AssignmentDetail = () => {
     (assignment?.courses?.owner_id && assignment.courses.owner_id === user?.id);
 
   return (
-    <>
+    <div className="shell">
       <Navbar />
       <Page title={assignment?.title || "Assignment"}>
         <Notice tone="error">{error}</Notice>
@@ -363,7 +363,7 @@ const AssignmentDetail = () => {
           </>
         ) : null}
       </Page>
-    </>
+    </div>
   );
 };
 

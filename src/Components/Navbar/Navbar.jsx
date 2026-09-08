@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import Notifications from "../Notifications";
 import { displayName, initials } from "../UI";
 
 const linksFor = (role) => {
@@ -64,6 +65,8 @@ const Navbar = () => {
           </nav>
 
           <span className="nav-spacer" />
+
+          <Notifications />
 
           <Link to="/Profile" className="nav-user" title={user?.email || ""}>
             {profile?.avatar_url ? (

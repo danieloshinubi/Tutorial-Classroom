@@ -1,58 +1,169 @@
-import React, { useEffect, useState } from "react";
-import { fetchRoster } from "../../lib/api";
-import { Card, Badge, Notice, Empty, displayName } from "../UI";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  fetchParticipants,
+  decideEnrollment,
+  removeParticipant,
+} from "../../lib/api";
+import {
+  Card,
+  Badge,
+  Button,
+  Notice,
+  Empty,
+  displayName,
+  initials,
+  formatDate,
+} from "../UI";
+
+const Person = ({ profile, children, sub }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+    {profile.avatar_url ? (
+      <img
+        src={profile.avatar_url}
+        alt=""
+        style={{ width: 38, height: 38, borderRadius: "50%", objectFit: "cover" }}
+      />
+    ) : (
+      <span className="brand-mark" style={{ width: 38, height: 38, borderRadius: "50%" }}>
+        {initials(profile)}
+      </span>
+    )}
+    <div style={{ flex: 1, minWidth: 160 }}>
+      <div style={{ fontWeight: 550 }}>{displayName(profile)}</div>
+      <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>{sub}</div>
+    </div>
+    {children}
+  </div>
+);
 
 const PeopleTab = ({ course, canManage }) => {
-  const [roster, setRoster] = useState([]);
+  const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
+  const load = useCallback(() => {
     setLoading(true);
-
-    fetchRoster(course.id)
-      .then((data) => {
-        if (active) setRoster(data);
-      })
-      .catch((err) => {
-        if (active) setError(err.message || "Could not load the roster.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
+    fetchParticipants(course.id)
+      .then(setRows)
+      .catch((err) => setError(err.message || "Could not load participants."))
+      .finally(() => setLoading(false));
   }, [course.id]);
+
+  useEffect(load, [load]);
+
+  const decide = async (userId, approve) => {
+    setBusyId(userId);
+    setError("");
+    try {
+      await decideEnrollment({ courseId: course.id, userId, approve });
+      load();
+    } catch (err) {
+      setError(err.message || "Could not update that request.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (profile) => {
+    if (!window.confirm(`Remove ${displayName(profile)} from ${course.code}?`)) return;
+    setBusyId(profile.id);
+    setError("");
+    try {
+      await removeParticipant({ courseId: course.id, userId: profile.id });
+      load();
+    } catch (err) {
+      setError(err.message || "Could not remove that participant.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const pending = rows.filter((row) => row.status === "pending");
+  const approved = rows.filter((row) => row.status === "approved");
+  const declined = rows.filter((row) => row.status === "declined");
 
   return (
     <>
-      <h3 style={{ marginTop: 0 }}>{"Tutor"}</h3>
-      <Card style={{ marginBottom: "22px" }}>
+      <Notice tone="error">{error}</Notice>
+
+      <h3>{"Tutor"}</h3>
+      <Card style={{ marginBottom: 26 }}>
         {course.owner ? (
-          <span style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <strong>{displayName(course.owner)}</strong>
-            <Badge tone={course.owner.role === "admin" ? "admin" : "tutor"}>
+          <Person profile={course.owner} sub={course.owner.email || ""}>
+            <Badge tone={course.owner.role === "admin" ? "danger" : "brand"}>
               {course.owner.role}
             </Badge>
-          </span>
+          </Person>
         ) : (
-          <span style={{ color: "#666" }}>
+          <span style={{ color: "var(--ink-3)" }}>
             {"This is a catalogue course with no tutor assigned yet."}
           </span>
         )}
       </Card>
 
-      <h3>{"Students"}</h3>
-      <Notice tone="error">{error}</Notice>
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {/* Requests come first — this is the queue a tutor needs to act on. */}
+      {canManage ? (
+        <>
+          <h3>
+            {"Requests to join"}
+            {pending.length > 0 ? (
+              <span style={{ marginLeft: 8 }}>
+                <Badge tone="warn">{pending.length}</Badge>
+              </span>
+            ) : null}
+          </h3>
+          {loading ? <Empty>{"Loading..."}</Empty> : null}
+          {!loading && pending.length === 0 ? (
+            <Empty>{"No one is waiting for approval."}</Empty>
+          ) : null}
 
+          {pending.map((row) => (
+            <Card key={row.profiles.id} style={{ marginBottom: 10 }}>
+              <Person
+                profile={row.profiles}
+                sub={`Asked ${formatDate(row.requested_at)}`}
+              >
+                <span className="btn-row">
+                  <Button
+                    size="sm"
+                    disabled={busyId === row.profiles.id}
+                    onClick={() => decide(row.profiles.id, true)}
+                  >
+                    {"Approve"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busyId === row.profiles.id}
+                    onClick={() => decide(row.profiles.id, false)}
+                  >
+                    {"Decline"}
+                  </Button>
+                </span>
+              </Person>
+              {row.message ? (
+                <p style={{ margin: "10px 0 0", fontSize: 14, color: "var(--ink-2)" }}>
+                  {row.message}
+                </p>
+              ) : null}
+            </Card>
+          ))}
+        </>
+      ) : null}
+
+      <h3 style={{ marginTop: 26 }}>
+        {"Participants"}
+        <span style={{ marginLeft: 8 }}>
+          <Badge>{approved.length}</Badge>
+        </span>
+      </h3>
+
+      {loading ? <Empty>{"Loading..."}</Empty> : null}
       {/* Row level security only returns the full roster to the course's own
-          tutor or an admin, so explain the empty list rather than implying
+          tutor or an admin, so explain an empty list rather than implying
           nobody has joined. */}
-      {!loading && !error && roster.length === 0 ? (
+      {!loading && approved.length === 0 ? (
         <Empty>
           {canManage
             ? "Nobody has joined this course yet."
@@ -60,23 +171,45 @@ const PeopleTab = ({ course, canManage }) => {
         </Empty>
       ) : null}
 
-      {roster.map((student) => (
-        <Card key={student.id} style={{ marginBottom: "10px" }}>
-          <span style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <img
-              src={student.avatar_url || "/images/final.jpg"}
-              alt=""
-              style={{
-                width: "34px",
-                height: "34px",
-                borderRadius: "30px",
-                objectFit: "cover",
-              }}
-            />
-            <span>{displayName(student)}</span>
-          </span>
+      {approved.map((row) => (
+        <Card key={row.profiles.id} style={{ marginBottom: 10 }}>
+          <Person
+            profile={row.profiles}
+            sub={row.decided_at ? `Joined ${formatDate(row.decided_at, { withTime: false })}` : ""}
+          >
+            {canManage ? (
+              <Button
+                size="sm"
+                variant="danger"
+                disabled={busyId === row.profiles.id}
+                onClick={() => remove(row.profiles)}
+              >
+                {"Remove"}
+              </Button>
+            ) : null}
+          </Person>
         </Card>
       ))}
+
+      {canManage && declined.length > 0 ? (
+        <>
+          <h3 style={{ marginTop: 26 }}>{"Declined"}</h3>
+          {declined.map((row) => (
+            <Card key={row.profiles.id} style={{ marginBottom: 10 }}>
+              <Person profile={row.profiles} sub={formatDate(row.decided_at)}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busyId === row.profiles.id}
+                  onClick={() => decide(row.profiles.id, true)}
+                >
+                  {"Approve after all"}
+                </Button>
+              </Person>
+            </Card>
+          ))}
+        </>
+      ) : null}
     </>
   );
 };

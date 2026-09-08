@@ -88,13 +88,26 @@ export const deleteCourse = async (id) => {
 /* enrollments                                                                */
 /* -------------------------------------------------------------------------- */
 
+// Only approved places count as "your courses" — a pending request is not
+// membership yet, and is surfaced separately.
 export const fetchMyCourses = async (userId) => {
   const { data, error } = await supabase
     .from("enrollments")
-    .select("course_id, courses ( id, code, title, level_year, archived )")
-    .eq("user_id", userId);
+    .select("course_id, status, courses ( id, code, title, level_year, archived )")
+    .eq("user_id", userId)
+    .eq("status", "approved");
   if (error) throw error;
   return data.map((row) => row.courses).filter(Boolean);
+};
+
+export const fetchMyPendingRequests = async (userId) => {
+  const { data, error } = await supabase
+    .from("enrollments")
+    .select("course_id, requested_at, courses ( id, code, title, level_year )")
+    .eq("user_id", userId)
+    .eq("status", "pending");
+  if (error) throw error;
+  return data.filter((row) => row.courses);
 };
 
 export const isEnrolled = async ({ userId, courseId }) => {
@@ -127,7 +140,7 @@ export const unenroll = async ({ userId, courseId }) => {
 export const fetchRoster = async (courseId) => {
   const { data, error } = await supabase
     .from("enrollments")
-    .select(`created_at, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`created_at, profiles!enrollments_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .eq("course_id", courseId);
   if (error) throw error;
   return data.map((row) => row.profiles).filter(Boolean);
@@ -140,7 +153,9 @@ export const fetchRoster = async (courseId) => {
 export const fetchMaterials = async (courseId) => {
   const { data, error } = await supabase
     .from("materials")
-    .select("id, title, description, url, created_at")
+    .select(
+      "id, title, description, url, created_at, file_path, file_name, file_size, mime_type"
+    )
     .eq("course_id", courseId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -256,7 +271,7 @@ export const submitWork = async ({ assignmentId, userId, body, url }) => {
 export const fetchSubmissionsForAssignment = async (assignmentId) => {
   const { data, error } = await supabase
     .from("submissions")
-    .select(`id, body, url, submitted_at, grade, feedback, graded_at, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, url, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .eq("assignment_id", assignmentId)
     .order("submitted_at");
   if (error) throw error;
@@ -273,7 +288,7 @@ export const gradeSubmission = async ({ id, grade, feedback, graderId }) => {
       graded_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .select(`id, body, url, submitted_at, grade, feedback, graded_at, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, url, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .single();
   if (error) throw error;
   return data;
@@ -380,7 +395,7 @@ export const subscribeToMessages = (courseId, onInsert) =>
 export const fetchExams = async (courseId) => {
   const { data, error } = await supabase
     .from("exams")
-    .select("id, title, instructions, duration_mins, opens_at, closes_at, published, show_results, created_at")
+    .select("id, title, instructions, duration_mins, opens_at, closes_at, published, show_results, created_at, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations")
     .eq("course_id", courseId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -390,7 +405,7 @@ export const fetchExams = async (courseId) => {
 export const fetchExam = async (id) => {
   const { data, error } = await supabase
     .from("exams")
-    .select("id, course_id, title, instructions, duration_mins, opens_at, closes_at, published, show_results, courses ( id, code, title, level_year, owner_id )")
+    .select("id, course_id, title, instructions, duration_mins, opens_at, closes_at, published, show_results, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations, grace_seconds, courses ( id, code, title, level_year, owner_id )")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -469,7 +484,7 @@ export const deleteQuestion = async (id) => {
 export const fetchMyAttempt = async ({ examId, userId }) => {
   const { data, error } = await supabase
     .from("exam_attempts")
-    .select("id, started_at, submitted_at, auto_score, total_score, max_score, graded_at")
+    .select("id, started_at, submitted_at, auto_score, total_score, max_score, graded_at, violations, disqualified, disqualified_reason, auto_submitted, submitted_late")
     .eq("exam_id", examId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -477,12 +492,34 @@ export const fetchMyAttempt = async ({ examId, userId }) => {
   return data;
 };
 
-export const startAttempt = async ({ examId, userId }) => {
+// Created server-side so a student cannot pre-create an attempt, restart one
+// to reset the clock, or sit an unpublished or closed paper.
+export const startAttempt = async ({ examId }) => {
+  const { data, error } = await supabase.rpc("start_exam_attempt", {
+    target_exam: examId,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+// The client reports what it saw; the server decides what it costs, and the
+// event is written to an append-only log either way.
+export const reportViolation = async ({ attemptId, kind, detail }) => {
+  const { data, error } = await supabase.rpc("record_exam_violation", {
+    target_attempt: attemptId,
+    violation_kind: kind,
+    violation_detail: detail ?? null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const fetchExamEvents = async (attemptId) => {
   const { data, error } = await supabase
-    .from("exam_attempts")
-    .insert({ exam_id: examId, user_id: userId })
-    .select("id, started_at, submitted_at, auto_score, total_score, max_score")
-    .single();
+    .from("exam_events")
+    .select("id, kind, detail, created_at")
+    .eq("attempt_id", attemptId)
+    .order("created_at");
   if (error) throw error;
   return data;
 };
@@ -521,7 +558,7 @@ export const submitAttempt = async (attemptId) => {
 export const fetchAttemptsForExam = async (examId) => {
   const { data, error } = await supabase
     .from("exam_attempts")
-    .select(`id, started_at, submitted_at, auto_score, total_score, max_score, graded_at, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, started_at, submitted_at, auto_score, total_score, max_score, graded_at, violations, disqualified, disqualified_reason, auto_submitted, submitted_late, profiles ( ${PROFILE_FIELDS} )`)
     .eq("exam_id", examId)
     .order("submitted_at", { nullsFirst: false });
   if (error) throw error;
@@ -551,4 +588,179 @@ export const fetchAttemptDetail = async (attemptId) => {
     .eq("attempt_id", attemptId);
   if (error) throw error;
   return data;
+};
+
+/* -------------------------------------------------------------------------- */
+/* join requests                                                              */
+/* -------------------------------------------------------------------------- */
+
+// Created server-side so a student cannot approve their own place.
+export const requestEnrollment = async ({ courseId, note }) => {
+  const { data, error } = await supabase.rpc("request_enrollment", {
+    target_course: courseId,
+    note: note ?? null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const decideEnrollment = async ({ courseId, userId, approve }) => {
+  const { data, error } = await supabase.rpc("decide_enrollment", {
+    target_course: courseId,
+    target_user: userId,
+    approve,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const fetchMyEnrollment = async ({ userId, courseId }) => {
+  const { data, error } = await supabase
+    .from("enrollments")
+    .select("status, requested_at, decided_at")
+    .eq("user_id", userId)
+    .eq("course_id", courseId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const fetchParticipants = async (courseId) => {
+  const { data, error } = await supabase
+    .from("enrollments")
+    .select(`status, requested_at, decided_at, message, profiles!enrollments_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("course_id", courseId)
+    .order("requested_at");
+  if (error) throw error;
+  return data.filter((row) => row.profiles);
+};
+
+export const removeParticipant = async ({ courseId, userId }) => {
+  const { error } = await supabase
+    .from("enrollments")
+    .delete()
+    .eq("course_id", courseId)
+    .eq("user_id", userId);
+  if (error) throw error;
+};
+
+/* -------------------------------------------------------------------------- */
+/* notifications                                                              */
+/* -------------------------------------------------------------------------- */
+
+export const fetchNotifications = async ({ courseId } = {}) => {
+  let query = supabase
+    .from("notifications")
+    .select("id, course_id, kind, title, body, link, read_at, created_at")
+    .order("created_at", { ascending: false })
+    .limit(50);
+  if (courseId) query = query.eq("course_id", courseId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+};
+
+export const markNotificationRead = async (id) => {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+};
+
+export const markAllNotificationsRead = async (userId) => {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .is("read_at", null);
+  if (error) throw error;
+};
+
+export const subscribeToNotifications = (userId, onInsert) =>
+  supabase
+    .channel(`notifications:${userId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "classroom",
+        table: "notifications",
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => onInsert(payload.new)
+    )
+    .subscribe();
+
+/* -------------------------------------------------------------------------- */
+/* material files                                                             */
+/* -------------------------------------------------------------------------- */
+
+const MATERIALS_BUCKET = "course-materials";
+
+// Path convention <course_id>/<random>-<name> — the first segment is what the
+// storage policy checks to decide who may write here.
+export const uploadMaterialFile = async ({ courseId, file, onProgress }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `${courseId}/${crypto.randomUUID()}-${safeName}`;
+
+  if (onProgress) onProgress(0);
+  const { error } = await supabase.storage
+    .from(MATERIALS_BUCKET)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  if (onProgress) onProgress(100);
+
+  return {
+    file_path: path,
+    file_name: file.name,
+    file_size: file.size,
+    mime_type: file.type || null,
+  };
+};
+
+// The bucket is private, so downloads go through a short-lived signed URL
+// rather than a public link anyone could pass around.
+export const signedMaterialUrl = async (path, seconds = 300) => {
+  const { data, error } = await supabase.storage
+    .from(MATERIALS_BUCKET)
+    .createSignedUrl(path, seconds);
+  if (error) throw error;
+  return data.signedUrl;
+};
+
+export const deleteMaterialFile = async (path) => {
+  const { error } = await supabase.storage.from(MATERIALS_BUCKET).remove([path]);
+  if (error) throw error;
+};
+
+/* -------------------------------------------------------------------------- */
+/* exam editing                                                               */
+/* -------------------------------------------------------------------------- */
+
+export const updateQuestion = async (id, changes) => {
+  const { error } = await supabase
+    .from("exam_questions")
+    .update(changes)
+    .eq("id", id);
+  if (error) throw error;
+};
+
+export const deleteOptionsForQuestion = async (questionId) => {
+  const { error } = await supabase
+    .from("exam_options")
+    .delete()
+    .eq("question_id", questionId);
+  if (error) throw error;
+};
+
+// How many students have already sat this paper. Restructuring questions
+// after that point would discard their answers, so the editor asks first.
+export const countAttempts = async (examId) => {
+  const { count, error } = await supabase
+    .from("exam_attempts")
+    .select("id", { count: "exact", head: true })
+    .eq("exam_id", examId);
+  if (error) throw error;
+  return count || 0;
 };

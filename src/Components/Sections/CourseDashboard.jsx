@@ -8,7 +8,12 @@ import AssignmentsTab from "./AssignmentsTab";
 import ExamsTab from "./ExamsTab";
 import PeopleTab from "./PeopleTab";
 import { useAuth } from "../../context/AuthContext";
-import { fetchCourseByCode, isEnrolled, enroll, unenroll } from "../../lib/api";
+import {
+  fetchCourseByCode,
+  fetchMyEnrollment,
+  requestEnrollment,
+  unenroll,
+} from "../../lib/api";
 import { Page, Button, Badge, Notice, Empty, Tabs } from "../UI";
 
 const CourseDashboard = () => {
@@ -16,7 +21,7 @@ const CourseDashboard = () => {
   const { user, profile } = useAuth();
 
   const [course, setCourse] = useState(null);
-  const [enrolled, setEnrolled] = useState(false);
+  const [membership, setMembership] = useState(null);
   const [tab, setTab] = useState("stream");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -39,7 +44,7 @@ const CourseDashboard = () => {
       }
       setCourse(data);
       if (user) {
-        setEnrolled(await isEnrolled({ userId: user.id, courseId: data.id }));
+        setMembership(await fetchMyEnrollment({ userId: user.id, courseId: data.id }));
       }
     } catch (err) {
       setError(err.message || "Could not load this course.");
@@ -52,19 +57,27 @@ const CourseDashboard = () => {
     load();
   }, [load]);
 
-  const handleEnrollToggle = async () => {
+  const handleJoin = async () => {
     setBusy(true);
     setError("");
     try {
-      if (enrolled) {
-        await unenroll({ userId: user.id, courseId: course.id });
-        setEnrolled(false);
-      } else {
-        await enroll({ userId: user.id, courseId: course.id });
-        setEnrolled(true);
-      }
+      const row = await requestEnrollment({ courseId: course.id });
+      setMembership(row);
     } catch (err) {
-      setError(err.message || "Could not update your enrollment.");
+      setError(err.message || "Could not send your request.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await unenroll({ userId: user.id, courseId: course.id });
+      setMembership(null);
+    } catch (err) {
+      setError(err.message || "Could not leave the course.");
     } finally {
       setBusy(false);
     }
@@ -114,13 +127,19 @@ const CourseDashboard = () => {
             <h1>{course.code}</h1>
             <p className="hero-sub">{course.title || "No title yet"}</p>
           </div>
-          <Button
-            variant={enrolled ? "secondary" : "primary"}
-            disabled={busy}
-            onClick={handleEnrollToggle}
-          >
-            {enrolled ? "Leave course" : "Join course"}
-          </Button>
+          {membership?.status === "approved" ? (
+            <Button variant="secondary" disabled={busy} onClick={handleLeave}>
+              {"Leave course"}
+            </Button>
+          ) : membership?.status === "pending" ? (
+            <Button variant="secondary" disabled>
+              {"Request pending"}
+            </Button>
+          ) : (
+            <Button disabled={busy} onClick={handleJoin}>
+              {membership?.status === "declined" ? "Ask again" : "Request to join"}
+            </Button>
+          )}
         </section>
 
         {course.description ? (

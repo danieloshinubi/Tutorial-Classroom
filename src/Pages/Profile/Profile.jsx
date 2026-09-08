@@ -66,7 +66,7 @@ const Profile = () => {
   };
 
   return (
-    <>
+    <div className="shell">
       <Navbar />
       <Page title="Your profile">
         <Card style={{ maxWidth: "620px" }}>
@@ -149,7 +149,7 @@ const Profile = () => {
           </form>
         </Card>
       </Page>
-    </>
+    </div>
   );
 };
 

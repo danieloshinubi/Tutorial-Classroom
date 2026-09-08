@@ -27,6 +27,15 @@ touched — containing:
 Row level security is enabled on every table. The script also seeds the four
 levels and the full 68-course catalogue.
 
+Then run the patches, in order:
+
+| File | What it does |
+| --- | --- |
+| `supabase/001_grants.sql` | Table privileges — without it every query fails with `permission denied` |
+| `supabase/002_backfill_profiles.sql` | Profiles for anyone who signed up before the trigger existed |
+| `supabase/003_exams.sql` | The exams and tests system (below) |
+| `supabase/004_exam_security.sql` | Proctoring, disqualification and the audit log |
+
 > **Warning:** the script starts with `DROP SCHEMA classroom CASCADE`. Re-running
 > it is a full reset, not a migration.
 
@@ -67,6 +76,78 @@ update classroom.profiles set role = 'admin' where email = 'you@example.com';
 ```
 
 Sign out and back in. The **Admin** tab appears in the navbar.
+
+## Exams and tests
+
+Tutors set papers; students sit them in the app; multiple choice and true/false
+are marked instantly.
+
+**Authoring** — open a course → **Exams** → *Create exam*. Each question is
+multiple choice, true/false, or short answer, with its own mark. Set a time
+limit and a closing date, then *Save & publish*, or keep it as a draft.
+Students never see drafts.
+
+**Sitting** — students open a published exam and press *Start*. A countdown
+runs in the header, and every answer saves as it is given, so a closed tab or a
+lost connection does not lose the paper. The timer is derived from the server's
+`started_at`, so refreshing cannot buy extra time. When it hits zero the paper
+submits itself. One attempt per student.
+
+**Marking** — multiple choice and true/false are marked the moment the paper is
+submitted. Short answers with an answer key are matched automatically (case and
+spacing ignored); the rest wait for the tutor under **Exams → Results**, where
+each paper can be opened and marked by hand. Saving marks recalculates the
+total.
+
+**The answer key never reaches the browser.** The client reads exam options
+without the `is_correct` column, and marking happens inside a `SECURITY
+DEFINER` function in Postgres — so a student cannot read the answers out of the
+network tab.
+
+## Exam integrity
+
+Two layers, and the distinction matters.
+
+**Browser lockdown — deterrents.** Copy, cut, paste, right-click, text
+selection and drag-and-drop are blocked; so are `Ctrl/Cmd + C/V/X/P/S/U/F`,
+`F12` and `Ctrl+Shift+I/J/C`. The paper runs fullscreen. Leaving fullscreen,
+switching tabs, minimising, or the window losing focus is detected. Questions
+and answer options are shuffled per student, so neighbours see different
+papers. **A student with devtools can disable all of this** — its job is to
+make casual cheating hard and, above all, noisy.
+
+**Database enforcement — the layer that holds.** Every rule that decides a mark
+lives in Postgres and cannot be bypassed by tampering with the client:
+
+- Answers are rejected after the deadline, by RLS, not by the timer.
+- Attempts are created by `start_exam_attempt()`, so nobody can pre-create one,
+  restart to reset the clock, or open an unpublished or closed paper.
+- One attempt per student, enforced by a unique constraint.
+- Marking happens inside a `SECURITY DEFINER` function; the answer key is never
+  sent to the browser.
+- Disqualification is decided server-side once the violation count is reached.
+- `exam_events` is append-only — there is deliberately no UPDATE or DELETE
+  policy for anyone, tutors included, so the log cannot be rewritten.
+- Students cannot delete an answer they have already given.
+
+**What the tutor sees.** Each attempt shows its violation count and any
+`disqualified`, `auto-submitted` or `late` flag, plus an **Activity** log
+listing every event with a timestamp.
+
+**Configurable per exam**, in the builder: block copy/paste, require
+fullscreen, shuffle questions, shuffle options, and how many violations trigger
+disqualification (0 = warn only, never disqualify).
+
+### Known limits
+
+Be honest with students about what this is. It is not a substitute for
+invigilation:
+
+- A second device, a phone or a person in the room is entirely undetectable.
+- Screenshots cannot be blocked; `PrintScreen` is logged, nothing more.
+- Fullscreen can be declined in some browsers, and cannot be forced.
+- A determined student can disable the JavaScript restrictions — but not the
+  deadline, the single attempt, or the marking.
 
 ## Google sign-in (optional)
 
@@ -127,6 +208,9 @@ forcing your way to `/Admin` still returns nothing you are not entitled to.
 | `/Assignments/:id` | signed in — submit, or grade if you own the course |
 | `/Tutors`, `/Profile` | signed in |
 | `/Teach`, `/Teach/New`, `/Teach/:id/Edit` | tutor or admin |
+| `/Courses/:id/Exams/New` | tutor or admin — author an exam |
+| `/Exams/:id` | signed in — sit the exam |
+| `/Exams/:id/Results` | tutor or admin — results and marking |
 | `/Admin` | admin |
 
 ## Scripts

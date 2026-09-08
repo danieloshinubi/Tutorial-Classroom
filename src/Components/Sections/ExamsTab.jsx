@@ -96,6 +96,17 @@ const ExamsTab = ({ courseId, canManage }) => {
                 <Link to={`/Exams/${exam.id}/Results`}>
                   <Button variant="secondary" size="sm">{"Results"}</Button>
                 </Link>
+                {/* A published paper is locked: unpublish first so no one is
+                    sitting it while the questions change underneath them. */}
+                {exam.published ? (
+                  <Button variant="secondary" size="sm" disabled title="Unpublish first to edit">
+                    {"Edit"}
+                  </Button>
+                ) : (
+                  <Link to={`/Exams/${exam.id}/Edit`}>
+                    <Button variant="secondary" size="sm">{"Edit"}</Button>
+                  </Link>
+                )}
                 <Button variant="secondary" size="sm" onClick={() => togglePublished(exam)}>
                   {exam.published ? "Unpublish" : "Publish"}
                 </Button>

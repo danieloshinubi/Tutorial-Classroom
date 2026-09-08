@@ -58,7 +58,7 @@ const Teach = () => {
   };
 
   return (
-    <>
+    <div className="shell">
       <Navbar />
       <Page
         title="Teaching"
@@ -74,7 +74,7 @@ const Teach = () => {
           <Empty>{"You have not created any courses yet."}</Empty>
         ) : null}
 
-        <Grid min="300px">
+        <Grid wide>
           {courses.map((course) => (
             <Card key={course.id}>
               <div
@@ -87,7 +87,7 @@ const Teach = () => {
                 <strong style={{ fontSize: "18px" }}>{course.code}</strong>
                 <span style={{ display: "flex", gap: "6px" }}>
                   <Badge>{`${course.level_year} lvl`}</Badge>
-                  {course.archived ? <Badge tone="admin">{"archived"}</Badge> : null}
+                  {course.archived ? <Badge tone="warn">{"archived"}</Badge> : null}
                 </span>
               </div>
               <p style={{ color: "#555" }}>{course.title || "No title yet"}</p>
@@ -113,7 +113,7 @@ const Teach = () => {
           ))}
         </Grid>
       </Page>
-    </>
+    </div>
   );
 };
 

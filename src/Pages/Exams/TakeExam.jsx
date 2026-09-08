@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
@@ -10,7 +10,25 @@ import {
   saveAnswer,
   submitAttempt,
   fetchAnswers,
+  reportViolation,
 } from "../../lib/api";
+import {
+  startProctoring,
+  requestFullscreen,
+  exitFullscreen,
+  seededShuffle,
+  VIOLATION_LABELS,
+} from "../../lib/proctor";
+import {
+  loadLocalAnswers,
+  mergeServerAnswers,
+  recordLocalAnswer,
+  clearLocalAnswers,
+  syncAnswers,
+  pendingCount,
+  isNetworkError,
+} from "../../lib/offline";
+import ConnectionStatus from "../../Components/ConnectionStatus";
 import {
   Page,
   Card,
@@ -24,10 +42,9 @@ import {
 const pad = (n) => String(n).padStart(2, "0");
 
 const clock = (seconds) => {
-  if (seconds < 0) seconds = 0;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${pad(Math.floor(m / 60))}:${pad(m % 60)}:${pad(s)}`;
+  const s = Math.max(0, seconds);
+  const m = Math.floor(s / 60);
+  return `${pad(Math.floor(m / 60))}:${pad(m % 60)}:${pad(s % 60)}`;
 };
 
 const TakeExam = () => {
@@ -39,13 +56,19 @@ const TakeExam = () => {
   const [attempt, setAttempt] = useState(null);
   const [answers, setAnswers] = useState({});
   const [remaining, setRemaining] = useState(null);
+  const [warning, setWarning] = useState("");
+  const [connection, setConnection] = useState("online");
+  const [pending, setPending] = useState(0);
+  const [pendingSubmit, setPendingSubmit] = useState(false);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  // Guards the timer from firing submit twice.
+  // Guards the timer and the proctor from submitting twice.
   const submittedRef = useRef(false);
+  const attemptRef = useRef(null);
+  attemptRef.current = attempt;
 
   useEffect(() => {
     let active = true;
@@ -62,16 +85,26 @@ const TakeExam = () => {
         setAttempt(attemptRow);
 
         if (attemptRow) {
-          const saved = await fetchAnswers(attemptRow.id);
+          // Local drafts win over the server copy: anything still unsynced was
+          // typed more recently than whatever was last delivered.
+          let store = loadLocalAnswers(attemptRow.id);
+          try {
+            const saved = await fetchAnswers(attemptRow.id);
+            store = mergeServerAnswers(attemptRow.id, saved);
+          } catch (err) {
+            if (!isNetworkError(err)) throw err;
+            setConnection(navigator.onLine ? "slow" : "offline");
+          }
           if (!active) return;
           setAnswers(
             Object.fromEntries(
-              saved.map((row) => [
-                row.question_id,
-                { optionId: row.selected_option_id, text: row.answer_text || "" },
+              Object.entries(store).map(([questionId, entry]) => [
+                questionId,
+                { optionId: entry.optionId, text: entry.text || "" },
               ])
             )
           );
+          setPending(pendingCount(attemptRow.id));
         }
       })
       .catch((err) => {
@@ -86,26 +119,135 @@ const TakeExam = () => {
     };
   }, [examId, user.id]);
 
+  // Pushes anything unsynced and reports what the connection is doing.
+  const flush = useCallback(async () => {
+    const current = attemptRef.current;
+    if (!current || current.submitted_at) return true;
+
+    setConnection((state) => (state === "offline" ? state : "syncing"));
+    const result = await syncAnswers(current.id, saveAnswer);
+    setPending(result.pending);
+
+    if (result.ok) {
+      setConnection("online");
+      return true;
+    }
+    // A refused write is a real problem; a failed one is just the network.
+    if (isNetworkError(result.error)) {
+      setConnection(navigator.onLine ? "slow" : "offline");
+    } else {
+      setConnection("online");
+      setError(
+        result.error?.message ||
+          "Your answers were refused — your time may be up, or the paper is closed."
+      );
+    }
+    return false;
+  }, []);
+
   const handleSubmit = useCallback(async () => {
-    if (submittedRef.current || !attempt) return;
+    const current = attemptRef.current;
+    if (submittedRef.current || !current || current.submitted_at) return;
     submittedRef.current = true;
     setSubmitting(true);
     setError("");
     try {
-      const result = await submitAttempt(attempt.id);
+      // Deliver every outstanding answer before closing the paper, so nothing
+      // typed during an outage is left behind.
+      await flush();
+      const result = await submitAttempt(current.id);
       setAttempt(result);
+      clearLocalAnswers(current.id);
+      exitFullscreen();
     } catch (err) {
-      setError(err.message || "Could not submit your paper.");
+      if (isNetworkError(err)) {
+        setConnection(navigator.onLine ? "slow" : "offline");
+        setError(
+          "You are offline, so the paper could not be sent. It will submit automatically when the connection returns — keep this page open."
+        );
+        setPendingSubmit(true);
+      } else {
+        setError(err.message || "Could not submit your paper.");
+      }
       submittedRef.current = false;
     } finally {
       setSubmitting(false);
     }
-  }, [attempt]);
+  }, [flush]);
 
-  // Countdown. The deadline is derived from started_at so refreshing the page
-  // cannot buy extra time.
+  /* ------------------------------------------------------------ proctoring */
+  const handleViolation = useCallback(async (kind, detail) => {
+    const current = attemptRef.current;
+    if (!current || current.submitted_at) return;
+
+    try {
+      const updated = await reportViolation({
+        attemptId: current.id,
+        kind,
+        detail,
+      });
+      setAttempt(updated);
+
+      if (updated.disqualified) {
+        submittedRef.current = true;
+        setWarning("");
+        exitFullscreen();
+        return;
+      }
+
+      const label = VIOLATION_LABELS[kind] || "Rule broken";
+      setWarning(`${label}. This has been recorded (warning ${updated.violations}).`);
+    } catch {
+      // A failed report must not interrupt the paper.
+    }
+  }, []);
+
+  // Only arm the lockdown while a paper is genuinely in progress.
+  const sitting = Boolean(attempt && !attempt.submitted_at && !attempt.disqualified);
+
   useEffect(() => {
-    if (!attempt || attempt.submitted_at || !exam?.duration_mins) return undefined;
+    if (!sitting || !exam) return undefined;
+    const stop = startProctoring({
+      onViolation: handleViolation,
+      blockCopyPaste: exam.block_copy_paste,
+      requireFullscreen: exam.require_fullscreen,
+    });
+    return stop;
+  }, [sitting, exam, handleViolation]);
+
+  // Background delivery. Retries on a timer and the moment the browser says it
+  // is back online, and fires a queued submit once everything has landed.
+  useEffect(() => {
+    if (!sitting) return undefined;
+
+    const attemptFlush = async () => {
+      const delivered = await flush();
+      if (delivered && pendingSubmit) {
+        setPendingSubmit(false);
+        submittedRef.current = false;
+        handleSubmit();
+      }
+    };
+
+    const id = setInterval(attemptFlush, 8000);
+    const onOnline = () => attemptFlush();
+    const onOffline = () => setConnection("offline");
+
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    if (!navigator.onLine) setConnection("offline");
+
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+    };
+  }, [sitting, flush, pendingSubmit, handleSubmit]);
+
+  // Countdown. The deadline comes from the server's started_at, so refreshing
+  // the page cannot buy extra time.
+  useEffect(() => {
+    if (!sitting || !exam?.duration_mins || !attempt) return undefined;
 
     const deadline =
       new Date(attempt.started_at).getTime() + exam.duration_mins * 60000;
@@ -119,13 +261,14 @@ const TakeExam = () => {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [attempt, exam, handleSubmit]);
+  }, [sitting, exam, attempt, handleSubmit]);
 
   const handleStart = async () => {
     setStarting(true);
     setError("");
     try {
-      setAttempt(await startAttempt({ examId, userId: user.id }));
+      if (exam.require_fullscreen) await requestFullscreen();
+      setAttempt(await startAttempt({ examId }));
     } catch (err) {
       setError(err.message || "Could not start the exam.");
     } finally {
@@ -133,25 +276,31 @@ const TakeExam = () => {
     }
   };
 
-  // Answers are written as they are made, so a crash or a closed tab does not
-  // lose the paper.
-  const recordAnswer = async (questionId, patch) => {
+  // Every answer lands in localStorage first, so a dropped connection cannot
+  // lose it. The sync loop below delivers it whenever the network allows.
+  const recordAnswer = (questionId, patch) => {
     setAnswers((current) => ({
       ...current,
       [questionId]: { ...current[questionId], ...patch },
     }));
-    try {
-      const next = { ...answers[questionId], ...patch };
-      await saveAnswer({
-        attemptId: attempt.id,
-        questionId,
-        optionId: next.optionId,
-        text: next.text,
-      });
-    } catch (err) {
-      setError(err.message || "Could not save that answer.");
-    }
+    recordLocalAnswer(attempt.id, questionId, patch);
+    setPending(pendingCount(attempt.id));
+    flush();
   };
+
+  // Each student gets their own order, stable across refreshes.
+  const ordered = useMemo(() => {
+    if (!exam || !attempt) return questions;
+    const list = exam.shuffle_questions
+      ? seededShuffle(questions, attempt.id)
+      : questions;
+    return list.map((question) => ({
+      ...question,
+      exam_options: exam.shuffle_options
+        ? seededShuffle(question.exam_options || [], attempt.id + question.id)
+        : [...(question.exam_options || [])].sort((a, b) => a.position - b.position),
+    }));
+  }, [questions, exam, attempt]);
 
   if (loading) {
     return (
@@ -178,23 +327,33 @@ const TakeExam = () => {
     : "/Dashboard";
 
   const closed = exam.closes_at && new Date(exam.closes_at) < new Date();
-  const answered = questions.filter((q) => {
+  const answered = ordered.filter((q) => {
     const answer = answers[q.id];
     return answer && (answer.optionId || answer.text?.trim());
   }).length;
 
-  /* ------------------------------------------------------------ finished */
-  if (attempt?.submitted_at) {
+  /* ----------------------------------------------------------- finished */
+  if (attempt?.submitted_at || attempt?.disqualified) {
     const showScore = exam.show_results && attempt.total_score !== null;
     return (
       <div className="shell">
         <Navbar />
         <Page title={exam.title} subtitle={exam.courses?.code}>
           <Card style={{ textAlign: "center", padding: 34 }}>
-            <h2 style={{ marginBottom: 18 }}>{"Paper submitted"}</h2>
+            <h2 style={{ marginBottom: 14 }}>
+              {attempt.disqualified ? "Exam ended" : "Paper submitted"}
+            </h2>
+
+            {attempt.disqualified ? (
+              <Notice tone="error">{attempt.disqualified_reason}</Notice>
+            ) : null}
+            {attempt.auto_submitted && !attempt.disqualified ? (
+              <Notice tone="muted">{"Submitted automatically when time ran out."}</Notice>
+            ) : null}
+
             {showScore ? (
               <>
-                <div style={{ display: "grid", placeItems: "center", marginBottom: 16 }}>
+                <div style={{ display: "grid", placeItems: "center", margin: "16px 0" }}>
                   <span className="score-ring">
                     {`${attempt.total_score}/${attempt.max_score}`}
                   </span>
@@ -208,10 +367,9 @@ const TakeExam = () => {
                 )}
               </>
             ) : (
-              <Notice tone="muted">
-                {"Your tutor will release the results."}
-              </Notice>
+              <Notice tone="muted">{"Your tutor will release the results."}</Notice>
             )}
+
             <div style={{ marginTop: 22 }}>
               <Link to={backLink}>
                 <Button variant="secondary">{"Back to course"}</Button>
@@ -229,7 +387,7 @@ const TakeExam = () => {
       <div className="shell">
         <Navbar />
         <Page title={exam.title} subtitle={exam.courses?.code}>
-          <Card style={{ maxWidth: 640 }}>
+          <Card style={{ maxWidth: 660 }}>
             {exam.instructions ? (
               <p style={{ whiteSpace: "pre-wrap" }}>{exam.instructions}</p>
             ) : null}
@@ -242,21 +400,41 @@ const TakeExam = () => {
               {exam.closes_at ? <Badge>{`Closes ${formatDate(exam.closes_at)}`}</Badge> : null}
             </div>
 
-            {closed ? (
-              <Notice tone="error">{"This exam has closed."}</Notice>
-            ) : (
-              <Notice tone="muted">
-                {exam.duration_mins
-                  ? "The timer starts as soon as you begin and keeps running if you close the page. You get one attempt."
-                  : "You get one attempt."}
-              </Notice>
-            )}
+            <Card style={{ background: "var(--warn-soft)", borderColor: "transparent" }}>
+              <strong style={{ display: "block", marginBottom: 8 }}>
+                {"Exam conditions"}
+              </strong>
+              <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8, fontSize: 14 }}>
+                <li>{"You get one attempt. The timer keeps running if you close the page."}</li>
+                {exam.block_copy_paste ? (
+                  <li>{"Copying, pasting and right-clicking are disabled."}</li>
+                ) : null}
+                {exam.require_fullscreen ? (
+                  <li>{"The exam runs fullscreen. Leaving fullscreen is recorded."}</li>
+                ) : null}
+                <li>{"Switching tabs or windows is recorded and shown to your tutor."}</li>
+                {exam.max_violations > 0 ? (
+                  <li>
+                    <strong>
+                      {`After ${exam.max_violations} violations your paper is submitted automatically and you are disqualified.`}
+                    </strong>
+                  </li>
+                ) : null}
+              </ul>
+            </Card>
 
+            {closed ? (
+              <Notice tone="error">
+                {`This exam closed on ${formatDate(exam.closes_at)}. Ask your tutor to extend the deadline.`}
+              </Notice>
+            ) : null}
             <Notice tone="error">{error}</Notice>
 
-            <Button onClick={handleStart} disabled={starting || closed}>
-              {starting ? "Starting..." : "Start exam"}
-            </Button>
+            <div style={{ marginTop: 16 }}>
+              <Button onClick={handleStart} disabled={starting || closed}>
+                {starting ? "Starting..." : "I understand — start exam"}
+              </Button>
+            </div>
           </Card>
         </Page>
       </div>
@@ -264,30 +442,41 @@ const TakeExam = () => {
   }
 
   /* --------------------------------------------------------- in progress */
+  const violationsLeft = exam.max_violations - (attempt.violations || 0);
+
   return (
     <div className="shell">
       <Navbar />
       <Page title={exam.title} subtitle={exam.courses?.code}>
         <div className={`exam-timer${remaining !== null && remaining < 120 ? " urgent" : ""}`}>
-          <span>{`${answered} of ${questions.length} answered`}</span>
-          {remaining !== null ? (
-            <span className="exam-clock">{clock(remaining)}</span>
-          ) : (
-            <span className="exam-clock">{"No limit"}</span>
-          )}
+          <span>{`${answered} of ${ordered.length} answered`}</span>
+          <span className="exam-clock">
+            {remaining !== null ? clock(remaining) : "No limit"}
+          </span>
           <Button onClick={handleSubmit} disabled={submitting}>
             {submitting ? "Submitting..." : "Submit"}
           </Button>
         </div>
 
+        <ConnectionStatus state={connection} pending={pending} />
+
+        {warning ? (
+          <Card style={{ background: "var(--danger-soft)", borderColor: "transparent", marginBottom: 14 }}>
+            <strong style={{ color: "var(--danger)" }}>{warning}</strong>
+            {exam.max_violations > 0 ? (
+              <p style={{ margin: "6px 0 0", fontSize: 14 }}>
+                {violationsLeft > 0
+                  ? `${violationsLeft} more and your paper is taken away.`
+                  : "This was your last warning."}
+              </p>
+            ) : null}
+          </Card>
+        ) : null}
+
         <Notice tone="error">{error}</Notice>
 
-        {questions.map((question, index) => {
+        {ordered.map((question, index) => {
           const answer = answers[question.id] || {};
-          const options = [...(question.exam_options || [])].sort(
-            (a, b) => a.position - b.position
-          );
-
           return (
             <div className="q-card" key={question.id}>
               <div className="q-head">
@@ -302,9 +491,13 @@ const TakeExam = () => {
                   value={answer.text || ""}
                   placeholder="Your answer"
                   onChange={(e) => recordAnswer(question.id, { text: e.target.value })}
+                  onPaste={(e) => e.preventDefault()}
+                  onCopy={(e) => e.preventDefault()}
+                  spellCheck={false}
+                  autoComplete="off"
                 />
               ) : (
-                options.map((option) => (
+                question.exam_options.map((option) => (
                   <label
                     key={option.id}
                     className={`opt${answer.optionId === option.id ? " selected" : ""}`}

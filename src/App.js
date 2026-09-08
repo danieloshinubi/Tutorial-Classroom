@@ -55,6 +55,7 @@ function App() {
               <Route path="/Teach/New" element={<CourseForm />} />
               <Route path="/Teach/:courseId/Edit" element={<CourseForm />} />
               <Route path="/Courses/:courseId/Exams/New" element={<ExamBuilder />} />
+              <Route path="/Exams/:examId/Edit" element={<ExamBuilder />} />
               <Route path="/Exams/:examId/Results" element={<ExamResults />} />
             </Route>
 

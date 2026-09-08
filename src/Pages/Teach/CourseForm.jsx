@@ -102,7 +102,7 @@ const CourseForm = () => {
   };
 
   return (
-    <>
+    <div className="shell">
       <Navbar />
       <Page title={isEditing ? "Edit course" : "Create a course"}>
         <Card style={{ maxWidth: "620px" }}>
@@ -165,7 +165,7 @@ const CourseForm = () => {
           )}
         </Card>
       </Page>
-    </>
+    </div>
   );
 };
 

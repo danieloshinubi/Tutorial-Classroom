@@ -37,8 +37,8 @@ jest.mock("./lib/supabaseClient", () => {
 test("shows the login page when nobody is signed in", async () => {
   render(<App />);
 
-  expect(await screen.findByLabelText(/email/i)).toBeInTheDocument();
-  expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+  expect(await screen.findByLabelText("Email")).toBeInTheDocument();
+  expect(screen.getByLabelText("Password")).toBeInTheDocument();
   expect(screen.getByText(/forgot password\?/i)).toBeInTheDocument();
   expect(screen.getByText(/sign up/i)).toBeInTheDocument();
 });

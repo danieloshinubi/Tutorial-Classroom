@@ -67,7 +67,7 @@ const Dashboard = () => {
   }, [user, isStaff]);
 
   return (
-    <>
+    <div className="shell">
       <Navbar />
       <Page
         title={`Welcome back, ${profile ? displayName(profile) : ""}`}
@@ -116,7 +116,7 @@ const Dashboard = () => {
           </Grid>
         </section>
       </Page>
-    </>
+    </div>
   );
 };
 

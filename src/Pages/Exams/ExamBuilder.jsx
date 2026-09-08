@@ -1,8 +1,19 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
-import { createExam, createQuestion, createOptions } from "../../lib/api";
+import {
+  createExam,
+  updateExam,
+  createQuestion,
+  updateQuestion,
+  createOptions,
+  deleteQuestion,
+  deleteOptionsForQuestion,
+  fetchExam,
+  fetchQuestionsForEditing,
+  countAttempts,
+} from "../../lib/api";
 import { Page, Card, Field, Button, Badge, Notice } from "../../Components/UI";
 
 const blankQuestion = (kind = "multiple_choice") => ({
@@ -22,12 +33,27 @@ const blankQuestion = (kind = "multiple_choice") => ({
         ],
 });
 
+const toLocalInput = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+};
+
 // Builds the whole paper in local state and writes it in one go, so a
-// half-finished exam is never visible to students.
+// half-finished exam is never visible to students. Handles both creating a
+// new paper and editing an unpublished one.
 const ExamBuilder = () => {
-  const { courseId } = useParams();
+  const { courseId: routeCourseId, examId } = useParams();
+  const isEditing = Boolean(examId);
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const [courseId, setCourseId] = useState(routeCourseId || null);
+  const [loading, setLoading] = useState(isEditing);
+  const [attemptCount, setAttemptCount] = useState(0);
 
   const [exam, setExam] = useState({
     title: "",
@@ -35,20 +61,91 @@ const ExamBuilder = () => {
     duration_mins: "60",
     closes_at: "",
     show_results: true,
+    block_copy_paste: true,
+    require_fullscreen: true,
+    shuffle_questions: true,
+    shuffle_options: true,
+    max_violations: "3",
   });
   const [questions, setQuestions] = useState([blankQuestion()]);
+  const [removedIds, setRemovedIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  // Load an existing paper for editing.
+  useEffect(() => {
+    if (!isEditing) return;
+    let active = true;
+
+    Promise.all([
+      fetchExam(examId),
+      fetchQuestionsForEditing(examId),
+      countAttempts(examId),
+    ])
+      .then(([examRow, questionRows, attempts]) => {
+        if (!active) return;
+        if (!examRow) {
+          setError("That exam no longer exists.");
+          return;
+        }
+        setCourseId(examRow.course_id);
+        setAttemptCount(attempts);
+        setExam({
+          title: examRow.title || "",
+          instructions: examRow.instructions || "",
+          duration_mins: examRow.duration_mins ? String(examRow.duration_mins) : "",
+          closes_at: toLocalInput(examRow.closes_at),
+          show_results: examRow.show_results,
+          block_copy_paste: examRow.block_copy_paste,
+          require_fullscreen: examRow.require_fullscreen,
+          shuffle_questions: examRow.shuffle_questions,
+          shuffle_options: examRow.shuffle_options,
+          max_violations: String(examRow.max_violations ?? 3),
+        });
+        setQuestions(
+          questionRows.length
+            ? questionRows.map((row) => ({
+                id: row.id,
+                kind: row.kind,
+                prompt: row.prompt,
+                points: String(row.points),
+                answer_key: row.answer_key || "",
+                options: [...(row.exam_options || [])]
+                  .sort((a, b) => a.position - b.position)
+                  .map((option) => ({
+                    id: option.id,
+                    body: option.body,
+                    is_correct: option.is_correct,
+                  })),
+              }))
+            : [blankQuestion()]
+        );
+      })
+      .catch((err) => {
+        if (active) setError(err.message || "Could not load the exam.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [examId, isEditing]);
+
   const setExamField = (field) => (event) => {
     const value =
-      event.target.type === "checkbox" ? event.target.checked : event.target.value;
+      event.target.type === "checkbox"
+        ? event.target.checked
+        : event.target.value;
     setExam((current) => ({ ...current, [field]: value }));
   };
 
   const patchQuestion = (index, patch) =>
     setQuestions((current) =>
-      current.map((question, i) => (i === index ? { ...question, ...patch } : question))
+      current.map((question, i) =>
+        i === index ? { ...question, ...patch } : question,
+      ),
     );
 
   const changeKind = (index, kind) => patchQuestion(index, blankQuestion(kind));
@@ -60,11 +157,11 @@ const ExamBuilder = () => {
           ? {
               ...question,
               options: question.options.map((option, j) =>
-                j === oi ? { ...option, ...patch } : option
+                j === oi ? { ...option, ...patch } : option,
               ),
             }
-          : question
-      )
+          : question,
+      ),
     );
 
   // Exactly one correct option, so picking a new one clears the others.
@@ -79,31 +176,37 @@ const ExamBuilder = () => {
                 is_correct: j === oi,
               })),
             }
-          : question
-      )
+          : question,
+      ),
     );
 
   const addOption = (qi) =>
     setQuestions((current) =>
       current.map((question, i) =>
         i === qi
-          ? { ...question, options: [...question.options, { body: "", is_correct: false }] }
-          : question
-      )
+          ? {
+              ...question,
+              options: [...question.options, { body: "", is_correct: false }],
+            }
+          : question,
+      ),
     );
 
   const removeOption = (qi, oi) =>
     setQuestions((current) =>
       current.map((question, i) =>
         i === qi
-          ? { ...question, options: question.options.filter((_, j) => j !== oi) }
-          : question
-      )
+          ? {
+              ...question,
+              options: question.options.filter((_, j) => j !== oi),
+            }
+          : question,
+      ),
     );
 
   const totalPoints = questions.reduce(
     (sum, question) => sum + (Number(question.points) || 0),
-    0
+    0,
   );
 
   const validate = () => {
@@ -116,14 +219,32 @@ const ExamBuilder = () => {
 
       if (question.kind !== "short_answer") {
         const filled = question.options.filter((option) => option.body.trim());
-        if (filled.length < 2) return `Question ${i + 1} needs at least two options.`;
-        if (!question.options.some((option) => option.is_correct && option.body.trim())) {
+        if (filled.length < 2)
+          return `Question ${i + 1} needs at least two options.`;
+        if (
+          !question.options.some(
+            (option) => option.is_correct && option.body.trim(),
+          )
+        ) {
           return `Question ${i + 1} needs a correct answer selected.`;
         }
       }
     }
     return "";
   };
+
+  // A deadline of 00:00 means the very start of that day, which is almost
+  // always a mistake — tutors mean the end of it.
+  const closesAt = exam.closes_at ? new Date(exam.closes_at) : null;
+  const closesInPast = closesAt && closesAt < new Date();
+  const closesAtMidnight =
+    closesAt && closesAt.getHours() === 0 && closesAt.getMinutes() === 0;
+
+  const closesHint = closesInPast
+    ? "This is in the past — students will see the exam as already closed."
+    : closesAtMidnight
+    ? "12:00 AM is the START of that day. For the end of the day use 11:59 PM."
+    : "Optional deadline. Leave blank for no closing time.";
 
   const handleSave = async (publish) => {
     const problem = validate();
@@ -132,42 +253,77 @@ const ExamBuilder = () => {
       return;
     }
 
+    // Rewriting questions discards any answers already given against them, so
+    // never do it silently once students have sat the paper.
+    if (isEditing && attemptCount > 0) {
+      const ok = window.confirm(
+        `${attemptCount} student${attemptCount === 1 ? " has" : "s have"} already sat this exam. ` +
+          "Changing the questions will discard their answers and scores. Continue?"
+      );
+      if (!ok) return;
+    }
+
     setError("");
     setSaving(true);
     try {
-      const created = await createExam({
-        course_id: courseId,
+      const fields = {
         title: exam.title.trim(),
         instructions: exam.instructions.trim() || null,
         duration_mins: exam.duration_mins ? Number(exam.duration_mins) : null,
-        closes_at: exam.closes_at ? new Date(exam.closes_at).toISOString() : null,
+        closes_at: exam.closes_at
+          ? new Date(exam.closes_at).toISOString()
+          : null,
         show_results: exam.show_results,
+        block_copy_paste: exam.block_copy_paste,
+        require_fullscreen: exam.require_fullscreen,
+        shuffle_questions: exam.shuffle_questions,
+        shuffle_options: exam.shuffle_options,
+        max_violations: Number(exam.max_violations) || 0,
         published: publish,
-        created_by: user.id,
-      });
+      };
+
+      const target = isEditing
+        ? await updateExam(examId, fields).then(() => ({ id: examId }))
+        : await createExam({ ...fields, course_id: courseId, created_by: user.id });
+
+      for (const id of removedIds) {
+        await deleteQuestion(id);
+      }
 
       for (let i = 0; i < questions.length; i += 1) {
         const question = questions[i];
-        const savedQuestion = await createQuestion({
-          exam_id: created.id,
+        const shape = {
           kind: question.kind,
           prompt: question.prompt.trim(),
           points: Number(question.points) || 1,
           position: i,
           answer_key:
-            question.kind === "short_answer" ? question.answer_key.trim() || null : null,
-        });
+            question.kind === "short_answer"
+              ? question.answer_key.trim() || null
+              : null,
+        };
+
+        let questionId = question.id;
+        if (questionId) {
+          await updateQuestion(questionId, shape);
+          // Options are replaced wholesale — simpler and safer than trying to
+          // diff them, and the confirmation above already covered the cost.
+          await deleteOptionsForQuestion(questionId);
+        } else {
+          const saved = await createQuestion({ ...shape, exam_id: target.id });
+          questionId = saved.id;
+        }
 
         if (question.kind !== "short_answer") {
           await createOptions(
             question.options
               .filter((option) => option.body.trim())
               .map((option, j) => ({
-                question_id: savedQuestion.id,
+                question_id: questionId,
                 body: option.body.trim(),
                 is_correct: option.is_correct,
                 position: j,
-              }))
+              })),
           );
         }
       }
@@ -180,13 +336,38 @@ const ExamBuilder = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="shell">
+        <Navbar />
+        <Page title="Edit exam">
+          <p>{"Loading exam..."}</p>
+        </Page>
+      </div>
+    );
+  }
+
   return (
     <div className="shell">
       <Navbar />
       <Page
-        title="Create an exam"
+        title={isEditing ? "Edit exam" : "Create an exam"}
         subtitle={`${questions.length} questions · ${totalPoints} points total`}
       >
+        {isEditing && attemptCount > 0 ? (
+          <Card
+            style={{
+              marginBottom: 16,
+              background: "var(--warn-soft)",
+              borderColor: "transparent",
+            }}
+          >
+            <strong>{`${attemptCount} student${attemptCount === 1 ? " has" : "s have"} already sat this exam.`}</strong>
+            <p style={{ margin: "6px 0 0", fontSize: 14 }}>
+              {"Changing the questions will discard their answers and scores. Editing the title, deadline or settings is safe."}
+            </p>
+          </Card>
+        ) : null}
         <Card style={{ marginBottom: 20 }}>
           <Field label="Title">
             <input
@@ -203,8 +384,17 @@ const ExamBuilder = () => {
               onChange={setExamField("instructions")}
             />
           </Field>
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
-            <Field label="Time limit (minutes)" hint="Leave blank for no limit.">
+          <div
+            style={{
+              display: "grid",
+              gap: 14,
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            }}
+          >
+            <Field
+              label="Time limit (minutes)"
+              hint="Leave blank for no limit."
+            >
               <input
                 type="number"
                 min="1"
@@ -213,7 +403,10 @@ const ExamBuilder = () => {
                 onChange={setExamField("duration_mins")}
               />
             </Field>
-            <Field label="Closes at" hint="Optional deadline.">
+            <Field
+              label="Closes at"
+              hint={closesHint}
+            >
               <input
                 type="datetime-local"
                 className="input"
@@ -222,7 +415,14 @@ const ExamBuilder = () => {
               />
             </Field>
           </div>
-          <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+          <label
+            style={{
+              display: "flex",
+              gap: 8,
+              alignItems: "center",
+              fontSize: 14,
+            }}
+          >
             <input
               type="checkbox"
               checked={exam.show_results}
@@ -230,6 +430,57 @@ const ExamBuilder = () => {
             />
             {"Show students their score as soon as they submit"}
           </label>
+        </Card>
+
+        <Card style={{ marginBottom: 20 }}>
+          <h3>{"Exam conditions"}</h3>
+          <p style={{ marginTop: 0, color: "var(--ink-3)", fontSize: 13.5 }}>
+            {
+              "Browser restrictions are deterrents; the deadline, the single attempt and disqualification are enforced by the database and cannot be bypassed."
+            }
+          </p>
+
+          {[
+            [
+              "block_copy_paste",
+              "Block copy, paste, right-click and text selection",
+            ],
+            ["require_fullscreen", "Run fullscreen, and record any exit"],
+            ["shuffle_questions", "Shuffle question order per student"],
+            ["shuffle_options", "Shuffle answer options per student"],
+          ].map(([field, label]) => (
+            <label
+              key={field}
+              style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                fontSize: 14,
+                marginBottom: 10,
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={exam[field]}
+                onChange={setExamField(field)}
+              />
+              {label}
+            </label>
+          ))}
+
+          <Field
+            label="Violations before disqualification"
+            hint="Each blocked action, tab switch or fullscreen exit counts as one. Set to 0 to warn without ever disqualifying."
+          >
+            <input
+              type="number"
+              min="0"
+              className="input"
+              style={{ maxWidth: 120 }}
+              value={exam.max_violations}
+              onChange={setExamField("max_violations")}
+            />
+          </Field>
         </Card>
 
         {questions.map((question, qi) => (
@@ -250,7 +501,11 @@ const ExamBuilder = () => {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setQuestions((c) => c.filter((_, i) => i !== qi))}
+                  onClick={() => {
+                    // Remember saved questions so the edit can delete them.
+                    if (question.id) setRemovedIds((ids) => [...ids, question.id]);
+                    setQuestions((c) => c.filter((_, i) => i !== qi));
+                  }}
                   disabled={questions.length === 1}
                 >
                   {"Remove"}
@@ -275,16 +530,34 @@ const ExamBuilder = () => {
                 <input
                   className="input"
                   value={question.answer_key}
-                  onChange={(e) => patchQuestion(qi, { answer_key: e.target.value })}
+                  onChange={(e) =>
+                    patchQuestion(qi, { answer_key: e.target.value })
+                  }
                 />
               </Field>
             ) : (
               <div style={{ marginBottom: 14 }}>
-                <span className="label" style={{ display: "block", marginBottom: 6, fontSize: 13.5, fontWeight: 550 }}>
+                <span
+                  className="label"
+                  style={{
+                    display: "block",
+                    marginBottom: 6,
+                    fontSize: 13.5,
+                    fontWeight: 550,
+                  }}
+                >
                   {"Options — select the correct one"}
                 </span>
                 {question.options.map((option, oi) => (
-                  <div key={oi} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                  <div
+                    key={oi}
+                    style={{
+                      display: "flex",
+                      gap: 8,
+                      alignItems: "center",
+                      marginBottom: 8,
+                    }}
+                  >
                     <input
                       type="radio"
                       name={`correct-${qi}`}
@@ -296,7 +569,9 @@ const ExamBuilder = () => {
                       value={option.body}
                       placeholder={`Option ${oi + 1}`}
                       disabled={question.kind === "true_false"}
-                      onChange={(e) => patchOption(qi, oi, { body: e.target.value })}
+                      onChange={(e) =>
+                        patchOption(qi, oi, { body: e.target.value })
+                      }
                     />
                     {question.kind === "multiple_choice" ? (
                       <Button
@@ -311,7 +586,11 @@ const ExamBuilder = () => {
                   </div>
                 ))}
                 {question.kind === "multiple_choice" ? (
-                  <Button variant="secondary" size="sm" onClick={() => addOption(qi)}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => addOption(qi)}
+                  >
                     {"Add option"}
                   </Button>
                 ) : null}
@@ -332,7 +611,10 @@ const ExamBuilder = () => {
         ))}
 
         <div className="btn-row" style={{ marginTop: 16 }}>
-          <Button variant="secondary" onClick={() => setQuestions((c) => [...c, blankQuestion()])}>
+          <Button
+            variant="secondary"
+            onClick={() => setQuestions((c) => [...c, blankQuestion()])}
+          >
             {"Add question"}
           </Button>
           <span style={{ flex: 1 }} />
@@ -345,10 +627,18 @@ const ExamBuilder = () => {
           <Button onClick={() => handleSave(true)} disabled={saving}>
             {saving ? "Saving..." : "Save & publish"}
           </Button>
-          <Button variant="secondary" onClick={() => handleSave(false)} disabled={saving}>
+          <Button
+            variant="secondary"
+            onClick={() => handleSave(false)}
+            disabled={saving}
+          >
             {"Save as draft"}
           </Button>
-          <Button variant="ghost" onClick={() => navigate(-1)} disabled={saving}>
+          <Button
+            variant="ghost"
+            onClick={() => navigate(-1)}
+            disabled={saving}
+          >
             {"Cancel"}
           </Button>
         </div>
