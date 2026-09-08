@@ -18,7 +18,6 @@ const Profile = () => {
     surname: "",
     username: "",
     bio: "",
-    level_year: "",
     avatar_url: "",
   });
   const [saving, setSaving] = useState(false);
@@ -33,7 +32,6 @@ const Profile = () => {
       surname: profile.surname || "",
       username: profile.username || "",
       bio: profile.bio || "",
-      level_year: profile.level_year ? String(profile.level_year) : "",
       avatar_url: profile.avatar_url || "",
     });
   }, [profile]);
@@ -53,7 +51,6 @@ const Profile = () => {
         surname: form.surname.trim(),
         username: form.username.trim() || null,
         bio: form.bio.trim() || null,
-        level_year: form.level_year ? Number(form.level_year) : null,
         avatar_url: form.avatar_url.trim() || null,
       });
       await refreshProfile();
@@ -110,19 +107,6 @@ const Profile = () => {
                 value={form.username}
                 onChange={update("username")}
               />
-            </Field>
-            <Field label="Level" hint="Students only — leave blank if it does not apply.">
-              <select
-                className="select"
-                value={form.level_year}
-                onChange={update("level_year")}
-              >
-                <option value="">{"Not set"}</option>
-                <option value="100">{"100"}</option>
-                <option value="200">{"200"}</option>
-                <option value="300">{"300"}</option>
-                <option value="400">{"400"}</option>
-              </select>
             </Field>
             <Field label="Avatar image URL">
               <input

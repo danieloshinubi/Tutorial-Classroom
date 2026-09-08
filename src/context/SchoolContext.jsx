@@ -29,6 +29,7 @@ export const SchoolProvider = ({ children }) => {
   const [membership, setMembership] = useState(null);
   const [memberships, setMemberships] = useState([]);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [levels, setLevels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -80,6 +81,14 @@ export const SchoolProvider = ({ children }) => {
           .maybeSingle(),
       ]);
 
+      // The school's own class names — "JSS 1", "Year 7", whatever they use.
+      const { data: levelRows } = await supabase
+        .from("levels")
+        .select("year, label")
+        .eq("school_id", schoolRow.id)
+        .order("year");
+      setLevels(levelRows || []);
+
       setMembership(mine || null);
       setMemberships((all || []).filter((row) => row.schools));
       setIsPlatformAdmin(Boolean(platform));
@@ -100,6 +109,12 @@ export const SchoolProvider = ({ children }) => {
     () => ({
       slug,
       school,
+      levels,
+      // Falls back to the raw number only if a class was deleted out from
+      // under a course that still references it.
+      labelFor: (year) =>
+        levels.find((row) => String(row.year) === String(year))?.label ?? String(year),
+      reloadLevels: load,
       schoolId: school?.id || null,
       membership,
       memberships,
@@ -114,7 +129,7 @@ export const SchoolProvider = ({ children }) => {
       error,
       reload: load,
     }),
-    [slug, school, membership, memberships, role, isPlatformAdmin, loading, authLoading, error, load]
+    [slug, school, levels, membership, memberships, role, isPlatformAdmin, loading, authLoading, error, load]
   );
 
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>;

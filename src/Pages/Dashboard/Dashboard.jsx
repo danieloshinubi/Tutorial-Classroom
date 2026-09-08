@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import { fetchMyCourses, fetchCoursesOwnedBy } from "../../lib/api";
 import {
   Page,
@@ -14,7 +15,7 @@ import {
   displayName,
 } from "../../Components/UI";
 
-const CourseCard = ({ course }) => (
+const CourseCard = ({ course, labelFor }) => (
   <Link
     to={`/Levels/${course.level_year}/Courses/${course.code}`}
     style={{ textDecoration: "none", color: "inherit" }}
@@ -22,7 +23,7 @@ const CourseCard = ({ course }) => (
     <Card style={{ height: "100%" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "8px" }}>
         <strong style={{ fontSize: "18px" }}>{course.code}</strong>
-        <Badge>{`${course.level_year} lvl`}</Badge>
+        <Badge>{labelFor(course.level_year)}</Badge>
       </div>
       <p style={{ margin: "8px 0 0", color: "#555" }}>
         {course.title || "No title yet"}
@@ -33,6 +34,7 @@ const CourseCard = ({ course }) => (
 
 const Dashboard = () => {
   const { profile, user } = useAuth();
+  const { labelFor } = useSchool();
   const [enrolled, setEnrolled] = useState([]);
   const [teaching, setTeaching] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,7 +98,7 @@ const Dashboard = () => {
             ) : null}
             <Grid>
               {teaching.map((course) => (
-                <CourseCard key={course.id} course={course} />
+                <CourseCard key={course.id} course={course} labelFor={labelFor} />
               ))}
             </Grid>
           </section>
@@ -111,7 +113,7 @@ const Dashboard = () => {
           ) : null}
           <Grid>
             {enrolled.map((course) => (
-              <CourseCard key={course.id} course={course} />
+              <CourseCard key={course.id} course={course} labelFor={labelFor} />
             ))}
           </Grid>
         </section>

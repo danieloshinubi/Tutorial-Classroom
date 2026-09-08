@@ -10,7 +10,7 @@ import { Page, Grid, Empty, Notice, Button, bandClass } from "../../Components/U
 // that only covered the first few — so most courses never rendered.
 const LevelCourses = () => {
   const { year } = useParams();
-  const { schoolId } = useSchool();
+  const { schoolId, labelFor } = useSchool();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -41,18 +41,18 @@ const LevelCourses = () => {
     <div className="shell">
       <Navbar />
       <Page
-        title={`${year} level courses`}
+        title={`${labelFor(year)} courses`}
         subtitle={loading ? "" : `${courses.length} courses`}
         action={
           <Link to="/Levels">
-            <Button variant="secondary">{"All levels"}</Button>
+            <Button variant="secondary">{"All classes"}</Button>
           </Link>
         }
       >
         <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading courses..."}</Empty> : null}
         {!loading && !error && courses.length === 0 ? (
-          <Empty>{"No courses listed for this level."}</Empty>
+          <Empty>{"No courses in this class yet."}</Empty>
         ) : null}
 
         <Grid>
@@ -66,7 +66,7 @@ const LevelCourses = () => {
                 <div className={bandClass(course.code)}>{course.code}</div>
                 <div className="tile-body">
                   <span className="tile-title">{course.title || course.code}</span>
-                  <span className="tile-sub">{`${year} level`}</span>
+                  <span className="tile-sub">{labelFor(year)}</span>
                 </div>
               </article>
             </Link>

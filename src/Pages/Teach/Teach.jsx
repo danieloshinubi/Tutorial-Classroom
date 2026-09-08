@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import { fetchCoursesOwnedBy, updateCourse, deleteCourse } from "../../lib/api";
 import {
   Page,
@@ -15,6 +16,7 @@ import {
 
 const Teach = () => {
   const { user } = useAuth();
+  const { labelFor } = useSchool();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -86,7 +88,7 @@ const Teach = () => {
               >
                 <strong style={{ fontSize: "18px" }}>{course.code}</strong>
                 <span style={{ display: "flex", gap: "6px" }}>
-                  <Badge>{`${course.level_year} lvl`}</Badge>
+                  <Badge>{labelFor(course.level_year)}</Badge>
                   {course.archived ? <Badge tone="warn">{"archived"}</Badge> : null}
                 </span>
               </div>

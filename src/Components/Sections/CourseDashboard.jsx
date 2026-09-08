@@ -20,7 +20,7 @@ import { Page, Button, Badge, Notice, Empty, Tabs } from "../UI";
 const CourseDashboard = () => {
   const { code } = useParams();
   const { user, profile } = useAuth();
-  const { schoolId, isAdmin: isSchoolAdmin } = useSchool();
+  const { schoolId, isAdmin: isSchoolAdmin, labelFor } = useSchool();
 
   const [course, setCourse] = useState(null);
   const [membership, setMembership] = useState(null);
@@ -102,7 +102,7 @@ const CourseDashboard = () => {
         <Page title="Course">
           <Notice tone="error">{error}</Notice>
           <Link to="/Levels">
-            <Button variant="secondary">{"Back to levels"}</Button>
+            <Button variant="secondary">{"Back to courses"}</Button>
           </Link>
         </Page>
       </div>
@@ -124,7 +124,7 @@ const CourseDashboard = () => {
         <section className="hero">
           <div>
             <div className="btn-row" style={{ marginBottom: 10 }}>
-              <Badge>{`${course.level_year} level`}</Badge>
+              <Badge>{labelFor(course.level_year)}</Badge>
               {canManage ? <Badge>{"you manage this"}</Badge> : null}
             </div>
             <h1>{course.code}</h1>

@@ -216,7 +216,7 @@ const CoursesTab = () => {
               <tr>
                 <th>{"Code"}</th>
                 <th>{"Title"}</th>
-                <th>{"Level"}</th>
+                <th>{"Class"}</th>
                 <th>{"Owner"}</th>
                 <th>{""}</th>
               </tr>

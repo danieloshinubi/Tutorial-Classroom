@@ -7,6 +7,7 @@ import {
   createCourse,
   updateCourse,
   fetchLevelsForSchool,
+  createLevel,
   fetchAllCourses,
 } from "../../lib/api";
 import {
@@ -31,16 +32,29 @@ const CourseForm = () => {
     code: "",
     title: "",
     description: "",
-    level_year: "100",
+    level_year: "",
   });
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // A tutor should not have to wait for an administrator to define a class
+  // before they can create a course, so they can add one right here.
+  const [newClass, setNewClass] = useState("");
+  const [addingClass, setAddingClass] = useState(false);
 
   useEffect(() => {
     if (!schoolId) return;
     fetchLevelsForSchool(schoolId)
-      .then(setLevels)
+      .then((rows) => {
+        setLevels(rows);
+        // Preselect the first class so the form is never in a state where
+        // nothing is chosen.
+        setForm((current) =>
+          current.level_year || rows.length === 0
+            ? current
+            : { ...current, level_year: String(rows[0].year) }
+        );
+      })
       .catch(() => setLevels([]));
   }, [schoolId]);
 
@@ -67,6 +81,29 @@ const CourseForm = () => {
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
 
+  const handleAddClass = async () => {
+    const label = newClass.trim();
+    if (!label) return;
+
+    setAddingClass(true);
+    setError("");
+    try {
+      // Order is just "next": the tutor names the class, the number only
+      // decides where it sits in the list.
+      const nextYear = levels.length
+        ? Math.max(...levels.map((row) => row.year)) + 1
+        : 1;
+      const created = await createLevel({ schoolId, year: nextYear, label });
+      setLevels((current) => [...current, created]);
+      setForm((current) => ({ ...current, level_year: String(created.year) }));
+      setNewClass("");
+    } catch (err) {
+      setError(err.message || "Could not add that class.");
+    } finally {
+      setAddingClass(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
@@ -74,6 +111,10 @@ const CourseForm = () => {
     const code = form.code.trim().toUpperCase();
     if (!code) {
       setError("A course code is required.");
+      return;
+    }
+    if (!form.level_year) {
+      setError("Choose a class, or add one below.");
       return;
     }
 
@@ -130,18 +171,55 @@ const CourseForm = () => {
                   placeholder="Data Structures and Algorithms"
                 />
               </Field>
-              <Field label="Level">
-                <select
-                  className="select"
-                  value={form.level_year}
-                  onChange={update("level_year")}
-                >
-                  {levels.map((level) => (
-                    <option key={level.year} value={level.year}>
-                      {level.label}
-                    </option>
-                  ))}
-                </select>
+              <Field
+                label="Class"
+                hint={
+                  levels.length
+                    ? "Which class takes this course."
+                    : "No classes yet — add the first one below."
+                }
+              >
+                {levels.length ? (
+                  <select
+                    className="select"
+                    value={form.level_year}
+                    onChange={update("level_year")}
+                  >
+                    {levels.map((level) => (
+                      <option key={level.year} value={level.year}>
+                        {level.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : null}
+              </Field>
+
+              <Field
+                label={levels.length ? "Add another class" : "Add a class"}
+                hint='Call it whatever your school calls it — "JSS 1", "Year 7", "Grade 4".'
+              >
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    className="input"
+                    value={newClass}
+                    placeholder="JSS 1"
+                    onChange={(e) => setNewClass(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddClass();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={addingClass || !newClass.trim()}
+                    onClick={handleAddClass}
+                  >
+                    {addingClass ? "Adding..." : "Add"}
+                  </Button>
+                </div>
               </Field>
               <Field label="Description">
                 <textarea

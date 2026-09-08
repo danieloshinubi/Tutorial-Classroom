@@ -34,14 +34,14 @@ const Levels = () => {
   return (
     <div className="shell">
       <Navbar />
-      <Page title="Courses" subtitle="Choose a level to see the courses it offers.">
+      <Page title="Courses" subtitle="Choose a class to see the courses it offers.">
         <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading levels..."}</Empty> : null}
         {!loading && !error && levels.length === 0 ? (
           <Empty>
             {isAdmin ? (
               <>
-                {"No class levels yet. "}
+                {"No classes yet. "}
                 <Link to="/School">{"Set up your classes"}</Link>
                 {" before adding courses."}
               </>
@@ -61,7 +61,7 @@ const Levels = () => {
               <article className="tile">
                 <div className={bandClass(String(level.year))}>{level.label}</div>
                 <div className="tile-body">
-                  <span className="tile-title">{`${level.year} level`}</span>
+                  <span className="tile-title">{level.label}</span>
                   <span className="tile-sub">{"View courses"}</span>
                 </div>
               </article>
