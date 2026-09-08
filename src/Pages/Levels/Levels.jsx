@@ -1,102 +1,61 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import Navbar from "../../Components/Navbar/Navbar";
+import { fetchLevels } from "../../lib/api";
+import { Page, Grid, Empty, Notice, bandClass } from "../../Components/UI";
 
 const Levels = () => {
-  const styles = {
-    margin: "auto",
-    marginTop: "10%",
-    width: "90%",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    boxStyle: {
-      backgroundImage: "url(/images/classroom.png)",
-      backgroundPosition: "center",
-      backgroundSize: "contain",
-      backgroundRepeat: "no-repeat",
-      opacity: "0.8",
-      width: "100%",
-      borderRadius: "20px",
-      height: "170px",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      backgroundColor: "RGBA(128, 128, 128, 0.7)",
-    },
-    linkStyle: {
-      width: "250px",
-      textDecoration: "none",
-      color: "black",
-    },
-    headStyle: {
-      textAlign: "center",
-    },
-  };
-  const schoolLevels = [
-    { year: "100", lvl: "100 lvl" },
-    { year: "200", lvl: "200 lvl" },
-    { year: "300", lvl: "300 lvl" },
-    { year: "400", lvl: "400 lvl" },
-  ];
+  const [levels, setLevels] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    fetchLevels()
+      .then((data) => {
+        if (active) setLevels(data);
+      })
+      .catch((err) => {
+        if (active) setError(err.message || "Could not load levels.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
-    <div className="Levels">
-      <h1 style={styles.headStyle}>{"Select your level:"}</h1>
-      <div className="level-boxes" style={styles}>
-        {schoolLevels.map((level, i) => {
-          switch (level.year) {
-            case "100":
-              return (
-                <Link to={`/Levels/100/Courses`} style={styles.linkStyle}>
-                  <div
-                    key={level.lvl}
-                    className="level-box"
-                    style={styles.boxStyle}
-                  >
-                    <h2>{level.lvl}</h2>
-                  </div>
-                </Link>
-              );
-            case "200":
-              return (
-                <Link to={`/Levels/200/Courses`} style={styles.linkStyle}>
-                  <div
-                    key={level.lvl}
-                    className="level-box"
-                    style={styles.boxStyle}
-                  >
-                    <h2>{level.lvl}</h2>
-                  </div>
-                </Link>
-              );
-            case "300":
-              return (
-                <Link to={`/Levels/300/Courses`} style={styles.linkStyle}>
-                  <div
-                    key={level.lvl}
-                    className="level-box"
-                    style={styles.boxStyle}
-                  >
-                    <h2>{level.lvl}</h2>
-                  </div>
-                </Link>
-              );
-            case "400":
-              return (
-                <Link to={`/Levels/400/Courses`} style={styles.linkStyle}>
-                  <div
-                    key={level.lvl}
-                    className="level-box"
-                    style={styles.boxStyle}
-                  >
-                    <h2>{level.lvl}</h2>
-                  </div>
-                </Link>
-              );
-            default:
-              return null;
-          }
-        })}
-      </div>
+    <div className="shell">
+      <Navbar />
+      <Page title="Courses" subtitle="Choose a level to see the courses it offers.">
+        <Notice tone="error">{error}</Notice>
+        {loading ? <Empty>{"Loading levels..."}</Empty> : null}
+        {!loading && !error && levels.length === 0 ? (
+          <Empty>{"No levels yet — run supabase/schema.sql to seed the catalogue."}</Empty>
+        ) : null}
+
+        <Grid>
+          {levels.map((level) => (
+            <Link
+              key={level.year}
+              to={`/Levels/${level.year}/Courses`}
+              className="card-link"
+            >
+              <article className="tile">
+                <div className={bandClass(String(level.year))}>{level.label}</div>
+                <div className="tile-body">
+                  <span className="tile-title">{`${level.year} level`}</span>
+                  <span className="tile-sub">{"View courses"}</span>
+                </div>
+              </article>
+            </Link>
+          ))}
+        </Grid>
+      </Page>
     </div>
   );
 };

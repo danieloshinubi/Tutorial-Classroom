@@ -1,62 +1,69 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { ForgotPasswordStyle } from "./ForgotPasswordStyle";
+import { useAuth } from "../../context/AuthContext";
+import { Field, Button, Notice } from "../../Components/UI";
 
 const ForgotPassword = () => {
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const usernameImage = "/images/username.png";
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
+  const { sendPasswordReset } = useAuth();
 
-  if (windowWidth >= 320 && windowWidth <= 480) {
-    ForgotPasswordStyle.width = "90%";
-    ForgotPasswordStyle.marginTop = "15%";
-    ForgotPasswordStyle.height = "auto";
-    ForgotPasswordStyle.formStyle.width = "90%";
-    ForgotPasswordStyle.inputStyle.width = "100%";
-    ForgotPasswordStyle.buttonStyle.width = "90%";
-  } else if (windowWidth >= 481 && windowWidth <= 768) {
-    ForgotPasswordStyle.width = "80%";
-  }else if (windowWidth >= 769 && windowWidth <= 1007) {
-    ForgotPasswordStyle.width = "80%";
-  }
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+    setNotice("");
+
+    if (!email.trim()) {
+      setError("Enter the email address on your account.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await sendPasswordReset(email.trim());
+      // Deliberately the same message whether or not the address exists, so
+      // this form cannot be used to discover which emails are registered.
+      setNotice("If that address has an account, a reset link is on its way.");
+    } catch (err) {
+      setError(err.message || "Could not send the reset link.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <div className="forgotPassword">
-      <div style={ForgotPasswordStyle} className="forgotPassword-box">
-        <h1>{"Forgot Password?"}</h1>
-        <form action="" style={ForgotPasswordStyle.formStyle}>
-          <label htmlFor="emailaddress">{"Email Address:"}</label>
-          <span style={ForgotPasswordStyle.spanStyle}>
-            <img src={usernameImage} alt="" style={ForgotPasswordStyle.imageStyle} />
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h1>{"Forgot password?"}</h1>
+        <p className="auth-sub">{"We'll email you a link to set a new one."}</p>
+
+        <form onSubmit={handleSubmit}>
+          <Field label="Email">
             <input
               required
               type="email"
-              id="emailaddress"
-              placeholder="Email Address"
-              style={ForgotPasswordStyle.inputStyle}
+              className="input"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
             />
-          </span>
-          <button style={ForgotPasswordStyle.buttonStyle}>{"Send OTP"}</button>
+          </Field>
+
+          <Notice tone="error">{error}</Notice>
+          <Notice tone="success">{notice}</Notice>
+
+          <Button type="submit" className="btn-block" disabled={submitting}>
+            {submitting ? "Sending..." : "Send reset link"}
+          </Button>
         </form>
-        <p>
-          {"Remember Password? "}
-          <span>
-            <Link to="/Login">{"Login"}</Link>
-          </span>
-        </p>
-        <p>
-          {"Don't have an account yet? "}
-          <span>
-            <Link to="/Signup">{"Sign Up"}</Link>
-          </span>
+
+        <p className="auth-foot">
+          {"Remember it? "}
+          <Link to="/Login">{"Sign in"}</Link>
         </p>
       </div>
     </div>

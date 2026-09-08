@@ -1,105 +1,109 @@
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { eyeOff } from "react-icons-kit/feather/eyeOff";
 import { eye } from "react-icons-kit/feather/eye";
-import WebFont from "webfontloader";
-import { GoogleLogin } from "@react-oauth/google";
-import { jwtDecode } from "jwt-decode";
-import { LoginStyle } from "./LoginStyle";
+import GoogleButton from "../../Components/GoogleButton";
+import { useAuth } from "../../context/AuthContext";
+import { Field, Button, Notice } from "../../Components/UI";
 
 const Login = () => {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [type, setType] = useState("password");
-  const [icon, setIcon] = useState(eyeOff);
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [visible, setVisible] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const passwordImage = "/images/password.png";
-  const usernameImage = "/images/username.png";
+  const { signIn, session } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = location.state?.from?.pathname || "/Dashboard";
 
-
+  // Someone who is already signed in should not sit on the login screen.
   useEffect(() => {
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, []);
+    if (session) navigate(redirectTo, { replace: true });
+  }, [session, navigate, redirectTo]);
 
-  if (windowWidth >= 320 && windowWidth <= 480) {
-    LoginStyle.width = "90%";
-    LoginStyle.marginTop = "15%";
-    LoginStyle.height = "auto";
-    LoginStyle.formStyle.width = "90%";
-    LoginStyle.inputStyle.width = "100%";
-    LoginStyle.buttonStyle.width = "90%";
-  } else if (windowWidth >= 481 && windowWidth <= 768) {
-    LoginStyle.width = "80%";
-  } else if (windowWidth >= 769 && windowWidth <= 1007) {
-    LoginStyle.width = "80%";
-  }
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+
+    if (!email.trim() || !password) {
+      setError("Enter your email address and password.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await signIn({ email: email.trim(), password });
+      navigate(redirectTo, { replace: true });
+    } catch (err) {
+      setError(err.message || "Could not sign you in.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
-    <div className="Login">
-      <div style={LoginStyle} className="Login-box">
-        <h1>{"Login"}</h1>
-        <form action="" style={LoginStyle.formStyle}>
-          <label htmlFor="username">{"Username:"}</label>
-          <span style={LoginStyle.spanStyle}>
-            <img src={usernameImage} alt="" style={LoginStyle.imageStyle} />
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <h1>{"Welcome back"}</h1>
+        <p className="auth-sub">{"Sign in to your classroom"}</p>
+
+        <form onSubmit={handleSubmit}>
+          <Field label="Email">
             <input
               required
-              type="text"
-              id="username"
-              placeholder="Username"
-              style={LoginStyle.inputStyle}
+              type="email"
+              className="input"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
             />
-          </span>
-          <label htmlFor="password">{"Password:"}</label>
-          <span style={LoginStyle.spanStyle}>
-            <img src={passwordImage} alt="" style={LoginStyle.imageStyle} />
-            <input
-              required
-              type={type}
-              id="password"
-              value={password}
-              placeholder="Password"
-              style={LoginStyle.inputStyle}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-            <Icon
-              icon={icon}
-              onClick={() => {
-                setType(type === "password" ? "text" : "password");
-                setIcon(icon === eyeOff ? eye : eyeOff);
-              }}
-            />
-          </span>
+          </Field>
+
+          <Field label="Password">
+            <span className="input-icon">
+              <input
+                required
+                type={visible ? "text" : "password"}
+                className="input"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                className="eye"
+                aria-label={visible ? "Hide password" : "Show password"}
+                onClick={() => setVisible((v) => !v)}
+              >
+                <Icon icon={visible ? eye : eyeOff} size={18} />
+              </button>
+            </span>
+          </Field>
+
+          <div style={{ textAlign: "right", marginTop: -6, marginBottom: 14 }}>
+            <Link to="/Forgot-Password" style={{ fontSize: 13.5 }}>
+              {"Forgot password?"}
+            </Link>
+          </div>
+
+          <Notice tone="error">{error}</Notice>
+
+          <Button type="submit" className="btn-block" disabled={submitting}>
+            {submitting ? "Signing in..." : "Sign in"}
+          </Button>
         </form>
-        <Link to="/Forgot-Password" style={LoginStyle.forgotPasswordStyle}>
-          {"Forgot Password?"}
-        </Link>
-        <button style={LoginStyle.buttonStyle}>{"Login"}</button>
-        <p>
-          {"Don't have an account yet? "}
-          <span>
-            <Link to="/Signup">{"Sign Up"}</Link>
-          </span>
-        </p>{" "}
-        <GoogleLogin
-          onSuccess={(credentialResponse) => {
-            const credentialResponseDecoded = jwtDecode(
-              credentialResponse.credential
-            );
-            console.log(credentialResponseDecoded);
-          }}
-          onError={() => {
-            console.log("Login Failed");
-          }}
-        />
+
+        <GoogleButton redirectPath={redirectTo} label="Sign in with Google" />
+
+        <p className="auth-foot">
+          {"Don't have an account? "}
+          <Link to="/Signup">{"Sign up"}</Link>
+        </p>
       </div>
     </div>
   );

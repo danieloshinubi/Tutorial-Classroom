@@ -1,15 +1,15 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { GoogleOAuthProvider } from "@react-oauth/google";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 
+// Google sign-in goes through Supabase's OAuth redirect flow, so the client id
+// and secret live in the Supabase dashboard rather than in this bundle. That
+// removes the need for a GoogleOAuthProvider wrapper here.
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId="234514997052-pgf6m81lqs7cl28fbgphe2st6olf9ah7.apps.googleusercontent.com">
-      <App />
-    </GoogleOAuthProvider>
+    <App />
   </React.StrictMode>
 );
 

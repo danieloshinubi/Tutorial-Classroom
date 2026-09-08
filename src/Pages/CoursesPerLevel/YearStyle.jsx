@@ -1,12 +1,14 @@
 export const YearStyle = {
   margin: "auto",
-  marginTop: "10%",
+  marginTop: "3%",
   width: "90%",
   display: "flex",
-  justifyContent: "space-between",
+  flexWrap: "wrap",
+  gap: "20px",
+  justifyContent: "flex-start",
   alignItems: "center",
   boxStyle: {
-        backgroundImage: "url(/images/classroom.png)",
+    backgroundImage: "url(/images/classroom.png)",
     backgroundPosition: "center",
     backgroundSize: "contain",
     backgroundRepeat: "no-repeat",
@@ -20,18 +22,15 @@ export const YearStyle = {
     backgroundColor: "RGBA(128, 128, 128, 0.7)",
   },
   linkStyle: {
-    width: "250px",
+    flex: "0 1 250px",
     textDecoration: "none",
     color: "black",
   },
   headStyle: {
     textAlign: "center",
   },
-//   boxStyle: {
-//     backgroundImage: "url(/images/classroom.png)",
-//     backgroundPosition: "center",
-//     backgroundSize: "contain",
-    // backgroundRepeat: "no-repeat",
-//     opacity: "0.8",
-//   },
+  stateStyle: {
+    textAlign: "center",
+    marginTop: "3%",
+  },
 };

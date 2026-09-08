@@ -1,57 +1,56 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { fetchUpcomingAssignments } from "../../lib/api";
+import { Card, Empty, Notice, formatDate } from "../UI";
 
-const Upcoming = () => {
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-
-  const UpcomingStyle = {
-    padding: "1%",
-    display: "flex",
-    border: "1px solid black",
-    flexDirection: "column",
-    width: "20%",
-    borderRadius: "20px",
-    buttonStyle: {
-      width: "50%",
-      padding: "4%",
-      fontFamily: "inherit",
-      borderRadius: "20px",
-      cursor: "pointer",
-      border: "none",
-      buttonSpan: {
-        display: "flex",
-        justifyContent: "flex-end",
-      },
-    },
-  };
+const Upcoming = ({ courseId }) => {
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-    };
-    window.addEventListener("resize", handleResize);
+    let active = true;
+    setLoading(true);
+
+    fetchUpcomingAssignments(courseId)
+      .then((data) => {
+        if (active) setAssignments(data);
+      })
+      .catch((err) => {
+        if (active) setError(err.message || "Could not load assignments.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
     return () => {
-      window.removeEventListener("resize", handleResize);
+      active = false;
     };
-  });
-  if(windowWidth>=320 && windowWidth<=480){
-    UpcomingStyle.display = "none"
-  }
+  }, [courseId]);
 
   return (
-    <>
-      <div className="Upcoming" style={UpcomingStyle}>
-        <h2>{"Upcoming: "}</h2>
-        <p>{"Woohoo, no work due soon! "}</p>
-        <span style={UpcomingStyle.buttonStyle.buttonSpan}>
-          <button
-            style={UpcomingStyle.buttonStyle}
-            onClick={() => alert("No upcoming assignments due!")}
-          >
-            {"View all"}
-          </button>
-        </span>
-      </div>
-    </>
+    <Card>
+      <h3 style={{ marginTop: 0 }}>{"Upcoming"}</h3>
+
+      <Notice tone="error">{error}</Notice>
+      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {!loading && !error && assignments.length === 0 ? (
+        <Empty>{"Woohoo, no work due soon!"}</Empty>
+      ) : null}
+
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, lineHeight: "1.5rem" }}>
+        {assignments.map((assignment) => (
+          <li key={assignment.id} style={{ marginBottom: "12px" }}>
+            <Link to={`/Assignments/${assignment.id}`} style={{ color: "inherit" }}>
+              {assignment.title}
+            </Link>
+            <div style={{ fontSize: "13px", color: "#777" }}>
+              {formatDate(assignment.due_at)}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 };
 
