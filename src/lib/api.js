@@ -833,9 +833,18 @@ export const inviteSchoolUser = async ({ schoolId, email, firstName, surname, ro
     },
   });
   if (error) {
-    // Edge Function errors arrive wrapped; surface the real message.
+    // supabase-js reports a missing function as a generic transport failure,
+    // which tells an administrator nothing. Name the real cause.
     const detail = await error.context?.json?.().catch(() => null);
-    throw new Error(detail?.error || error.message || "Could not create that user.");
+    if (detail?.error) throw new Error(detail.error);
+
+    const status = error.context?.status;
+    if (status === 404 || /failed to send|fetch/i.test(error.message || "")) {
+      throw new Error(
+        "Account creation is not set up on this project yet. The create-school-user Edge Function has not been deployed — run: supabase functions deploy create-school-user"
+      );
+    }
+    throw new Error(error.message || "Could not create that user.");
   }
   return data;
 };

@@ -194,39 +194,40 @@ returns table (
 )
 language sql stable security definer
 set search_path = classroom, public as $$
-  select
-    'assignment'::text,
-    c.code,
-    a.title,
-    s.grade,
-    a.points,
-    s.submitted_at,
-    (a.due_at is not null and s.submitted_at > a.due_at)
-  from classroom.submissions s
-  join classroom.assignments a on a.id = s.assignment_id
-  join classroom.courses c on c.id = a.course_id
-  where s.user_id = target_student
-    and s.grade is not null
-    and classroom.can_view_student(target_student)
+  select m.kind, m.course_code, m.title, m.scored, m.out_of, m.happened_at, m.late
+  from (
+    select
+      'assignment'::text as kind,
+      c.code             as course_code,
+      a.title            as title,
+      s.grade            as scored,
+      a.points           as out_of,
+      s.submitted_at     as happened_at,
+      (a.due_at is not null and s.submitted_at > a.due_at) as late
+    from classroom.submissions s
+    join classroom.assignments a on a.id = s.assignment_id
+    join classroom.courses c on c.id = a.course_id
+    where s.user_id = target_student
+      and s.grade is not null
 
-  union all
+    union all
 
-  select
-    'exam'::text,
-    c.code,
-    e.title,
-    t.total_score,
-    t.max_score,
-    t.submitted_at,
-    coalesce(t.submitted_late, false)
-  from classroom.exam_attempts t
-  join classroom.exams e on e.id = t.exam_id
-  join classroom.courses c on c.id = e.course_id
-  where t.user_id = target_student
-    and t.submitted_at is not null
-    and classroom.can_view_student(target_student)
-
-  order by happened_at;
+    select
+      'exam'::text,
+      c.code,
+      e.title,
+      t.total_score,
+      t.max_score,
+      t.submitted_at,
+      coalesce(t.submitted_late, false)
+    from classroom.exam_attempts t
+    join classroom.exams e on e.id = t.exam_id
+    join classroom.courses c on c.id = e.course_id
+    where t.user_id = target_student
+      and t.submitted_at is not null
+  ) m
+  where classroom.can_view_student(target_student)
+  order by m.happened_at;
 $$;
 
 grant execute on function classroom.student_marks(uuid) to authenticated;
