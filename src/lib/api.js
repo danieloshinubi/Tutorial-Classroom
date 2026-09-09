@@ -2103,3 +2103,16 @@ export const fetchPaymentByReference = async (reference) => {
   if (error) throw error;
   return data;
 };
+
+// A reply can be corrected by whoever wrote it. edited_at is stamped so the
+// thread shows it was changed rather than quietly rewriting history.
+export const updateNoticeReply = async ({ id, body }) => {
+  const { data, error } = await supabase
+    .from("notice_replies")
+    .update({ body, edited_at: new Date().toISOString() })
+    .eq("id", id)
+    .select(REPLY_FIELDS)
+    .single();
+  if (error) throw error;
+  return data;
+};

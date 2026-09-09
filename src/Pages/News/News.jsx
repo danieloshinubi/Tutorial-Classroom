@@ -11,6 +11,7 @@ import {
   fetchNoticeReplies,
   replyToNotice,
   deleteNoticeReply,
+  updateNoticeReply,
   NOTICE_AUDIENCES,
 } from "../../lib/api";
 import {
@@ -27,14 +28,27 @@ import {
 
 const AUDIENCE_LABEL = Object.fromEntries(NOTICE_AUDIENCES);
 
+// datetime-local wants local wall-clock time, not UTC. Handing it an ISO
+// string shifts the event by the timezone offset every time it is edited.
+const forInput = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+};
+
 // Replies live under the notice they answer, because a question about a
 // closure or a levy is nearly always the same question the next parent has.
-const Replies = ({ notice, replies, onReply, onRemove, canModerate }) => {
+const Replies = ({ notice, replies, onReply, onEdit, onRemove, canModerate }) => {
   const { user } = useAuth();
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
 
   const rows = replies || [];
   const showing = open || rows.length > 0;
@@ -71,22 +85,75 @@ const Replies = ({ notice, replies, onReply, onRemove, canModerate }) => {
         </div>
       ) : null}
 
-      {rows.map((reply) => (
-        <div key={reply.id} className="comment">
-          <div className="chat-meta">
-            <span className="chat-author">{displayName(reply.profiles)}</span>
-            <span className="chat-time">{formatDate(reply.created_at)}</span>
-            {reply.user_id === user?.id || canModerate ? (
-              <span className="chat-actions">
-                <button type="button" onClick={() => onRemove(reply)}>
-                  {"Delete"}
-                </button>
-              </span>
-            ) : null}
+      {rows.map((reply) => {
+        const mine = reply.user_id === user?.id;
+        return (
+          <div key={reply.id} className="comment">
+            <div className="chat-meta">
+              <span className="chat-author">{displayName(reply.profiles)}</span>
+              <span className="chat-time">{formatDate(reply.created_at)}</span>
+              {reply.edited_at ? <span className="chat-time">{"· edited"}</span> : null}
+              {(mine || canModerate) && editingId !== reply.id ? (
+                <span className="chat-actions">
+                  {mine ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingId(reply.id);
+                        setEditDraft(reply.body);
+                      }}
+                    >
+                      {"Edit"}
+                    </button>
+                  ) : null}
+                  <button type="button" onClick={() => onRemove(reply)}>
+                    {"Delete"}
+                  </button>
+                </span>
+              ) : null}
+            </div>
+
+            {editingId === reply.id ? (
+              <div className="composer composer-inline">
+                <textarea
+                  rows={2}
+                  autoFocus
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                />
+                <div className="btn-row">
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      const body = editDraft.trim();
+                      if (!body || body === reply.body) {
+                        setEditingId(null);
+                        return;
+                      }
+                      try {
+                        await onEdit(reply, body);
+                        setEditingId(null);
+                      } catch (err) {
+                        setError(err.message || "Could not save that change.");
+                      }
+                    }}
+                  >
+                    {"Save"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                    {"Cancel"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="chat-body">{reply.body}</p>
+            )}
           </div>
-          <p className="chat-body">{reply.body}</p>
-        </div>
-      ))}
+        );
+      })}
 
       <Notice tone="error">{error}</Notice>
 
@@ -125,6 +192,10 @@ const News = () => {
   const [busy, setBusy] = useState(false);
 
   const [composing, setComposing] = useState(false);
+  // Which published notice is being corrected, if any. The composer is
+  // reused rather than duplicated, so an edit offers exactly the fields the
+  // original was written with.
+  const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [audience, setAudience] = useState("everyone");
@@ -160,6 +231,58 @@ const News = () => {
     setEventPlace("");
     setPinned(false);
     setComposing(false);
+    setEditingId(null);
+  };
+
+  // Load a notice back into the composer.
+  const startEdit = (row) => {
+    setEditingId(row.id);
+    setTitle(row.title);
+    setBody(row.body);
+    setAudience(row.audience);
+    setIsEvent(row.is_event);
+    setEventAt(forInput(row.event_at));
+    setEventPlace(row.event_place || "");
+    setPinned(row.pinned);
+    setComposing(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const saveEdit = async () => {
+    setError("");
+    setNotice("");
+
+    if (!title.trim() || !body.trim()) {
+      setError("A notice needs a heading and something to say.");
+      return;
+    }
+    if (isEvent && !eventAt) {
+      setError("An event needs a date and time.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await updateNotice({
+        id: editingId,
+        title: title.trim(),
+        body: body.trim(),
+        audience,
+        pinned,
+        isEvent,
+        eventAt: isEvent && eventAt ? new Date(eventAt).toISOString() : null,
+        eventPlace: eventPlace.trim(),
+      });
+      // Nobody is re-notified: correcting a typo should not send the whole
+      // school a second alert about the same notice.
+      setNotice("Updated. The notice now shows as edited.");
+      reset();
+      load();
+    } catch (err) {
+      setError(err.message || "Could not save that change.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const post = async (publishNow) => {
@@ -245,6 +368,16 @@ const News = () => {
     }));
   };
 
+  const onEditReply = async (reply, replyBody) => {
+    const saved = await updateNoticeReply({ id: reply.id, body: replyBody });
+    setReplies((current) => ({
+      ...current,
+      [reply.notice_id]: (current[reply.notice_id] || []).map((r) =>
+        r.id === saved.id ? saved : r
+      ),
+    }));
+  };
+
   const onRemoveReply = async (reply) => {
     if (!window.confirm("Delete this reply?")) return;
     try {
@@ -268,7 +401,16 @@ const News = () => {
         subtitle={school ? `From ${school.name}` : "From the school"}
         action={
           canPost ? (
-            <Button onClick={() => setComposing((v) => !v)}>
+            <Button
+              onClick={() => {
+                if (composing) {
+                  reset();
+                } else {
+                  setEditingId(null);
+                  setComposing(true);
+                }
+              }}
+            >
               {composing ? "Cancel" : "Write a notice"}
             </Button>
           ) : null
@@ -279,7 +421,12 @@ const News = () => {
 
         {composing ? (
           <Card style={{ marginBottom: 24 }}>
-            <h3>{"A new notice"}</h3>
+            <h3>{editingId ? "Editing a notice" : "A new notice"}</h3>
+            {editingId ? (
+              <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0 }}>
+                {"Saving marks it edited. Nobody is notified again — a correction should not alert the school twice about the same notice."}
+              </p>
+            ) : null}
 
             <Field label="Heading">
               <input
@@ -365,12 +512,25 @@ const News = () => {
             ) : null}
 
             <div className="btn-row" style={{ marginTop: 8 }}>
-              <Button disabled={busy} onClick={() => post(true)}>
-                {busy ? "Posting..." : "Post and notify"}
-              </Button>
-              <Button variant="secondary" disabled={busy} onClick={() => post(false)}>
-                {"Save as draft"}
-              </Button>
+              {editingId ? (
+                <>
+                  <Button disabled={busy} onClick={saveEdit}>
+                    {busy ? "Saving..." : "Save changes"}
+                  </Button>
+                  <Button variant="secondary" disabled={busy} onClick={reset}>
+                    {"Cancel"}
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button disabled={busy} onClick={() => post(true)}>
+                    {busy ? "Posting..." : "Post and notify"}
+                  </Button>
+                  <Button variant="secondary" disabled={busy} onClick={() => post(false)}>
+                    {"Save as draft"}
+                  </Button>
+                </>
+              )}
             </div>
           </Card>
         ) : null}
@@ -420,6 +580,11 @@ const News = () => {
                     {"Send it"}
                   </Button>
                 ) : null}
+                {/* Published or not — a notice already sent is exactly the one
+                    most likely to need a correction. */}
+                <Button size="sm" variant="secondary" onClick={() => startEdit(row)}>
+                  {"Edit"}
+                </Button>
                 <Button size="sm" variant="secondary" onClick={() => togglePin(row)}>
                   {row.pinned ? "Unpin" : "Pin"}
                 </Button>
@@ -434,6 +599,7 @@ const News = () => {
                 notice={row}
                 replies={replies[row.id]}
                 onReply={onReply}
+                onEdit={onEditReply}
                 onRemove={onRemoveReply}
                 canModerate={canPost}
               />
