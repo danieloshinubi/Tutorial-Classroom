@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { clearPasswordChangeFlag } from "../../lib/api";
+import AuthLayout from "../../Components/AuthLayout";
 import { Field, Button, Notice } from "../../Components/UI";
 
 // Shown the first time someone signs in with a password an administrator
@@ -43,12 +44,7 @@ const SetPassword = () => {
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h1>{"Choose your password"}</h1>
-        <p className="auth-sub">
-          {"Your school gave you a temporary one. Replace it to finish setting up your account."}
-        </p>
+    <AuthLayout title="Choose your password" subtitle="Your school gave you a temporary one. Replace it to finish setting up your account.">
 
         <form onSubmit={handleSubmit}>
           <Field label="New password" hint="At least 6 characters.">
@@ -92,8 +88,7 @@ const SetPassword = () => {
             {"Sign out instead"}
           </button>
         </p>
-      </div>
-    </div>
+    </AuthLayout>
   );
 };
 

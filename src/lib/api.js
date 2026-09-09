@@ -13,16 +13,17 @@ const PROFILE_FIELDS = "id, first_name, surname, username, email, role, avatar_u
 /* levels & courses                                                           */
 /* -------------------------------------------------------------------------- */
 
-// Scoped by school as well as level: two schools may both use level 1, and
-// someone who belongs to both would otherwise see the two mixed together.
-export const fetchCoursesForLevel = async ({ schoolId, year }) => {
-  const { data, error } = await supabase
+// Every course in the school, newest session first. The session is what
+// separates the same course taught in different years.
+export const fetchCourses = async ({ schoolId, sessionId = null } = {}) => {
+  let query = supabase
     .from("courses")
-    .select("id, code, title, level_year, archived")
+    .select("id, code, title, level_year, archived, session_id, sessions ( id, name, is_current )")
     .eq("school_id", schoolId)
-    .eq("level_year", year)
     .eq("archived", false)
     .order("code");
+  if (sessionId) query = query.eq("session_id", sessionId);
+  const { data, error } = await query;
   if (error) throw error;
   return data;
 };
@@ -37,14 +38,37 @@ export const fetchAllCourses = async () => {
   return data;
 };
 
-// Course codes are unique per school, not globally.
-export const fetchCourseByCode = async ({ schoolId, code }) => {
+// A code can now belong to several sessions. Without an explicit one, the
+// current session wins, then the newest — so a bare /Courses/AZ-900 lands on
+// the year being taught rather than an archive.
+export const fetchCourseByCode = async ({ schoolId, code, sessionId = null }) => {
+  let query = supabase
+    .from("courses")
+    .select(`id, code, title, description, level_year, archived, owner_id, school_id, session_id, owner:profiles!courses_owner_id_fkey ( ${PROFILE_FIELDS} ), sessions ( id, name, is_current, starts_on )`)
+    .eq("school_id", schoolId)
+    .eq("code", code);
+  if (sessionId) query = query.eq("session_id", sessionId);
+
+  const { data, error } = await query;
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+  if (data.length === 1) return data[0];
+
+  return (
+    data.find((row) => row.sessions?.is_current) ||
+    [...data].sort((a, b) =>
+      String(b.sessions?.starts_on || "").localeCompare(String(a.sessions?.starts_on || ""))
+    )[0]
+  );
+};
+
+// Every session a given code is taught in, so the course page can offer them.
+export const fetchCourseSessions = async ({ schoolId, code }) => {
   const { data, error } = await supabase
     .from("courses")
-    .select(`id, code, title, description, level_year, archived, owner_id, school_id, owner:profiles!courses_owner_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select("id, session_id, sessions ( id, name, is_current )")
     .eq("school_id", schoolId)
-    .eq("code", code)
-    .maybeSingle();
+    .eq("code", code);
   if (error) throw error;
   return data;
 };
@@ -52,7 +76,7 @@ export const fetchCourseByCode = async ({ schoolId, code }) => {
 export const fetchCoursesOwnedBy = async (userId) => {
   const { data, error } = await supabase
     .from("courses")
-    .select("id, code, title, level_year, archived")
+    .select("id, code, title, level_year, archived, session_id, sessions ( id, name, is_current )")
     .eq("owner_id", userId)
     .order("code");
   if (error) throw error;
@@ -94,7 +118,7 @@ export const deleteCourse = async (id) => {
 export const fetchMyCourses = async (userId) => {
   const { data, error } = await supabase
     .from("enrollments")
-    .select("course_id, status, courses ( id, code, title, level_year, archived )")
+    .select("course_id, status, courses ( id, code, title, level_year, archived, sessions ( name ) )")
     .eq("user_id", userId)
     .eq("status", "approved");
   if (error) throw error;
@@ -344,7 +368,7 @@ export const deleteProfile = async (id) => {
 export const fetchMessages = async (courseId) => {
   const { data, error } = await supabase
     .from("messages")
-    .select(`id, body, created_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
     .eq("course_id", courseId)
     .order("created_at")
     .limit(100);
@@ -356,7 +380,7 @@ export const postMessage = async ({ courseId, userId, body }) => {
   const { data, error } = await supabase
     .from("messages")
     .insert({ course_id: courseId, user_id: userId, body })
-    .select(`id, body, created_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
     .single();
   if (error) throw error;
   return data;
@@ -367,7 +391,7 @@ export const postMessage = async ({ courseId, userId, body }) => {
 export const fetchMessageById = async (id) => {
   const { data, error } = await supabase
     .from("messages")
-    .select(`id, body, created_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -1258,4 +1282,48 @@ export const fetchMyTeaching = async (schoolId) => {
   const { data, error } = await supabase.rpc("my_teaching", { target_school: schoolId });
   if (error) throw error;
   return data || [];
+};
+
+/* -------------------------------------------------------------------------- */
+/* editing what has been published                                            */
+/* -------------------------------------------------------------------------- */
+
+export const updateMaterial = async (id, changes) => {
+  const { data, error } = await supabase
+    .from("materials")
+    .update(changes)
+    .eq("id", id)
+    .select("id, title, description, url, created_at, file_path, file_name, file_size")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateAssignment = async (id, changes) => {
+  const { data, error } = await supabase
+    .from("assignments")
+    .update(changes)
+    .eq("id", id)
+    .select("id, title, description, points, due_at, created_at")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// Authors may correct their own posts. edited_at is stamped so the class can
+// see a message was changed after the fact.
+export const updateMessage = async ({ id, body }) => {
+  const { data, error } = await supabase
+    .from("messages")
+    .update({ body, edited_at: new Date().toISOString() })
+    .eq("id", id)
+    .select(`id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteMessage = async (id) => {
+  const { error } = await supabase.from("messages").delete().eq("id", id);
+  if (error) throw error;
 };

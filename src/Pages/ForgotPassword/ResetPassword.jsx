@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import AuthLayout from "../../Components/AuthLayout";
 import { Field, Button, Notice } from "../../Components/UI";
 
 // Landing page for the link emailed by ForgotPassword. Supabase puts a
@@ -43,10 +44,7 @@ const ResetPassword = () => {
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h1>{"Set a new password"}</h1>
-        <p className="auth-sub">{"Choose something you have not used before."}</p>
+    <AuthLayout title="Set a new password" subtitle="Choose something you have not used before.">
 
         <form onSubmit={handleSubmit}>
           <Field label="New password">
@@ -77,8 +75,7 @@ const ResetPassword = () => {
             {submitting ? "Updating..." : "Update password"}
           </Button>
         </form>
-      </div>
-    </div>
+    </AuthLayout>
   );
 };
 

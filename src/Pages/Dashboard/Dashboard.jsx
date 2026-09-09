@@ -17,7 +17,7 @@ import {
 
 const CourseCard = ({ course, labelFor }) => (
   <Link
-    to={`/Levels/${course.level_year}/Courses/${course.code}`}
+    to={`/Courses/${course.code}`}
     style={{ textDecoration: "none", color: "inherit" }}
   >
     <Card style={{ height: "100%" }}>
@@ -78,7 +78,7 @@ const Dashboard = () => {
               <Button>{"Create a course"}</Button>
             </Link>
           ) : (
-            <Link to="/Levels">
+            <Link to="/Courses">
               <Button>{"Browse courses"}</Button>
             </Link>
           )

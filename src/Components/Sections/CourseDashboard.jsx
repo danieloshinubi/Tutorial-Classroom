@@ -99,7 +99,7 @@ const CourseDashboard = () => {
         <Navbar />
         <Page title="Course">
           <Notice tone="error">{error}</Notice>
-          <Link to="/Levels">
+          <Link to="/Courses">
             <Button variant="secondary">{"Back to courses"}</Button>
           </Link>
         </Page>

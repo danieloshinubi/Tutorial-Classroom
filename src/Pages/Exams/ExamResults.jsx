@@ -207,7 +207,7 @@ const ExamResults = () => {
         subtitle={exam?.courses ? `${exam.courses.code} · ${submitted.length} submitted` : ""}
         action={
           exam?.courses ? (
-            <Link to={`/Levels/${exam.courses.level_year}/Courses/${exam.courses.code}`}>
+            <Link to={`/Courses/${exam.courses.code}`}>
               <Button variant="secondary">{"Back to course"}</Button>
             </Link>
           ) : null

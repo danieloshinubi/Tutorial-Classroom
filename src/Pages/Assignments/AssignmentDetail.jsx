@@ -341,7 +341,7 @@ const AssignmentDetail = () => {
           <>
             <p style={{ color: "#666", marginTop: 0 }}>
               <Link
-                to={`/Levels/${assignment.courses.level_year}/Courses/${assignment.courses.code}`}
+                to={`/Courses/${assignment.courses.code}`}
                 style={{ color: "inherit" }}
               >
                 {assignment.courses.code}

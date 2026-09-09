@@ -9,7 +9,7 @@ import { displayName, initials } from "../UI";
 const linksFor = ({ isStaff, isAdmin, isPlatformAdmin }) => {
   const links = [
     { to: "/Dashboard", label: "Dashboard" },
-    { to: "/Levels", label: "Courses" },
+    { to: "/Courses", label: "Courses" },
     { to: "/Tutors", label: "Tutors" },
     { to: "/Reports", label: "Reports" },
   ];

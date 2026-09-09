@@ -5,6 +5,7 @@ import { eyeOff } from "react-icons-kit/feather/eyeOff";
 import { eye } from "react-icons-kit/feather/eye";
 import GoogleButton from "../../Components/GoogleButton";
 import { useAuth } from "../../context/AuthContext";
+import AuthLayout from "../../Components/AuthLayout";
 import { Field, Button, Notice } from "../../Components/UI";
 
 // Shared by the student (/Signup) and tutor (/SignupTutor) pages — the only
@@ -77,10 +78,19 @@ const SignupForm = ({ heading, subheading, role, footer }) => {
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h1>{heading}</h1>
-        <p className="auth-sub">{subheading}</p>
+    <AuthLayout
+      title={heading}
+      subtitle={subheading}
+      footer={
+        <>
+          <p>
+            {"Already registered? "}
+            <Link to="/Login">{"Sign in"}</Link>
+          </p>
+          {footer}
+        </>
+      }
+    >
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
@@ -169,14 +179,7 @@ const SignupForm = ({ heading, subheading, role, footer }) => {
         {/* Google accounts always land as students — the tutor role is set by
             an admin afterwards, since anyone can sign in with Google. */}
         {role === "student" ? <GoogleButton label="Sign up with Google" /> : null}
-
-        <p className="auth-foot">
-          {"Already registered? "}
-          <Link to="/Login">{"Sign in"}</Link>
-        </p>
-        <div className="auth-foot">{footer}</div>
-      </div>
-    </div>
+    </AuthLayout>
   );
 };
 

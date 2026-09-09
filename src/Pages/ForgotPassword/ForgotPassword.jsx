@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import AuthLayout from "../../Components/AuthLayout";
 import { Field, Button, Notice } from "../../Components/UI";
 
 const ForgotPassword = () => {
@@ -35,10 +36,7 @@ const ForgotPassword = () => {
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h1>{"Forgot password?"}</h1>
-        <p className="auth-sub">{"We'll email you a link to set a new one."}</p>
+    <AuthLayout title="Forgot password" subtitle="We will email you a link to set a new one.">
 
         <form onSubmit={handleSubmit}>
           <Field label="Email">
@@ -65,8 +63,7 @@ const ForgotPassword = () => {
           {"Remember it? "}
           <Link to="/Login">{"Sign in"}</Link>
         </p>
-      </div>
-    </div>
+    </AuthLayout>
   );
 };
 

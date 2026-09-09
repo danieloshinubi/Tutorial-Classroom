@@ -1,7 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { fetchAssignments, createAssignment, deleteAssignment } from "../../lib/api";
+import {
+  fetchAssignments,
+  createAssignment,
+  updateAssignment,
+  deleteAssignment,
+} from "../../lib/api";
 import {
   Card,
   Button,
@@ -22,6 +27,8 @@ const AssignmentsTab = ({ courseId, canManage }) => {
     due_at: "",
   });
   const [showForm, setShowForm] = useState(false);
+  // Set while correcting an existing assignment rather than writing a new one.
+  const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -39,6 +46,33 @@ const AssignmentsTab = ({ courseId, canManage }) => {
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
 
+  const toLocalInput = (iso) => {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+      d.getHours()
+    )}:${pad(d.getMinutes())}`;
+  };
+
+  const startEdit = (assignment) => {
+    setEditingId(assignment.id);
+    setShowForm(true);
+    setError("");
+    setForm({
+      title: assignment.title,
+      description: assignment.description || "",
+      points: String(assignment.points),
+      due_at: toLocalInput(assignment.due_at),
+    });
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setForm({ title: "", description: "", points: "100", due_at: "" });
+  };
+
   const handleCreate = async (event) => {
     event.preventDefault();
     setError("");
@@ -49,21 +83,29 @@ const AssignmentsTab = ({ courseId, canManage }) => {
 
     setSaving(true);
     try {
-      await createAssignment({
-        course_id: courseId,
+      const fields = {
         title: form.title.trim(),
         description: form.description.trim() || null,
         points: Number(form.points) || 100,
         // datetime-local gives a value with no timezone; let the browser
         // interpret it locally, then store UTC.
         due_at: form.due_at ? new Date(form.due_at).toISOString() : null,
-        created_by: user.id,
-      });
-      setForm({ title: "", description: "", points: "100", due_at: "" });
-      setShowForm(false);
+      };
+
+      if (editingId) {
+        // Editing leaves existing submissions and marks alone — only the
+        // wording, points and deadline change.
+        await updateAssignment(editingId, fields);
+      } else {
+        await createAssignment({ ...fields, course_id: courseId, created_by: user.id });
+      }
+      cancelForm();
       load();
     } catch (err) {
-      setError(err.message || "Could not create that assignment.");
+      setError(
+        err.message ||
+          `Could not ${editingId ? "save" : "create"} that assignment.`
+      );
     } finally {
       setSaving(false);
     }
@@ -94,7 +136,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
         <div style={{ marginBottom: "16px" }}>
           <Button
             variant={showForm ? "secondary" : "primary"}
-            onClick={() => setShowForm((open) => !open)}
+            onClick={() => (showForm ? cancelForm() : setShowForm(true))}
           >
             {showForm ? "Cancel" : "Create assignment"}
           </Button>
@@ -103,6 +145,14 @@ const AssignmentsTab = ({ courseId, canManage }) => {
 
       {canManage && showForm ? (
         <Card style={{ marginBottom: "18px", maxWidth: "620px" }}>
+          <h3 style={{ marginTop: 0 }}>
+            {editingId ? "Edit assignment" : "New assignment"}
+          </h3>
+          {editingId ? (
+            <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0 }}>
+              {"Submissions and marks already given are not affected."}
+            </p>
+          ) : null}
           <form onSubmit={handleCreate}>
             <Field label="Title">
               <input className="input" value={form.title} onChange={update("title")} />
@@ -132,7 +182,11 @@ const AssignmentsTab = ({ courseId, canManage }) => {
               />
             </Field>
             <Button type="submit" disabled={saving}>
-              {saving ? "Creating..." : "Create assignment"}
+              {saving
+                ? "Saving..."
+                : editingId
+                ? "Save changes"
+                : "Create assignment"}
             </Button>
           </form>
         </Card>
@@ -174,13 +228,22 @@ const AssignmentsTab = ({ courseId, canManage }) => {
                 </Button>
               </Link>
               {canManage ? (
-                <Button
-                  variant="danger"
-                  onClick={() => handleDelete(assignment)}
-                  style={{ padding: "6px 12px", fontSize: "14px" }}
-                >
-                  {"Delete"}
-                </Button>
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => startEdit(assignment)}
+                    style={{ padding: "6px 12px", fontSize: "14px" }}
+                  >
+                    {"Edit"}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    onClick={() => handleDelete(assignment)}
+                    style={{ padding: "6px 12px", fontSize: "14px" }}
+                  >
+                    {"Delete"}
+                  </Button>
+                </>
               ) : null}
             </span>
           </div>

@@ -4,6 +4,7 @@ import {
   fetchMaterials,
   createMaterial,
   deleteMaterial,
+  updateMaterial,
   uploadMaterialFile,
   signedMaterialUrl,
   deleteMaterialFile,
@@ -31,6 +32,8 @@ const MaterialsTab = ({ courseId, canManage }) => {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  // The id being edited, or null. Editing reuses the same form.
+  const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -63,6 +66,25 @@ const MaterialsTab = ({ courseId, canManage }) => {
     );
   };
 
+  const startEdit = (material) => {
+    setEditingId(material.id);
+    setShowForm(true);
+    setFile(null);
+    setError("");
+    setForm({
+      title: material.title || "",
+      description: material.description || "",
+      url: material.url || "",
+    });
+  };
+
+  const cancelForm = () => {
+    setShowForm(false);
+    setEditingId(null);
+    setFile(null);
+    setForm({ title: "", description: "", url: "" });
+  };
+
   const handleCreate = async (event) => {
     event.preventDefault();
     setError("");
@@ -71,7 +93,10 @@ const MaterialsTab = ({ courseId, canManage }) => {
       setError("Give the material a title.");
       return;
     }
-    if (!file && !form.url.trim()) {
+    // An existing material may already carry a file, so only a new one needs
+    // something attached.
+    const existing = materials.find((m) => m.id === editingId);
+    if (!file && !form.url.trim() && !existing?.file_path) {
       setError("Attach a file or paste a link.");
       return;
     }
@@ -81,18 +106,25 @@ const MaterialsTab = ({ courseId, canManage }) => {
       let fileFields = {};
       if (file) fileFields = await uploadMaterialFile({ courseId, file });
 
-      await createMaterial({
-        course_id: courseId,
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        url: form.url.trim() || null,
-        created_by: user.id,
-        ...fileFields,
-      });
+      if (editingId) {
+        await updateMaterial(editingId, {
+          title: form.title.trim(),
+          description: form.description.trim() || null,
+          url: form.url.trim() || null,
+          ...fileFields,
+        });
+      } else {
+        await createMaterial({
+          course_id: courseId,
+          title: form.title.trim(),
+          description: form.description.trim() || null,
+          url: form.url.trim() || null,
+          created_by: user.id,
+          ...fileFields,
+        });
+      }
 
-      setForm({ title: "", description: "", url: "" });
-      setFile(null);
-      setShowForm(false);
+      cancelForm();
       load();
     } catch (err) {
       // Uploads fail loudly until the bucket exists; links keep working, so
@@ -143,7 +175,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
         <div style={{ marginBottom: 16 }}>
           <Button
             variant={showForm ? "secondary" : "primary"}
-            onClick={() => setShowForm((open) => !open)}
+            onClick={() => (showForm ? cancelForm() : setShowForm(true))}
           >
             {showForm ? "Cancel" : "Add material"}
           </Button>
@@ -165,7 +197,14 @@ const MaterialsTab = ({ courseId, canManage }) => {
               />
             </Field>
 
-            <Field label="File" hint="Up to 50 MB. PDF, slides, documents, images, audio or video.">
+            <Field
+              label="File"
+              hint={
+                editingId
+                  ? "Choose a file only if you want to replace the one already attached."
+                  : "Up to 50 MB. PDF, slides, documents, images, audio or video."
+              }
+            >
               {file ? (
                 <div className="file-chip">
                   <span style={{ flex: 1 }}>
@@ -219,7 +258,13 @@ const MaterialsTab = ({ courseId, canManage }) => {
             <Notice tone="error">{error}</Notice>
 
             <Button type="submit" disabled={saving}>
-              {saving ? (file ? "Uploading..." : "Saving...") : "Add material"}
+              {saving
+                ? file
+                  ? "Uploading..."
+                  : "Saving..."
+                : editingId
+                ? "Save changes"
+                : "Add material"}
             </Button>
           </form>
         </Card>
@@ -242,9 +287,14 @@ const MaterialsTab = ({ courseId, canManage }) => {
               </div>
             </div>
             {canManage ? (
-              <Button variant="danger" size="sm" onClick={() => handleDelete(material)}>
-                {"Delete"}
-              </Button>
+              <span className="btn-row">
+                <Button variant="secondary" size="sm" onClick={() => startEdit(material)}>
+                  {"Edit"}
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => handleDelete(material)}>
+                  {"Delete"}
+                </Button>
+              </span>
             ) : null}
           </div>
 

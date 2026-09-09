@@ -9,6 +9,7 @@ import {
   fetchLevelsForSchool,
   createLevel,
   fetchAllCourses,
+  fetchSessions,
 } from "../../lib/api";
 import {
   Page,
@@ -28,11 +29,13 @@ const CourseForm = () => {
   const navigate = useNavigate();
 
   const [levels, setLevels] = useState([]);
+  const [sessions, setSessions] = useState([]);
   const [form, setForm] = useState({
     code: "",
     title: "",
     description: "",
     level_year: "",
+    session_id: "",
   });
   const [loading, setLoading] = useState(isEditing);
   const [saving, setSaving] = useState(false);
@@ -44,6 +47,20 @@ const CourseForm = () => {
 
   useEffect(() => {
     if (!schoolId) return;
+    fetchSessions(schoolId)
+      .then((rows) => {
+        setSessions(rows);
+        setForm((current) =>
+          current.session_id || rows.length === 0
+            ? current
+            : {
+                ...current,
+                session_id: (rows.find((r) => r.is_current) || rows[0]).id,
+              }
+        );
+      })
+      .catch(() => setSessions([]));
+
     fetchLevelsForSchool(schoolId)
       .then((rows) => {
         setLevels(rows);
@@ -71,7 +88,8 @@ const CourseForm = () => {
           code: course.code,
           title: course.title || "",
           description: course.description || "",
-          level_year: String(course.level_year),
+          level_year: course.level_year == null ? "" : String(course.level_year),
+          session_id: course.session_id || "",
         });
       })
       .catch((err) => setError(err.message || "Could not load the course."))
@@ -113,10 +131,7 @@ const CourseForm = () => {
       setError("A course code is required.");
       return;
     }
-    if (!form.level_year) {
-      setError("Choose a class, or add one below.");
-      return;
-    }
+
 
     setSaving(true);
     try {
@@ -124,7 +139,9 @@ const CourseForm = () => {
         code,
         title: form.title.trim(),
         description: form.description.trim() || null,
-        level_year: Number(form.level_year),
+        // Both optional now: a course is identified by its code and session.
+        level_year: form.level_year ? Number(form.level_year) : null,
+        session_id: form.session_id || null,
         school_id: schoolId,
       };
 
@@ -138,7 +155,7 @@ const CourseForm = () => {
       // The unique index on `code` is the usual reason a create fails.
       setError(
         err.code === "23505"
-          ? `A course with the code ${code} already exists.`
+          ? `${code} already exists in that session. Pick a different session, or a different code.`
           : err.message || "Could not save the course."
       );
     } finally {
@@ -172,11 +189,33 @@ const CourseForm = () => {
                 />
               </Field>
               <Field
+                label="Session"
+                hint={
+                  sessions.length
+                    ? "Which academic year this course runs in. The same course can run again in a later session as a separate course."
+                    : "No sessions yet — an administrator adds them under School → Calendar."
+                }
+              >
+                <select
+                  className="select"
+                  value={form.session_id}
+                  onChange={update("session_id")}
+                >
+                  <option value="">{"No session"}</option>
+                  {sessions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.is_current ? `${s.name} (current)` : s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field
                 label="Class"
                 hint={
                   levels.length
-                    ? "Which class takes this course."
-                    : "No classes yet — add the first one below."
+                    ? "Optional. Which class takes this course."
+                    : "Optional. Add one below if you want to group courses by class."
                 }
               >
                 {levels.length ? (
@@ -185,6 +224,7 @@ const CourseForm = () => {
                     value={form.level_year}
                     onChange={update("level_year")}
                   >
+                    <option value="">{"No class"}</option>
                     {levels.map((level) => (
                       <option key={level.year} value={level.year}>
                         {level.label}

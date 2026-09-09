@@ -95,7 +95,7 @@ const Teach = () => {
               <p style={{ color: "#555" }}>{course.title || "No title yet"}</p>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                <Link to={`/Levels/${course.level_year}/Courses/${course.code}`}>
+                <Link to={`/Courses/${course.code}`}>
                   <Button variant="secondary">{"Open"}</Button>
                 </Link>
                 <Link to={`/Teach/${course.id}/Edit`}>

@@ -22,6 +22,8 @@ jest.mock("./lib/supabaseClient", () => {
     fetchEnabledProviders: () => Promise.resolve({}),
     supabase: {
       from: () => query,
+      // AuthLayout asks for the school's name before anyone signs in.
+      rpc: () => Promise.resolve({ data: [], error: null }),
       auth: {
         getSession: () => Promise.resolve({ data: { session: null } }),
         onAuthStateChange: () => ({
@@ -40,5 +42,5 @@ test("shows the login page when nobody is signed in", async () => {
   expect(await screen.findByLabelText("Email")).toBeInTheDocument();
   expect(screen.getByLabelText("Password")).toBeInTheDocument();
   expect(screen.getByText(/forgot password\?/i)).toBeInTheDocument();
-  expect(screen.getByText(/sign up/i)).toBeInTheDocument();
+  expect(screen.getByText(/create an account/i)).toBeInTheDocument();
 });

@@ -1,5 +1,11 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  useParams,
+} from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { SchoolProvider } from "./context/SchoolContext";
 import ConfigNotice from "./Components/ConfigNotice";
@@ -12,8 +18,7 @@ import ForgotPassword from "./Pages/ForgotPassword/ForgotPassword";
 import ResetPassword from "./Pages/ForgotPassword/ResetPassword";
 import SetPassword from "./Pages/ForgotPassword/SetPassword";
 import Dashboard from "./Pages/Dashboard/Dashboard";
-import Levels from "./Pages/Levels/Levels";
-import LevelCourses from "./Pages/CoursesPerLevel/LevelCourses";
+import Courses from "./Pages/Courses/Courses";
 import CourseDashboard from "./Components/Sections/CourseDashboard";
 import AssignmentDetail from "./Pages/Assignments/AssignmentDetail";
 import ExamBuilder from "./Pages/Exams/ExamBuilder";
@@ -29,6 +34,13 @@ import Reports from "./Pages/Reports/Reports";
 import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
 import "./styles/theme.css";
+
+// /Levels/100/Courses/AZ-900 → /Courses/AZ-900, so bookmarks and old
+// notification links survive the change.
+const LegacyCourseRedirect = () => {
+  const { code } = useParams();
+  return <Navigate to={`/Courses/${code}`} replace />;
+};
 
 function App() {
   return (
@@ -50,9 +62,12 @@ function App() {
             <Route path="/Dashboard" element={<Dashboard />} />
             <Route path="/Profile" element={<Profile />} />
             <Route path="/Tutors" element={<Tutors />} />
-            <Route path="/Levels" element={<Levels />} />
-            <Route path="/Levels/:year/Courses" element={<LevelCourses />} />
-            <Route path="/Levels/:year/Courses/:code" element={<CourseDashboard />} />
+            <Route path="/Courses" element={<Courses />} />
+            <Route path="/Courses/:code" element={<CourseDashboard />} />
+            {/* Old level-based links keep working rather than 404ing. */}
+            <Route path="/Levels" element={<Navigate to="/Courses" replace />} />
+            <Route path="/Levels/:year/Courses" element={<Navigate to="/Courses" replace />} />
+            <Route path="/Levels/:year/Courses/:code" element={<LegacyCourseRedirect />} />
             <Route path="/Assignments/:assignmentId" element={<AssignmentDetail />} />
             <Route path="/Exams/:examId" element={<TakeExam />} />
             {/* Who may see which report is decided in Postgres, not here. */}

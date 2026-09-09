@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { eyeOff } from "react-icons-kit/feather/eyeOff";
 import { eye } from "react-icons-kit/feather/eye";
+import AuthLayout from "../../Components/AuthLayout";
 import GoogleButton from "../../Components/GoogleButton";
 import { useAuth } from "../../context/AuthContext";
 import { Field, Button, Notice } from "../../Components/UI";
@@ -19,7 +20,7 @@ const Login = () => {
   const location = useLocation();
   const redirectTo = location.state?.from?.pathname || "/Dashboard";
 
-  // Someone who is already signed in should not sit on the login screen.
+  // Someone already signed in should not sit on the login screen.
   useEffect(() => {
     if (session) navigate(redirectTo, { replace: true });
   }, [session, navigate, redirectTo]);
@@ -38,74 +39,78 @@ const Login = () => {
       await signIn({ email: email.trim(), password });
       navigate(redirectTo, { replace: true });
     } catch (err) {
-      setError(err.message || "Could not sign you in.");
+      // Supabase says "Invalid login credentials" for both a wrong password
+      // and an unknown address. Say what to do instead of restating that.
+      setError(
+        /invalid login/i.test(err.message || "")
+          ? "That email and password do not match. Check both, or use forgot password."
+          : err.message || "Could not sign you in."
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="auth-wrap">
-      <div className="auth-card">
-        <h1>{"Welcome back"}</h1>
-        <p className="auth-sub">{"Sign in to your classroom"}</p>
+    <AuthLayout
+      title="Sign in"
+      subtitle="Use the email address your school gave you."
+      footer={
+        <p>
+          {"New here? "}
+          <Link to="/Signup">{"Create an account"}</Link>
+        </p>
+      }
+    >
+      <form onSubmit={handleSubmit}>
+        <Field label="Email">
+          <input
+            required
+            autoFocus
+            type="email"
+            className="input"
+            placeholder="you@school.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="email"
+          />
+        </Field>
 
-        <form onSubmit={handleSubmit}>
-          <Field label="Email">
+        <Field label="Password">
+          <span className="input-icon">
             <input
               required
-              type="email"
+              type={visible ? "text" : "password"}
               className="input"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
+              placeholder="Your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
             />
-          </Field>
+            <button
+              type="button"
+              className="eye"
+              aria-label={visible ? "Hide password" : "Show password"}
+              onClick={() => setVisible((v) => !v)}
+            >
+              <Icon icon={visible ? eye : eyeOff} size={18} />
+            </button>
+          </span>
+        </Field>
 
-          <Field label="Password">
-            <span className="input-icon">
-              <input
-                required
-                type={visible ? "text" : "password"}
-                className="input"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-              <button
-                type="button"
-                className="eye"
-                aria-label={visible ? "Hide password" : "Show password"}
-                onClick={() => setVisible((v) => !v)}
-              >
-                <Icon icon={visible ? eye : eyeOff} size={18} />
-              </button>
-            </span>
-          </Field>
+        <div className="forgot-row">
+          <Link to="/Forgot-Password">{"Forgot password?"}</Link>
+        </div>
 
-          <div style={{ textAlign: "right", marginTop: -6, marginBottom: 14 }}>
-            <Link to="/Forgot-Password" style={{ fontSize: 13.5 }}>
-              {"Forgot password?"}
-            </Link>
-          </div>
+        <Notice tone="error">{error}</Notice>
 
-          <Notice tone="error">{error}</Notice>
+        <Button type="submit" className="btn-block" disabled={submitting}>
+          {submitting ? "Signing in..." : "Sign in"}
+        </Button>
+      </form>
 
-          <Button type="submit" className="btn-block" disabled={submitting}>
-            {submitting ? "Signing in..." : "Sign in"}
-          </Button>
-        </form>
-
-        <GoogleButton redirectPath={redirectTo} label="Sign in with Google" />
-
-        <p className="auth-foot">
-          {"Don't have an account? "}
-          <Link to="/Signup">{"Sign up"}</Link>
-        </p>
-      </div>
-    </div>
+      <GoogleButton redirectPath={redirectTo} label="Sign in with Google" />
+    </AuthLayout>
   );
 };
 

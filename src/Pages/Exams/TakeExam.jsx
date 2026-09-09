@@ -323,7 +323,7 @@ const TakeExam = () => {
   }
 
   const backLink = exam.courses
-    ? `/Levels/${exam.courses.level_year}/Courses/${exam.courses.code}`
+    ? `/Courses/${exam.courses.code}`
     : "/Dashboard";
 
   const closed = exam.closes_at && new Date(exam.closes_at) < new Date();
