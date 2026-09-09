@@ -1,5 +1,5 @@
 import { supabase } from "./supabaseClient";
-import { createAuthUser, invitePasswordSetup } from "./provisioning";
+import { createAuthUser, temporaryPassword } from "./provisioning";
 
 // Fields selected wherever a row carries its author/owner, so names render
 // consistently across the app.
@@ -853,34 +853,25 @@ export const inviteSchoolUser = async ({ schoolId, email, firstName, surname, ro
   return addSchoolUserDirect({ schoolId, email: address, firstName, surname, role });
 };
 
-// The no-Edge-Function path.
+// The no-Edge-Function path: create the login, issue a temporary password,
+// and require it to be replaced at first sign-in.
 export const addSchoolUserDirect = async ({ schoolId, email, firstName, surname, role }) => {
+  const password = temporaryPassword();
   let userId = null;
   let existed = false;
 
   try {
-    const created = await createAuthUser({ email, firstName, surname });
+    const created = await createAuthUser({ email, firstName, surname, password });
     userId = created.userId;
     existed = created.existed;
   } catch (err) {
     throw new Error(err.message || "Could not create that account.");
   }
 
-  // Either the address was already registered, or email confirmation is on and
-  // signUp withheld the id. Look the profile up by address instead.
-  if (!userId) {
-    const { data: found } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("email", email)
-      .maybeSingle();
-    userId = found?.id ?? null;
-  }
-
   if (!userId) {
     throw new Error(
       existed
-        ? `${email} already has an account elsewhere. Supabase will not reveal its id to the browser, so ask them to sign in here once — then adding them will work. Deploying the create-school-user function removes this step.`
+        ? `${email} already has an account. Supabase will not reveal its id to the browser, so ask them to sign in here once — then adding them will work.`
         : "The account was created but its id was not returned. Ask them to sign in once, then add them again."
     );
   }
@@ -893,16 +884,25 @@ export const addSchoolUserDirect = async ({ schoolId, email, firstName, surname,
     );
   if (memberError) throw new Error(memberError.message);
 
-  // Lets them choose their own password. Not fatal if the mail fails — the
-  // account exists and Forgot Password reaches the same place.
-  let emailed = true;
+  // Flag the account so the temporary password is only good for getting in
+  // once. Not fatal if it fails — they simply are not forced to change it.
+  let mustChange = true;
   try {
-    await invitePasswordSetup(email);
+    const { error } = await supabase.rpc("require_password_change", {
+      target_user: userId,
+    });
+    if (error) mustChange = false;
   } catch {
-    emailed = false;
+    mustChange = false;
   }
 
-  return { user_id: userId, email, role, existed, emailed, viaFallback: true };
+  return { user_id: userId, email, role, password, mustChange, viaFallback: true };
+};
+
+// Called by the forced-change screen once the new password has been set.
+export const clearPasswordChangeFlag = async () => {
+  const { error } = await supabase.rpc("password_changed");
+  if (error) throw error;
 };
 
 

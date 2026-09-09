@@ -68,6 +68,9 @@ const PeoplePanel = () => {
     role: "student",
   });
   const [inviting, setInviting] = useState(false);
+  // Shown once, right after creation — this is the only time the password exists
+  // anywhere the administrator can see it.
+  const [issued, setIssued] = useState(null);
 
   const load = useCallback(() => {
     if (!schoolId) return;
@@ -112,14 +115,20 @@ const PeoplePanel = () => {
     setInviting(true);
     try {
       const result = await inviteSchoolUser({ schoolId, ...invite });
-      // Say what actually happened, including when the email did not go out —
-      // otherwise an administrator waits for a message that never arrives.
-      const who = `${invite.email} was added as ${ROLE_LABEL[invite.role]}.`;
-      setNotice(
-        result?.emailed === false
-          ? `${who} The email could not be sent, so ask them to use "Forgot password" to set one.`
-          : `${who} They have been emailed a link to set their password.`
-      );
+
+      if (result?.password) {
+        setIssued({
+          name: [invite.firstName, invite.surname].filter(Boolean).join(" ") || invite.email,
+          email: result.email,
+          password: result.password,
+          role: ROLE_LABEL[invite.role],
+          mustChange: result.mustChange,
+        });
+        setNotice("");
+      } else {
+        setNotice(`${invite.email} was added as ${ROLE_LABEL[invite.role]}.`);
+      }
+
       setInvite({ email: "", firstName: "", surname: "", role: "student" });
       setShowInvite(false);
       load();
@@ -263,6 +272,62 @@ const PeoplePanel = () => {
 
       <Notice tone="error">{error}</Notice>
       <Notice tone="success">{notice}</Notice>
+
+      {issued ? (
+        <Card
+          style={{
+            marginBottom: 18,
+            maxWidth: 640,
+            background: "var(--success-soft)",
+            borderColor: "transparent",
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>{`${issued.name} can now sign in`}</h3>
+          <p style={{ fontSize: 14, marginTop: 0 }}>
+            {issued.mustChange
+              ? "Give them these details. They will be asked to choose their own password the first time they sign in."
+              : "Give them these details."}
+          </p>
+
+          <div style={{ display: "grid", gap: 10, maxWidth: 420 }}>
+            <div className="file-chip">
+              <span style={{ flex: 1 }}>
+                <span className="file-meta">{"Email"}</span>
+                <div style={{ fontFamily: "monospace" }}>{issued.email}</div>
+              </span>
+            </div>
+            <div className="file-chip">
+              <span style={{ flex: 1 }}>
+                <span className="file-meta">{"Temporary password"}</span>
+                <div style={{ fontFamily: "monospace", fontSize: 17, letterSpacing: ".02em" }}>
+                  {issued.password}
+                </div>
+              </span>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  navigator.clipboard
+                    ?.writeText(`${issued.email}  ${issued.password}`)
+                    .catch(() => {})
+                }
+              >
+                {"Copy"}
+              </Button>
+            </div>
+          </div>
+
+          <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 0, marginTop: 14 }}>
+            {"This password is shown once and is not stored anywhere you can read it again. If it is lost, remove the person and add them back."}
+          </p>
+
+          <div style={{ marginTop: 14 }}>
+            <Button variant="secondary" size="sm" onClick={() => setIssued(null)}>
+              {"Done"}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
 
       {loading ? <Empty>{"Loading..."}</Empty> : null}
       {!loading && filtered.length === 0 ? <Empty>{"Nobody matches."}</Empty> : null}

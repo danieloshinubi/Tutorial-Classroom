@@ -10,6 +10,7 @@ import Signup from "./Pages/Signup/Signup";
 import SignupTutor from "./Pages/Signup/SignupTutor";
 import ForgotPassword from "./Pages/ForgotPassword/ForgotPassword";
 import ResetPassword from "./Pages/ForgotPassword/ResetPassword";
+import SetPassword from "./Pages/ForgotPassword/SetPassword";
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import Levels from "./Pages/Levels/Levels";
 import LevelCourses from "./Pages/CoursesPerLevel/LevelCourses";
@@ -45,6 +46,7 @@ function App() {
 
           {/* Signed in — any role */}
           <Route element={<ProtectedRoute />}>
+            <Route path="/Set-Password" element={<SetPassword />} />
             <Route path="/Dashboard" element={<Dashboard />} />
             <Route path="/Profile" element={<Profile />} />
             <Route path="/Tutors" element={<Tutors />} />

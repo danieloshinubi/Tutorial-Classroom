@@ -5,14 +5,14 @@ import { supabase } from "./supabaseClient";
 //
 // The obvious way — supabase.auth.admin.createUser — needs the service_role
 // key, which can never ship to a browser, which is why it normally lives in an
-// Edge Function. This does it from the client instead:
+// Edge Function. This does it from the client instead: a throwaway Supabase
+// client with persistSession off registers the new person, so the
+// administrator stays signed in as themselves.
 //
-//   1. A throwaway Supabase client with persistSession off signs the new
-//      person up. Because it keeps no session, the administrator stays signed
-//      in as themselves.
-//   2. The password is random, generated here and never shown to anyone. The
-//      administrator does not know it and cannot know it.
-//   3. A reset email lets the new person set their own.
+// The administrator is shown a generated password to pass on, and the account
+// is flagged so the person must replace it the moment they sign in. That is
+// the Microsoft 365 pattern: the temporary password is only ever good for
+// getting in once.
 //
 // No privilege is gained: anyone can already register themselves at /Signup.
 // What an administrator adds is the school membership, and that insert is
@@ -34,23 +34,32 @@ const provisioningClient = () =>
     },
   });
 
-const randomPassword = () => {
-  const bytes = new Uint8Array(24);
+// A password somebody has to read off a screen and type once. No 0/O or 1/l,
+// because those get mistyped and then the account looks broken.
+const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+const DIGITS = "23456789";
+const LOWER = "abcdefghijkmnpqrstuvwxyz";
+
+const pick = (set, n) => {
+  const bytes = new Uint8Array(n);
   crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(bytes, (b) => set[b % set.length]).join("");
 };
+
+export const temporaryPassword = () =>
+  `${pick(ALPHABET, 3)}-${pick(LOWER, 4)}-${pick(DIGITS, 3)}`;
 
 /**
  * Registers a person and returns their user id.
  * Returns { userId, existed } — existed is true when the email already had an
  * account, which is normal for a parent with children at two schools.
  */
-export const createAuthUser = async ({ email, firstName, surname }) => {
+export const createAuthUser = async ({ email, firstName, surname, password }) => {
   const client = provisioningClient();
 
   const { data, error } = await client.auth.signUp({
     email,
-    password: randomPassword(),
+    password,
     options: {
       data: { first_name: firstName || "", surname: surname || "" },
     },
