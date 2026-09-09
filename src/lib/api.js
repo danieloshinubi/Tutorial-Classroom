@@ -1024,3 +1024,228 @@ export const unlinkGuardian = async (linkId) => {
   const { error } = await supabase.from("guardian_students").delete().eq("id", linkId);
   if (error) throw error;
 };
+
+/* -------------------------------------------------------------------------- */
+/* platform console                                                           */
+/* -------------------------------------------------------------------------- */
+
+export const fetchPlatformSchools = async () => {
+  const { data, error } = await supabase.rpc("platform_schools");
+  if (error) throw error;
+  return data || [];
+};
+
+export const createSchool = async ({ name, slug, ownerEmail }) => {
+  const { data, error } = await supabase.rpc("create_school", {
+    school_name: name,
+    school_slug: slug,
+    owner_email: ownerEmail || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const setSchoolActive = async ({ id, isActive }) => {
+  const { error } = await supabase
+    .from("schools")
+    .update({ is_active: isActive })
+    .eq("id", id);
+  if (error) throw error;
+};
+
+// Called after signing in on a school's subdomain, so a person who registers
+// themselves actually becomes a member of that school.
+export const joinSchool = async (slug) => {
+  const { data, error } = await supabase.rpc("join_school", { target_slug: slug });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+/* -------------------------------------------------------------------------- */
+/* academic structure                                                         */
+/* -------------------------------------------------------------------------- */
+
+export const fetchSessions = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("sessions")
+    .select("id, name, starts_on, ends_on, is_current")
+    .eq("school_id", schoolId)
+    .order("name", { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+export const createSession = async ({ schoolId, name, startsOn, endsOn }) => {
+  const { data, error } = await supabase
+    .from("sessions")
+    .insert({ school_id: schoolId, name, starts_on: startsOn || null, ends_on: endsOn || null })
+    .select("id, name, starts_on, ends_on, is_current")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteSession = async (id) => {
+  const { error } = await supabase.from("sessions").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const fetchTerms = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("terms")
+    .select("id, session_id, name, position, starts_on, ends_on, is_current, sessions ( name )")
+    .eq("school_id", schoolId)
+    .order("position");
+  if (error) throw error;
+  return data;
+};
+
+export const createTerm = async ({ schoolId, sessionId, name, position, startsOn, endsOn }) => {
+  const { data, error } = await supabase
+    .from("terms")
+    .insert({
+      school_id: schoolId,
+      session_id: sessionId,
+      name,
+      position,
+      starts_on: startsOn || null,
+      ends_on: endsOn || null,
+    })
+    .select("id, name, position, is_current")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteTerm = async (id) => {
+  const { error } = await supabase.from("terms").delete().eq("id", id);
+  if (error) throw error;
+};
+
+// One statement, so the school is never left with two current terms or none.
+export const setCurrentTerm = async (termId) => {
+  const { data, error } = await supabase.rpc("set_current_term", { target_term: termId });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const fetchClasses = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("classes")
+    .select(`id, name, level_year, session_id, form_teacher_id,
+             form_teacher:profiles!classes_form_teacher_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("school_id", schoolId)
+    .order("level_year")
+    .order("name");
+  if (error) throw error;
+  return data;
+};
+
+export const createClass = async ({ schoolId, sessionId, levelYear, name, formTeacherId }) => {
+  const { data, error } = await supabase
+    .from("classes")
+    .insert({
+      school_id: schoolId,
+      session_id: sessionId || null,
+      level_year: levelYear,
+      name,
+      form_teacher_id: formTeacherId || null,
+    })
+    .select("id, name, level_year")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateClass = async (id, changes) => {
+  const { error } = await supabase.from("classes").update(changes).eq("id", id);
+  if (error) throw error;
+};
+
+export const deleteClass = async (id) => {
+  const { error } = await supabase.from("classes").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const fetchClassRoster = async (classId) => {
+  const { data, error } = await supabase
+    .from("class_students")
+    .select(`id, added_at, student:profiles!class_students_student_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("class_id", classId);
+  if (error) throw error;
+  return data.filter((row) => row.student);
+};
+
+export const addStudentToClass = async ({ classId, studentId }) => {
+  const { error } = await supabase
+    .from("class_students")
+    .insert({ class_id: classId, student_id: studentId });
+  if (error) throw error;
+};
+
+export const removeStudentFromClass = async (rowId) => {
+  const { error } = await supabase.from("class_students").delete().eq("id", rowId);
+  if (error) throw error;
+};
+
+export const fetchSubjects = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("subjects")
+    .select("id, code, name")
+    .eq("school_id", schoolId)
+    .order("name");
+  if (error) throw error;
+  return data;
+};
+
+export const createSubject = async ({ schoolId, code, name }) => {
+  const { data, error } = await supabase
+    .from("subjects")
+    .insert({ school_id: schoolId, code: code || null, name })
+    .select("id, code, name")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteSubject = async (id) => {
+  const { error } = await supabase.from("subjects").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const fetchClassSubjects = async (classId) => {
+  const { data, error } = await supabase
+    .from("class_subjects")
+    .select(`id, subject_id, teacher_id,
+             subjects ( id, code, name ),
+             teacher:profiles!class_subjects_teacher_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("class_id", classId);
+  if (error) throw error;
+  return data;
+};
+
+export const assignSubjectToClass = async ({ schoolId, classId, subjectId, teacherId }) => {
+  const { error } = await supabase.from("class_subjects").insert({
+    school_id: schoolId,
+    class_id: classId,
+    subject_id: subjectId,
+    teacher_id: teacherId || null,
+  });
+  if (error) throw error;
+};
+
+export const updateClassSubject = async (id, changes) => {
+  const { error } = await supabase.from("class_subjects").update(changes).eq("id", id);
+  if (error) throw error;
+};
+
+export const removeClassSubject = async (id) => {
+  const { error } = await supabase.from("class_subjects").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const fetchMyTeaching = async (schoolId) => {
+  const { data, error } = await supabase.rpc("my_teaching", { target_school: schoolId });
+  if (error) throw error;
+  return data || [];
+};

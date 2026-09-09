@@ -3,25 +3,26 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import Notifications from "../Notifications";
+import { schoolUrl } from "../../lib/tenant";
 import { displayName, initials } from "../UI";
 
-const linksFor = (role, isSchoolAdmin) => {
+const linksFor = ({ isStaff, isAdmin, isPlatformAdmin }) => {
   const links = [
     { to: "/Dashboard", label: "Dashboard" },
     { to: "/Levels", label: "Courses" },
     { to: "/Tutors", label: "Tutors" },
     { to: "/Reports", label: "Reports" },
   ];
-  if (role === "tutor" || role === "admin") links.push({ to: "/Teach", label: "Teach" });
-  if (role === "admin") links.push({ to: "/Admin", label: "Admin" });
-  if (isSchoolAdmin) links.push({ to: "/School", label: "School" });
+  if (isStaff) links.push({ to: "/Teach", label: "Teach" });
+  if (isAdmin) links.push({ to: "/School", label: "School" });
+  if (isPlatformAdmin) links.push({ to: "/Platform", label: "Platform" });
   return links;
 };
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
   const { profile, user, signOut } = useAuth();
-  const { school, isAdmin: isSchoolAdmin } = useSchool();
+  const { school, memberships, role, isAdmin, isStaff, isPlatformAdmin } = useSchool();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -29,7 +30,7 @@ const Navbar = () => {
   // you just navigated to.
   useEffect(() => setOpen(false), [location.pathname]);
 
-  const links = linksFor(profile?.role, isSchoolAdmin);
+  const links = linksFor({ isStaff, isAdmin, isPlatformAdmin });
   const name = profile || user ? displayName(profile || { email: user?.email }) : "";
 
   const handleSignOut = async () => {
@@ -79,6 +80,23 @@ const Navbar = () => {
 
           <span className="nav-spacer" />
 
+          {memberships.length > 1 ? (
+            <select
+              className="select school-switch"
+              value={school?.slug || ""}
+              onChange={(e) => {
+                window.location.href = schoolUrl(e.target.value);
+              }}
+              aria-label="Switch school"
+            >
+              {memberships.map((m) => (
+                <option key={m.schools.id} value={m.schools.slug}>
+                  {m.schools.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+
           <Notifications />
 
           <Link to="/Profile" className="nav-user" title={user?.email || ""}>
@@ -89,7 +107,7 @@ const Navbar = () => {
             )}
             <span style={{ minWidth: 0 }}>
               <div className="nav-name">{name}</div>
-              {profile?.role ? <div className="nav-role">{profile.role}</div> : null}
+              {role ? <div className="nav-role">{role}</div> : null}
             </span>
           </Link>
 

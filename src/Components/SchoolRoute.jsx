@@ -11,7 +11,7 @@ import Navbar from "./Navbar/Navbar";
 // the membership of the school in the current subdomain. Both exist during the
 // tenancy transition, and the classroom keeps behaving exactly as it did.
 const SchoolRoute = ({ require = "admin" }) => {
-  const { school, isAdmin, isStaff, loading, error, slug } = useSchool();
+  const { school, isAdmin, isStaff, isPlatformAdmin, loading, error, slug } = useSchool();
 
   if (loading) {
     return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Loading school..."}</p>;
@@ -19,7 +19,7 @@ const SchoolRoute = ({ require = "admin" }) => {
 
   // No membership of this subdomain's school — say which school, since the URL
   // is the only thing that decides it.
-  if (!school) {
+  if (!school && require !== "platform") {
     return (
       <div className="shell">
         <Navbar />
@@ -37,7 +37,8 @@ const SchoolRoute = ({ require = "admin" }) => {
     );
   }
 
-  const allowed = require === "staff" ? isStaff : isAdmin;
+  const allowed =
+    require === "platform" ? isPlatformAdmin : require === "staff" ? isStaff : isAdmin;
   if (!allowed) return <Navigate to="/Dashboard" replace />;
 
   return <Outlet />;

@@ -7,6 +7,7 @@ import React, {
   useState,
 } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { joinSchool } from "../lib/api";
 import { resolveSlug } from "../lib/tenant";
 import { useAuth } from "./AuthContext";
 
@@ -89,7 +90,15 @@ export const SchoolProvider = ({ children }) => {
         .order("year");
       setLevels(levelRows || []);
 
-      setMembership(mine || null);
+      // A person who signed themselves up has no membership yet. Ask the
+      // database to add them as a student — it refuses if the school is
+      // invitation-only, which is the right answer.
+      let membershipRow = mine;
+      if (!membershipRow) {
+        membershipRow = await joinSchool(slug).catch(() => null);
+      }
+
+      setMembership(membershipRow || null);
       setMemberships((all || []).filter((row) => row.schools));
       setIsPlatformAdmin(Boolean(platform));
     } catch (err) {

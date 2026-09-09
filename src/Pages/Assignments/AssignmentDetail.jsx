@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import {
   fetchAssignment,
   fetchMySubmission,
@@ -294,7 +295,8 @@ const GradePanel = ({ assignment, graderId }) => {
 
 const AssignmentDetail = () => {
   const { assignmentId } = useParams();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const { isAdmin } = useSchool();
 
   const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -325,7 +327,7 @@ const AssignmentDetail = () => {
   }, [assignmentId]);
 
   const canManage =
-    profile?.role === "admin" ||
+    isAdmin ||
     (assignment?.courses?.owner_id && assignment.courses.owner_id === user?.id);
 
   return (

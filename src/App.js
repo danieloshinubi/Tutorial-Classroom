@@ -4,7 +4,6 @@ import { AuthProvider } from "./context/AuthContext";
 import { SchoolProvider } from "./context/SchoolContext";
 import ConfigNotice from "./Components/ConfigNotice";
 import ProtectedRoute from "./Components/ProtectedRoute";
-import RoleRoute from "./Components/RoleRoute";
 import SchoolRoute from "./Components/SchoolRoute";
 import Login from "./Pages/Login/Login";
 import Signup from "./Pages/Signup/Signup";
@@ -23,7 +22,7 @@ import Tutors from "./Pages/Tutors/Tutors";
 import Profile from "./Pages/Profile/Profile";
 import Teach from "./Pages/Teach/Teach";
 import CourseForm from "./Pages/Teach/CourseForm";
-import Admin from "./Pages/Admin/Admin";
+import Platform from "./Pages/Platform/Platform";
 import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
 import Reports from "./Pages/Reports/Reports";
 import StudentReport from "./Pages/Reports/StudentReport";
@@ -58,8 +57,8 @@ function App() {
             <Route path="/Reports" element={<Reports />} />
             <Route path="/Reports/:studentId" element={<StudentReport />} />
 
-            {/* Tutors and admins */}
-            <Route element={<RoleRoute allow={["tutor", "admin"]} />}>
+            {/* Staff who may run a course */}
+            <Route element={<SchoolRoute require="staff" />}>
               <Route path="/Teach" element={<Teach />} />
               <Route path="/Teach/New" element={<CourseForm />} />
               <Route path="/Teach/:courseId/Edit" element={<CourseForm />} />
@@ -68,14 +67,14 @@ function App() {
               <Route path="/Exams/:examId/Results" element={<ExamResults />} />
             </Route>
 
-            {/* Admins only */}
-            <Route element={<RoleRoute allow={["admin"]} />}>
-              <Route path="/Admin" element={<Admin />} />
-            </Route>
-
-            {/* School administration — gated on this subdomain's membership */}
+            {/* School administration */}
             <Route element={<SchoolRoute require="admin" />}>
               <Route path="/School" element={<SchoolAdmin />} />
+            </Route>
+
+            {/* The vendor's own console, across every school */}
+            <Route element={<SchoolRoute require="platform" />}>
+              <Route path="/Platform" element={<Platform />} />
             </Route>
           </Route>
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import { updateProfile } from "../../lib/api";
 import {
   Page,
@@ -13,6 +14,7 @@ import {
 
 const Profile = () => {
   const { profile, user, refreshProfile } = useAuth();
+  const { role, school } = useSchool();
   const [form, setForm] = useState({
     first_name: "",
     surname: "",
@@ -69,18 +71,10 @@ const Profile = () => {
         <Card style={{ maxWidth: "620px" }}>
           <p style={{ marginTop: 0, color: "#555" }}>
             {user?.email}
-            {profile ? (
+            {role ? (
               <span style={{ marginLeft: "10px" }}>
-                <Badge
-                  tone={
-                    profile.role === "admin"
-                      ? "admin"
-                      : profile.role === "tutor"
-                      ? "tutor"
-                      : "default"
-                  }
-                >
-                  {profile.role}
+                <Badge tone={role === "owner" || role === "admin" ? "danger" : role === "teacher" ? "brand" : undefined}>
+                  {`${role}${school ? ` at ${school.name}` : ""}`}
                 </Badge>
               </span>
             ) : null}

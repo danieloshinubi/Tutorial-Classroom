@@ -692,3 +692,12 @@ table.data tr:last-child td { border-bottom: none; }
 .finding.strength { border-left-color: var(--success); background: var(--success-soft); }
 .finding-title { font-weight: 600; font-size: 14.5px; }
 .finding-detail { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
+
+/* Only appears for someone who belongs to more than one school. */
+.school-switch {
+  width: auto;
+  max-width: 190px;
+  padding: 7px 10px;
+  font-size: 13.5px;
+}
+@media (max-width: 860px) { .school-switch { display: none; } }

@@ -34,13 +34,12 @@ const CourseCard = ({ course, labelFor }) => (
 
 const Dashboard = () => {
   const { profile, user } = useAuth();
-  const { labelFor } = useSchool();
+  const { labelFor, isStaff } = useSchool();
   const [enrolled, setEnrolled] = useState([]);
   const [teaching, setTeaching] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const isStaff = profile?.role === "tutor" || profile?.role === "admin";
 
   useEffect(() => {
     if (!user) return undefined;

@@ -4,6 +4,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import LevelsPanel from "./LevelsPanel";
 import GuardiansPanel from "./GuardiansPanel";
+import AcademicPanel from "./AcademicPanel";
+import ClassesPanel from "./ClassesPanel";
 import {
   fetchSchoolMembers,
   updateMemberRole,
@@ -462,6 +464,8 @@ const SchoolAdmin = () => {
         <Tabs
           tabs={[
             { id: "people", label: "People" },
+            { id: "academic", label: "Calendar" },
+            { id: "classes", label: "Classes & subjects" },
             { id: "levels", label: "Class levels" },
             { id: "guardians", label: "Parents & children" },
             { id: "settings", label: "School settings" },
@@ -470,6 +474,8 @@ const SchoolAdmin = () => {
           onChange={setTab}
         />
         {tab === "people" ? <PeoplePanel /> : null}
+        {tab === "academic" ? <AcademicPanel /> : null}
+        {tab === "classes" ? <ClassesPanel /> : null}
         {tab === "levels" ? <LevelsPanel /> : null}
         {tab === "guardians" ? <GuardiansPanel /> : null}
         {tab === "settings" ? <SettingsPanel /> : null}
