@@ -10,6 +10,7 @@ import {
   declarePayment,
   uploadPaymentProof,
   withdrawPayment,
+  startOnlinePayment,
   PAYMENT_METHODS,
 } from "../../lib/api";
 import {
@@ -203,6 +204,23 @@ const InvoiceCard = ({
   const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [payingOnline, setPayingOnline] = useState(false);
+
+  // Straight to the gateway. The amount is decided server-side from the
+  // outstanding balance, so there is nothing to pass here but the invoice.
+  const payOnline = async () => {
+    onError("");
+    setPayingOnline(true);
+    try {
+      const { authorizationUrl } = await startOnlinePayment({
+        invoiceId: invoice.invoice_id,
+      });
+      window.location.href = authorizationUrl;
+    } catch (err) {
+      onError(err.message || "Could not start that payment.");
+      setPayingOnline(false);
+    }
+  };
 
   const owing = Number(invoice.balance || 0);
 
@@ -285,9 +303,14 @@ const InvoiceCard = ({
 
         <div className="btn-row">
           {owing > 0 && invoice.status === "issued" ? (
-            <Button size="sm" onClick={() => setPaying((v) => !v)}>
-              {paying ? "Cancel" : "I have paid"}
-            </Button>
+            <>
+              <Button size="sm" disabled={payingOnline} onClick={payOnline}>
+                {payingOnline ? "Opening..." : "Pay now"}
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setPaying((v) => !v)}>
+                {paying ? "Cancel" : "I already paid"}
+              </Button>
+            </>
           ) : null}
           <Button size="sm" variant="secondary" onClick={onToggle}>
             {open ? "Hide detail" : "See detail"}

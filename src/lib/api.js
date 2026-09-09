@@ -1834,3 +1834,272 @@ export const fetchChildTeachers = async (studentId) => {
   if (error) throw error;
   return data || [];
 };
+
+/* -------------------------------------------------------------------------- */
+/* bursary                                                                    */
+/* -------------------------------------------------------------------------- */
+
+export const fetchFeeStructures = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("fee_structures")
+    .select(
+      "id, name, term_id, session_id, class_id, due_on, notes, is_active, created_at"
+    )
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchFeeItems = async (structureIds) => {
+  if (!structureIds || structureIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("fee_items")
+    .select("id, structure_id, name, amount, is_optional, position")
+    .in("structure_id", structureIds)
+    .order("position");
+  if (error) throw error;
+
+  const byStructure = {};
+  for (const row of data) {
+    (byStructure[row.structure_id] = byStructure[row.structure_id] || []).push(row);
+  }
+  return byStructure;
+};
+
+export const createFeeStructure = async ({
+  schoolId,
+  sessionId,
+  termId,
+  classId,
+  name,
+  dueOn,
+  notes,
+  userId,
+}) => {
+  const { data, error } = await supabase
+    .from("fee_structures")
+    .insert({
+      school_id: schoolId,
+      session_id: sessionId,
+      term_id: termId,
+      class_id: classId || null,
+      name,
+      due_on: dueOn || null,
+      notes: notes || null,
+      created_by: userId,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteFeeStructure = async (id) => {
+  const { error } = await supabase.from("fee_structures").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const addFeeItem = async ({ structureId, name, amount, isOptional, position }) => {
+  const { data, error } = await supabase
+    .from("fee_items")
+    .insert({
+      structure_id: structureId,
+      name,
+      amount,
+      is_optional: Boolean(isOptional),
+      position: position || 0,
+    })
+    .select("id, structure_id, name, amount, is_optional, position")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateFeeItem = async ({ id, name, amount, isOptional }) => {
+  const patch = {};
+  if (name !== undefined) patch.name = name;
+  if (amount !== undefined) patch.amount = amount;
+  if (isOptional !== undefined) patch.is_optional = isOptional;
+  const { error } = await supabase.from("fee_items").update(patch).eq("id", id);
+  if (error) throw error;
+};
+
+export const deleteFeeItem = async (id) => {
+  const { error } = await supabase.from("fee_items").delete().eq("id", id);
+  if (error) throw error;
+};
+
+// Raises one invoice per student in the class, skipping anyone who already
+// has one for that term. Returns how many were made.
+export const raiseInvoicesForClass = async (structureId) => {
+  const { data, error } = await supabase.rpc("raise_invoices_for_class", {
+    target_structure: structureId,
+  });
+  if (error) throw error;
+  return data ?? 0;
+};
+
+export const raiseInvoice = async ({ structureId, studentId, includeOptional, discount, discountReason }) => {
+  const { data, error } = await supabase.rpc("raise_invoice", {
+    target_structure: structureId,
+    target_student: studentId,
+    include_optional: includeOptional || [],
+    discount: discount || 0,
+    discount_reason: discountReason || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const issueInvoice = async (invoiceId) => {
+  const { error } = await supabase.rpc("issue_invoice", { target_invoice: invoiceId });
+  if (error) throw error;
+};
+
+export const cancelInvoice = async ({ invoiceId, reason }) => {
+  const { error } = await supabase.rpc("cancel_invoice", {
+    target_invoice: invoiceId,
+    reason,
+  });
+  if (error) throw error;
+};
+
+// Every invoice in the school, with its balance. RLS returns nothing here
+// unless the caller is owner, admin or bursar.
+export const fetchSchoolInvoices = async ({ schoolId, termId }) => {
+  let query = supabase
+    .from("invoice_balances")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("balance", { ascending: false });
+  if (termId) query = query.eq("term_id", termId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+};
+
+// Everything a bursar has to decide on, oldest first — a parent waiting on a
+// receipt is waiting on this queue.
+export const fetchPaymentQueue = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "id, invoice_id, amount, method, status, reference, paid_on, note, proof_path, submitted_at, submitted_by"
+    )
+    .eq("school_id", schoolId)
+    .eq("status", "submitted")
+    .order("submitted_at", { ascending: true });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchRecentPayments = async ({ schoolId, limit = 50 }) => {
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "id, invoice_id, amount, method, status, reference, paid_on, decided_at, decision_note"
+    )
+    .eq("school_id", schoolId)
+    .neq("status", "submitted")
+    .order("decided_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data;
+};
+
+export const approvePayment = async ({ id, note }) => {
+  const { error } = await supabase.rpc("approve_payment", {
+    target_payment: id,
+    decision: note || null,
+  });
+  if (error) throw error;
+};
+
+export const rejectPayment = async ({ id, note }) => {
+  const { error } = await supabase.rpc("reject_payment", {
+    target_payment: id,
+    decision: note,
+  });
+  if (error) throw error;
+};
+
+// Money taken at the desk: recorded and approved in one movement, because the
+// bursar counting the notes is the approval.
+export const takePayment = async ({ invoiceId, amount, method, reference, paidOn, note }) => {
+  const { data, error } = await supabase.rpc("take_payment", {
+    target_invoice: invoiceId,
+    amount,
+    method: method || "cash",
+    reference: reference || null,
+    paid_on: paidOn || new Date().toISOString().slice(0, 10),
+    note: note || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const fetchDebtors = async ({ schoolId, termId }) => {
+  const { data, error } = await supabase.rpc("debtors", {
+    target_school: schoolId,
+    target_term: termId || null,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+export const fetchCollectionSummary = async ({ schoolId, termId }) => {
+  const { data, error } = await supabase.rpc("collection_summary", {
+    target_school: schoolId,
+    target_term: termId || null,
+  });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) || null;
+};
+
+/* -------------------------------------------------------------------------- */
+/* paying online                                                              */
+/* -------------------------------------------------------------------------- */
+
+// Asks the server to start a Paystack transaction. Note what is NOT sent: an
+// amount. The Edge Function reads the outstanding balance from the database
+// as this user and charges that, so the figure cannot be argued with from
+// here. What comes back is a URL to send the family to.
+export const startOnlinePayment = async ({ invoiceId }) => {
+  const { data, error } = await supabase.functions.invoke("pay-init", {
+    body: {
+      invoiceId,
+      // Where Paystack returns them afterwards. This page only reports the
+      // outcome — the webhook is what actually credits the invoice.
+      callbackUrl: `${window.location.origin}/Fees/Paid`,
+    },
+  });
+
+  // A function that returns 4xx/5xx arrives here as an error whose useful
+  // message is in the response body rather than error.message.
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not start that payment.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+};
+
+// Did the webhook land? A family may read payments on their own invoices, so
+// finding the row by its gateway reference is the honest way to tell — rather
+// than trusting a status in the URL, which anybody can type.
+export const fetchPaymentByReference = async (reference) => {
+  if (!reference) return null;
+  const { data, error } = await supabase
+    .from("payments")
+    .select("id, invoice_id, amount, status, gateway, gateway_ref, decided_at")
+    .eq("gateway_ref", reference)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};

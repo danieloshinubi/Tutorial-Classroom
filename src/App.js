@@ -36,7 +36,9 @@ import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
 import PlatformApp from "./platform/PlatformApp";
 import { isPlatformHost } from "./lib/tenant";
 import News from "./Pages/News/News";
+import Bursary from "./Pages/Bursary/Bursary";
 import Fees from "./Pages/Fees/Fees";
+import PaymentReturn from "./Pages/Fees/PaymentReturn";
 import Reports from "./Pages/Reports/Reports";
 import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
@@ -82,6 +84,9 @@ function App() {
                 parent, and an invoice is only visible to its own family. */}
             <Route path="/News" element={<News />} />
             <Route path="/Fees" element={<Fees />} />
+            {/* Where the gateway returns a family. It reports the outcome and
+                credits nothing — the signed webhook does that. */}
+            <Route path="/Fees/Paid" element={<PaymentReturn />} />
             <Route path="/Tutors" element={<Tutors />} />
             <Route path="/Courses" element={<Courses />} />
             <Route path="/Courses/:code" element={<CourseDashboard />} />
@@ -109,6 +114,12 @@ function App() {
             <Route element={<SchoolRoute require="admissions" />}>
               <Route path="/Admissions" element={<Admissions />} />
               <Route path="/Admissions/:applicationId" element={<ApplicationDetail />} />
+            </Route>
+
+            {/* The money. Owner, admin and bursar — a principal signs off
+                results, not the accounts. */}
+            <Route element={<SchoolRoute module="bursary" />}>
+              <Route path="/Bursary" element={<Bursary />} />
             </Route>
 
             {/* School administration */}
