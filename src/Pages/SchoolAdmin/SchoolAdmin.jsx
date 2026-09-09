@@ -109,8 +109,15 @@ const PeoplePanel = () => {
 
     setInviting(true);
     try {
-      await inviteSchoolUser({ schoolId, ...invite });
-      setNotice(`${invite.email} was added as ${ROLE_LABEL[invite.role]}.`);
+      const result = await inviteSchoolUser({ schoolId, ...invite });
+      // Say what actually happened, including when the email did not go out —
+      // otherwise an administrator waits for a message that never arrives.
+      const who = `${invite.email} was added as ${ROLE_LABEL[invite.role]}.`;
+      setNotice(
+        result?.emailed === false
+          ? `${who} The email could not be sent, so ask them to use "Forgot password" to set one.`
+          : `${who} They have been emailed a link to set their password.`
+      );
       setInvite({ email: "", firstName: "", surname: "", role: "student" });
       setShowInvite(false);
       load();

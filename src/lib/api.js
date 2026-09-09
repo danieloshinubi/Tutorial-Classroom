@@ -1,4 +1,5 @@
 import { supabase } from "./supabaseClient";
+import { createAuthUser, invitePasswordSetup } from "./provisioning";
 
 // Fields selected wherever a row carries its author/owner, so names render
 // consistently across the app.
@@ -819,35 +820,91 @@ export const removeMember = async (memberId) => {
   if (error) throw error;
 };
 
-// Creating a login for someone else needs the service_role key, which must
-// never reach the browser — so it runs in an Edge Function that checks the
-// caller administers this school. See supabase/functions/create-school-user.
+// Adds someone to this school, creating their login if they do not have one.
+//
+// Tries the Edge Function first — that is the better route, because it can
+// send a real invitation and reuse an existing account by email. When it is
+// not deployed, falls back to creating the account from the browser: see
+// lib/provisioning.js for why that is safe.
 export const inviteSchoolUser = async ({ schoolId, email, firstName, surname, role }) => {
+  const address = email.trim().toLowerCase();
+
   const { data, error } = await supabase.functions.invoke("create-school-user", {
     body: {
       school_id: schoolId,
-      email: email.trim().toLowerCase(),
+      email: address,
       first_name: firstName.trim(),
       surname: surname.trim(),
       role,
     },
   });
-  if (error) {
-    // supabase-js reports a missing function as a generic transport failure,
-    // which tells an administrator nothing. Name the real cause.
-    const detail = await error.context?.json?.().catch(() => null);
-    if (detail?.error) throw new Error(detail.error);
 
-    const status = error.context?.status;
-    if (status === 404 || /failed to send|fetch/i.test(error.message || "")) {
-      throw new Error(
-        "Account creation is not set up on this project yet. The create-school-user Edge Function has not been deployed — run: supabase functions deploy create-school-user"
-      );
-    }
-    throw new Error(error.message || "Could not create that user.");
-  }
-  return data;
+  if (!error) return data;
+
+  // A refusal from the function itself is a real answer — surface it.
+  const detail = await error.context?.json?.().catch(() => null);
+  if (detail?.error) throw new Error(detail.error);
+
+  const missing =
+    error.context?.status === 404 ||
+    /failed to send|fetch|not found/i.test(error.message || "");
+  if (!missing) throw new Error(error.message || "Could not create that user.");
+
+  return addSchoolUserDirect({ schoolId, email: address, firstName, surname, role });
 };
+
+// The no-Edge-Function path.
+export const addSchoolUserDirect = async ({ schoolId, email, firstName, surname, role }) => {
+  let userId = null;
+  let existed = false;
+
+  try {
+    const created = await createAuthUser({ email, firstName, surname });
+    userId = created.userId;
+    existed = created.existed;
+  } catch (err) {
+    throw new Error(err.message || "Could not create that account.");
+  }
+
+  // Either the address was already registered, or email confirmation is on and
+  // signUp withheld the id. Look the profile up by address instead.
+  if (!userId) {
+    const { data: found } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+    userId = found?.id ?? null;
+  }
+
+  if (!userId) {
+    throw new Error(
+      existed
+        ? `${email} already has an account elsewhere. Supabase will not reveal its id to the browser, so ask them to sign in here once — then adding them will work. Deploying the create-school-user function removes this step.`
+        : "The account was created but its id was not returned. Ask them to sign in once, then add them again."
+    );
+  }
+
+  const { error: memberError } = await supabase
+    .from("school_members")
+    .upsert(
+      { school_id: schoolId, user_id: userId, role, is_active: true },
+      { onConflict: "school_id,user_id" }
+    );
+  if (memberError) throw new Error(memberError.message);
+
+  // Lets them choose their own password. Not fatal if the mail fails — the
+  // account exists and Forgot Password reaches the same place.
+  let emailed = true;
+  try {
+    await invitePasswordSetup(email);
+  } catch {
+    emailed = false;
+  }
+
+  return { user_id: userId, email, role, existed, emailed, viaFallback: true };
+};
+
 
 /* -------------------------------------------------------------------------- */
 /* class levels — defined by each school, never seeded                        */
