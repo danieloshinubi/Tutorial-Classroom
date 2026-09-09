@@ -31,6 +31,10 @@ import {
 const ROLES = [
   ["owner", "Proprietor"],
   ["admin", "Administrator"],
+  // Approves and releases results. Kept separate from Administrator on
+  // purpose: whoever enters marks must not be the one who signs them off, so
+  // the database refuses an approval from the person who submitted it.
+  ["principal", "Principal"],
   ["bursar", "Bursar"],
   ["admissions", "Admissions"],
   ["teacher", "Teacher"],
@@ -41,7 +45,7 @@ const ROLES = [
 const ROLE_LABEL = Object.fromEntries(ROLES);
 
 const toneFor = (role) => {
-  if (role === "owner" || role === "admin") return "danger";
+  if (role === "owner" || role === "admin" || role === "principal") return "danger";
   if (role === "teacher") return "brand";
   if (role === "bursar" || role === "admissions") return "warn";
   return undefined;
