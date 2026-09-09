@@ -35,6 +35,8 @@ import CourseForm from "./Pages/Teach/CourseForm";
 import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
 import PlatformApp from "./platform/PlatformApp";
 import { isPlatformHost } from "./lib/tenant";
+import News from "./Pages/News/News";
+import Fees from "./Pages/Fees/Fees";
 import Reports from "./Pages/Reports/Reports";
 import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
@@ -75,6 +77,11 @@ function App() {
             <Route path="/Set-Password" element={<SetPassword />} />
             <Route path="/Dashboard" element={<Dashboard />} />
             <Route path="/Profile" element={<Profile />} />
+            {/* The school's noticeboard, and what a family owes. Both are
+                scoped in Postgres: a staff notice is not readable by a
+                parent, and an invoice is only visible to its own family. */}
+            <Route path="/News" element={<News />} />
+            <Route path="/Fees" element={<Fees />} />
             <Route path="/Tutors" element={<Tutors />} />
             <Route path="/Courses" element={<Courses />} />
             <Route path="/Courses/:code" element={<CourseDashboard />} />

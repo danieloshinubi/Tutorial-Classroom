@@ -4,6 +4,7 @@ import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchMyCourses, fetchCoursesOwnedBy } from "../../lib/api";
+import ParentDashboard from "./ParentDashboard";
 import {
   Page,
   Card,
@@ -34,7 +35,7 @@ const CourseCard = ({ course, labelFor }) => (
 
 const Dashboard = () => {
   const { profile, user } = useAuth();
-  const { labelFor, isStaff } = useSchool();
+  const { labelFor, isStaff, isParent } = useSchool();
   const [enrolled, setEnrolled] = useState([]);
   const [teaching, setTeaching] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +67,19 @@ const Dashboard = () => {
       active = false;
     };
   }, [user, isStaff]);
+
+  // A parent is not a student. Offering them courses to join, and telling
+  // them they have not joined any, describes a relationship they do not have
+  // with the school — their business here is their children, the fees and
+  // what the school has announced.
+  if (isParent) {
+    return (
+      <div className="shell">
+        <Navbar />
+        <ParentDashboard />
+      </div>
+    );
+  }
 
   return (
     <div className="shell">

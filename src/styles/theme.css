@@ -1218,3 +1218,23 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .nav-links::-webkit-scrollbar { display: none; }
 .nav-link { white-space: nowrap; }
+
+/* An event on the noticeboard carries a when and a where. */
+.event-when {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: var(--r);
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: 13.5px;
+}
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; }
+.check input { width: 16px; height: 16px; }
+.pay-form {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}

@@ -34,6 +34,14 @@ export const MODULES = [
     roles: ROLES,
   },
   {
+    id: "news",
+    path: "/News",
+    label: "News",
+    // The school's own noticeboard. Everyone gets it — a parent who sees
+    // nothing else on the platform should still hear about a closure.
+    roles: ROLES,
+  },
+  {
     id: "courses",
     path: "/Courses",
     label: "Courses",

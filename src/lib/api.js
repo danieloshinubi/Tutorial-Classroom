@@ -1589,3 +1589,224 @@ export const setSessionApplicationsOpen = async ({ sessionId, open }) => {
     .eq("id", sessionId);
   if (error) throw error;
 };
+
+/* -------------------------------------------------------------------------- */
+/* the noticeboard                                                            */
+/* -------------------------------------------------------------------------- */
+
+// Who a notice is addressed to. The database enforces this in the SELECT
+// policy; these labels only decide what the composer offers.
+export const NOTICE_AUDIENCES = [
+  ["everyone", "Everyone at the school"],
+  ["parents", "Parents only"],
+  ["students", "Students only"],
+  ["staff", "Staff only"],
+];
+
+export const fetchNotices = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("notice_feed")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("pinned", { ascending: false })
+    .order("published_at", { ascending: false, nullsFirst: true })
+    .limit(100);
+  if (error) throw error;
+  return data;
+};
+
+export const createNotice = async ({
+  schoolId,
+  title,
+  body,
+  audience,
+  isEvent,
+  eventAt,
+  eventPlace,
+  pinned,
+  authorId,
+}) => {
+  const { data, error } = await supabase
+    .from("notices")
+    .insert({
+      school_id: schoolId,
+      title,
+      body,
+      audience: audience || "everyone",
+      is_event: Boolean(isEvent),
+      event_at: isEvent && eventAt ? eventAt : null,
+      event_place: isEvent ? eventPlace || null : null,
+      pinned: Boolean(pinned),
+      author_id: authorId,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateNotice = async ({ id, ...fields }) => {
+  const patch = { updated_at: new Date().toISOString(), edited_at: new Date().toISOString() };
+  if (fields.title !== undefined) patch.title = fields.title;
+  if (fields.body !== undefined) patch.body = fields.body;
+  if (fields.audience !== undefined) patch.audience = fields.audience;
+  if (fields.pinned !== undefined) patch.pinned = fields.pinned;
+  if (fields.isEvent !== undefined) patch.is_event = fields.isEvent;
+  if (fields.eventAt !== undefined) patch.event_at = fields.eventAt || null;
+  if (fields.eventPlace !== undefined) patch.event_place = fields.eventPlace || null;
+
+  const { error } = await supabase.from("notices").update(patch).eq("id", id);
+  if (error) throw error;
+};
+
+// Publishing is what sends it. Separate from the insert so a draft written on
+// Sunday is not announced until Monday.
+export const publishNotice = async (id) => {
+  const { error } = await supabase.rpc("publish_notice", { target_notice: id });
+  if (error) throw error;
+};
+
+export const deleteNotice = async (id) => {
+  const { error } = await supabase.from("notices").delete().eq("id", id);
+  if (error) throw error;
+};
+
+const REPLY_FIELDS = `id, notice_id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} )`;
+
+export const fetchNoticeReplies = async (noticeIds) => {
+  if (!noticeIds || noticeIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("notice_replies")
+    .select(REPLY_FIELDS)
+    .in("notice_id", noticeIds)
+    .order("created_at");
+  if (error) throw error;
+
+  const byNotice = {};
+  for (const row of data) {
+    (byNotice[row.notice_id] = byNotice[row.notice_id] || []).push(row);
+  }
+  return byNotice;
+};
+
+export const replyToNotice = async ({ noticeId, userId, body }) => {
+  const { data, error } = await supabase
+    .from("notice_replies")
+    .insert({ notice_id: noticeId, user_id: userId, body })
+    .select(REPLY_FIELDS)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteNoticeReply = async (id) => {
+  const { error } = await supabase.from("notice_replies").delete().eq("id", id);
+  if (error) throw error;
+};
+
+/* -------------------------------------------------------------------------- */
+/* fees, from the family's side                                               */
+/* -------------------------------------------------------------------------- */
+
+export const PAYMENT_METHODS = [
+  ["transfer", "Bank transfer"],
+  ["cash", "Cash"],
+  ["pos", "Card / POS"],
+  ["cheque", "Cheque"],
+];
+
+// Row level security decides whose invoices come back: a parent gets their
+// children's, a student their own, the bursary the whole school.
+export const fetchMyInvoices = async () => {
+  const { data, error } = await supabase
+    .from("invoice_balances")
+    .select("*")
+    .order("due_on", { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchInvoiceItems = async (invoiceIds) => {
+  if (!invoiceIds || invoiceIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("invoice_items")
+    .select("id, invoice_id, name, amount, position")
+    .in("invoice_id", invoiceIds)
+    .order("position");
+  if (error) throw error;
+
+  const byInvoice = {};
+  for (const row of data) {
+    (byInvoice[row.invoice_id] = byInvoice[row.invoice_id] || []).push(row);
+  }
+  return byInvoice;
+};
+
+export const fetchPaymentsFor = async (invoiceIds) => {
+  if (!invoiceIds || invoiceIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      "id, invoice_id, amount, method, status, reference, paid_on, note, proof_path, submitted_at, decided_at, decision_note"
+    )
+    .in("invoice_id", invoiceIds)
+    .order("paid_on", { ascending: false });
+  if (error) throw error;
+
+  const byInvoice = {};
+  for (const row of data) {
+    (byInvoice[row.invoice_id] = byInvoice[row.invoice_id] || []).push(row);
+  }
+  return byInvoice;
+};
+
+// The receipt for a transfer. Path shape matters: the storage policy reads
+// the invoice id out of the third segment to decide who may write here.
+export const uploadPaymentProof = async ({ schoolId, invoiceId, file }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `payments/${schoolId}/${invoiceId}/${crypto.randomUUID()}-${safeName}`;
+
+  const { error } = await supabase.storage
+    .from("course-materials")
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return path;
+};
+
+// A declaration, not a receipt. It lands as `submitted` and is worth nothing
+// against the balance until the bursary approves it — the insert policy will
+// not accept any other status.
+export const declarePayment = async ({
+  schoolId,
+  invoiceId,
+  userId,
+  amount,
+  method,
+  reference,
+  paidOn,
+  note,
+  proofPath,
+}) => {
+  const { data, error } = await supabase
+    .from("payments")
+    .insert({
+      school_id: schoolId,
+      invoice_id: invoiceId,
+      amount,
+      method: method || "transfer",
+      reference: reference || null,
+      paid_on: paidOn || new Date().toISOString().slice(0, 10),
+      note: note || null,
+      proof_path: proofPath || null,
+      submitted_by: userId,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const withdrawPayment = async (id) => {
+  const { error } = await supabase.from("payments").delete().eq("id", id);
+  if (error) throw error;
+};
