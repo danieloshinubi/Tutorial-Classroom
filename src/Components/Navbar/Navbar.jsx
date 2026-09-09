@@ -6,7 +6,7 @@ import Notifications from "../Notifications";
 import { schoolUrl } from "../../lib/tenant";
 import { displayName, initials } from "../UI";
 
-const linksFor = ({ isStaff, isAdmin, isPlatformAdmin }) => {
+const linksFor = ({ role, isStaff, isAdmin, isPlatformAdmin }) => {
   const links = [
     { to: "/Dashboard", label: "Dashboard" },
     { to: "/Courses", label: "Courses" },
@@ -14,6 +14,7 @@ const linksFor = ({ isStaff, isAdmin, isPlatformAdmin }) => {
     { to: "/Reports", label: "Reports" },
   ];
   if (isStaff) links.push({ to: "/Teach", label: "Teach" });
+  if (isAdmin || role === "admissions") links.push({ to: "/Admissions", label: "Admissions" });
   if (isAdmin) links.push({ to: "/School", label: "School" });
   if (isPlatformAdmin) links.push({ to: "/Platform", label: "Platform" });
   return links;
@@ -30,7 +31,7 @@ const Navbar = () => {
   // you just navigated to.
   useEffect(() => setOpen(false), [location.pathname]);
 
-  const links = linksFor({ isStaff, isAdmin, isPlatformAdmin });
+  const links = linksFor({ role, isStaff, isAdmin, isPlatformAdmin });
   const name = profile || user ? displayName(profile || { email: user?.email }) : "";
 
   const handleSignOut = async () => {

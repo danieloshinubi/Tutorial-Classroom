@@ -835,3 +835,169 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .chat-actions button:hover { color: var(--brand); text-decoration: underline; }
 .chat-item:hover .chat-actions button { color: var(--ink-2); }
+
+/* ==========================================================================
+   Admissions
+   ========================================================================== */
+
+/* The public form is reached without signing in, so it carries its own
+   frame rather than the app shell. */
+.apply { min-height: 100vh; background: var(--bg); padding-bottom: 70px; }
+.apply-inner { width: min(760px, 100% - 40px); margin: 0 auto; }
+
+.apply-head {
+  background: linear-gradient(158deg, #4f46e5 0%, #4338ca 55%, #312e81 100%);
+  color: #fff;
+  padding: 40px 0 44px;
+  margin-bottom: 32px;
+}
+.apply-head h1 { color: #fff; margin: 0 0 8px; font-size: clamp(26px, 3.4vw, 36px); }
+.apply-lede { margin: 0; color: rgb(255 255 255 / 0.82); font-size: 15.5px; max-width: 60ch; line-height: 1.6; }
+
+.apply-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 22px; font-weight: 600; }
+.apply-brand img, .apply-brand span:first-child {
+  width: 32px; height: 32px; border-radius: 9px; object-fit: cover;
+  display: grid; place-items: center;
+  background: rgb(255 255 255 / 0.18); font-weight: 700;
+}
+
+.apply-form {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: 26px;
+  box-shadow: var(--shadow-1);
+}
+.apply-form section { margin-bottom: 30px; }
+.apply-form section:last-of-type { margin-bottom: 18px; }
+.apply-form h2 {
+  font-size: 16px; font-weight: 650;
+  padding-bottom: 8px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.apply-hint { margin: -8px 0 16px; font-size: 13.5px; color: var(--ink-3); }
+.apply-grid {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.apply-actions {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding-top: 18px; border-top: 1px solid var(--line);
+}
+
+.apply-done { text-align: center; padding-top: 70px; }
+.apply-tick {
+  display: grid; place-items: center;
+  width: 56px; height: 56px; margin: 0 auto 20px;
+  border-radius: 50%;
+  background: var(--success-soft); color: var(--success);
+  font-size: 26px; font-weight: 700;
+}
+.apply-done .apply-lede { color: var(--ink-2); margin: 0 auto 26px; }
+.apply-reference {
+  display: inline-flex; align-items: center; gap: 14px;
+  padding: 14px 20px; margin-bottom: 18px;
+  border: 1px dashed var(--line); border-radius: var(--r);
+  background: var(--surface);
+}
+.apply-reference strong { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 19px; }
+.apply-note {
+  max-width: 52ch; margin: 0 auto 26px;
+  font-size: 14px; color: var(--ink-3); line-height: 1.6;
+}
+
+/* Label/value pairs, used on the status check and the staff detail page. */
+.apply-facts { display: grid; gap: 12px; margin: 0; }
+.apply-facts > div {
+  display: grid; grid-template-columns: 150px 1fr; gap: 12px;
+  font-size: 14.5px;
+}
+.apply-facts dt { color: var(--ink-3); }
+.apply-facts dd { margin: 0; }
+@media (max-width: 560px) {
+  .apply-facts > div { grid-template-columns: 1fr; gap: 2px; }
+}
+
+/* The audit trail */
+.timeline { list-style: none; margin: 0; padding: 0; }
+.timeline li {
+  display: flex; gap: 14px;
+  padding: 0 0 18px 0; position: relative;
+}
+.timeline li:not(:last-child)::before {
+  content: ""; position: absolute;
+  left: 5px; top: 16px; bottom: 0;
+  width: 1px; background: var(--line);
+}
+.timeline-dot {
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--brand); flex: none; margin-top: 4px;
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.timeline-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+.timeline-note {
+  margin: 6px 0 0; font-size: 14px; color: var(--ink-2);
+  background: var(--bg); padding: 8px 11px; border-radius: var(--r-sm);
+}
+
+/* ==========================================================================
+   Admission letter — laid out for A4, not for the screen
+   ========================================================================== */
+.letter-page { background: var(--bg); min-height: 100vh; padding: 24px 0 60px; }
+.letter-toolbar {
+  display: flex; gap: 10px; justify-content: flex-end;
+  width: min(760px, 100% - 40px); margin: 0 auto 18px;
+}
+.letter {
+  width: min(760px, 100% - 40px);
+  margin: 0 auto;
+  background: #fff;
+  color: #14161a;
+  padding: 52px 56px 46px;
+  border-radius: 4px;
+  box-shadow: var(--shadow-2);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.letter p { margin: 0 0 15px; }
+.letter-head {
+  display: flex; justify-content: space-between; gap: 24px;
+  padding-bottom: 20px; margin-bottom: 30px;
+  border-bottom: 2px solid #14161a;
+}
+.letter-head h1 { font-size: 22px; margin: 0 0 4px; color: #14161a; }
+.letter-head p { margin: 0; font-size: 13px; color: #4a5160; }
+.letter-logo { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; margin-bottom: 8px; }
+.letter-contact { margin-top: 3px !important; }
+.letter-ref { text-align: right; font-size: 12.5px; color: #4a5160; display: grid; gap: 2px; }
+.letter-ref strong { font-size: 15px; color: #14161a; font-family: "IBM Plex Mono", monospace; }
+.letter-title {
+  font-size: 17px; text-align: center; text-transform: uppercase;
+  letter-spacing: .08em; margin: 0 0 28px; color: #14161a;
+}
+.letter-table { width: 100%; border-collapse: collapse; margin: 22px 0 26px; }
+.letter-table th, .letter-table td {
+  text-align: left; padding: 9px 12px;
+  border: 1px solid #dbe0e0; font-size: 14px;
+}
+.letter-table th { width: 180px; background: #f5f7f6; font-weight: 600; }
+.letter-sign { margin-top: 40px; }
+.letter-rule { width: 210px; border-bottom: 1px solid #14161a; margin: 34px 0 6px; }
+.letter-role { margin: 0 !important; font-size: 13.5px; color: #4a5160; }
+.letter-foot {
+  margin-top: 40px; padding-top: 14px;
+  border-top: 1px solid #dbe0e0;
+  font-size: 11.5px; color: #6d7b82; text-align: center;
+}
+
+@media print {
+  /* Only the letter reaches the paper. */
+  .nav, .nav-drawer, .letter-toolbar, .conn { display: none !important; }
+  body, .letter-page { background: #fff; padding: 0; }
+  .letter {
+    width: auto; margin: 0; padding: 0;
+    box-shadow: none; border-radius: 0;
+    font-size: 12pt;
+  }
+  @page { size: A4; margin: 18mm 16mm; }
+}

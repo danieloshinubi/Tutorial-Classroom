@@ -1327,3 +1327,206 @@ export const deleteMessage = async (id) => {
   const { error } = await supabase.from("messages").delete().eq("id", id);
   if (error) throw error;
 };
+
+/* -------------------------------------------------------------------------- */
+/* admissions                                                                 */
+/* -------------------------------------------------------------------------- */
+
+export const APPLICATION_STATUSES = [
+  ["submitted", "Submitted", "warn"],
+  ["screening", "Screening", "brand"],
+  ["offered", "Offered", "brand"],
+  ["accepted", "Accepted", "success"],
+  ["enrolled", "Enrolled", "success"],
+  ["declined", "Declined", undefined],
+  ["rejected", "Rejected", "danger"],
+  ["withdrawn", "Withdrawn", undefined],
+];
+
+export const STATUS_LABEL = Object.fromEntries(
+  APPLICATION_STATUSES.map(([value, label]) => [value, label])
+);
+export const STATUS_TONE = Object.fromEntries(
+  APPLICATION_STATUSES.map(([value, , tone]) => [value, tone])
+);
+
+// Which moves the database will accept. Mirrors decide_application() so the
+// interface only offers what will actually work — the rule is still enforced
+// server-side either way.
+export const NEXT_STATUSES = {
+  submitted: ["screening", "offered", "rejected", "withdrawn"],
+  screening: ["offered", "rejected", "withdrawn"],
+  offered: ["accepted", "declined", "rejected", "withdrawn"],
+  accepted: ["withdrawn"],
+  enrolled: [],
+  declined: ["offered"],
+  rejected: ["screening"],
+  withdrawn: ["screening"],
+};
+
+// Public: no account needed.
+export const submitApplication = async ({ slug, ...fields }) => {
+  const { data, error } = await supabase.rpc("submit_application", {
+    target_slug: slug,
+    first_name: fields.firstName,
+    surname: fields.surname,
+    guardian_name: fields.guardianName,
+    guardian_email: fields.guardianEmail,
+    middle_name: fields.middleName || null,
+    date_of_birth: fields.dateOfBirth || null,
+    gender: fields.gender || null,
+    applying_for_level: fields.applyingForLevel ? Number(fields.applyingForLevel) : null,
+    previous_school: fields.previousSchool || null,
+    guardian_phone: fields.guardianPhone || null,
+    guardian_relation: fields.guardianRelation || null,
+    address: fields.address || null,
+    notes: fields.notes || null,
+    document_links: fields.documentLinks || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+// Public: needs the reference and the guardian's email together, so a
+// guessed reference on its own reveals nothing.
+export const trackApplication = async ({ reference, email }) => {
+  const { data, error } = await supabase.rpc("track_application", {
+    target_reference: reference,
+    target_email: email,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] || null : data;
+};
+
+export const fetchApplications = async ({ schoolId, status = null }) => {
+  let query = supabase
+    .from("applications")
+    .select(
+      `id, reference, first_name, surname, middle_name, date_of_birth, gender,
+       applying_for_level, previous_school, guardian_name, guardian_email,
+       guardian_phone, guardian_relation, address, notes, document_links,
+       status, offer_expires_at, decided_at, created_at, student_id, class_id,
+       sessions ( id, name ), classes ( id, name )`
+    )
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: false });
+  if (status && status !== "all") query = query.eq("status", status);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data;
+};
+
+export const fetchApplication = async (id) => {
+  const { data, error } = await supabase
+    .from("applications")
+    .select(
+      `id, school_id, reference, first_name, surname, middle_name, date_of_birth,
+       gender, applying_for_level, previous_school, guardian_name, guardian_email,
+       guardian_phone, guardian_relation, address, notes, document_links, status,
+       offer_expires_at, decided_at, created_at, student_id, class_id,
+       sessions ( id, name ), classes ( id, name ),
+       schools ( id, name, slug, logo_url, address, phone, email )`
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const fetchApplicationEvents = async (applicationId) => {
+  const { data, error } = await supabase
+    .from("application_events")
+    .select("id, status_from, status_to, actor_label, note, created_at")
+    .eq("application_id", applicationId)
+    .order("created_at");
+  if (error) throw error;
+  return data;
+};
+
+export const fetchAdmissionsSummary = async (schoolId) => {
+  const { data, error } = await supabase.rpc("admissions_summary", {
+    target_school: schoolId,
+  });
+  if (error) throw error;
+  return Object.fromEntries((data || []).map((row) => [row.status, row.count]));
+};
+
+// The legal transitions are enforced in the database; a refusal here means
+// the move genuinely was not allowed.
+export const decideApplication = async ({ id, status, note, offerExpires }) => {
+  const { data, error } = await supabase.rpc("decide_application", {
+    target_application: id,
+    new_status: status,
+    note: note || null,
+    offer_expires: offerExpires || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const enrolApplicant = async ({ id, studentId, classId }) => {
+  const { data, error } = await supabase.rpc("enrol_applicant", {
+    target_application: id,
+    target_student: studentId,
+    target_class: classId || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+/* documents ---------------------------------------------------------------- */
+
+const MATERIALS_BUCKET_NAME = "course-materials";
+
+export const fetchApplicationDocuments = async (applicationId) => {
+  const { data, error } = await supabase
+    .from("application_documents")
+    .select("id, kind, file_path, file_name, file_size, mime_type, uploaded_at")
+    .eq("application_id", applicationId)
+    .order("uploaded_at");
+  if (error) throw error;
+  return data;
+};
+
+// Path is admissions/<school_id>/<application_id>/... — the storage policy
+// reads the school out of the second segment to decide who may write here.
+export const uploadApplicationDocument = async ({
+  schoolId,
+  applicationId,
+  file,
+  kind,
+  userId,
+}) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `admissions/${schoolId}/${applicationId}/${crypto.randomUUID()}-${safeName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(MATERIALS_BUCKET_NAME)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { error } = await supabase.from("application_documents").insert({
+    application_id: applicationId,
+    kind: kind || "other",
+    file_path: path,
+    file_name: file.name,
+    file_size: file.size,
+    mime_type: file.type || null,
+    uploaded_by: userId,
+  });
+  if (error) throw error;
+};
+
+export const deleteApplicationDocument = async ({ id, filePath }) => {
+  await supabase.storage.from(MATERIALS_BUCKET_NAME).remove([filePath]).catch(() => {});
+  const { error } = await supabase.from("application_documents").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const setSessionApplicationsOpen = async ({ sessionId, open }) => {
+  const { error } = await supabase
+    .from("sessions")
+    .update({ applications_open: open })
+    .eq("id", sessionId);
+  if (error) throw error;
+};

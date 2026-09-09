@@ -4,14 +4,15 @@ import { useSchool } from "../context/SchoolContext";
 import { Page, Card, Notice } from "./UI";
 import Navbar from "./Navbar/Navbar";
 
-// Gate for the school-administration area.
+// Gate for everything behind a school role.
 //
-// Deliberately separate from RoleRoute: that one reads the legacy
-// profiles.role which still drives the classroom, while this reads the role on
-// the membership of the school in the current subdomain. Both exist during the
-// tenancy transition, and the classroom keeps behaving exactly as it did.
+// "require" names the least privileged role that may pass: admin (owner or
+// administrator), staff (anyone who works there), admissions (officers plus
+// administrators), or platform (the vendor). The role comes from the caller's
+// membership of the school in the current subdomain, and row level security
+// enforces the same rule again in the database.
 const SchoolRoute = ({ require = "admin" }) => {
-  const { school, isAdmin, isStaff, isPlatformAdmin, loading, error, slug } = useSchool();
+  const { school, role, isAdmin, isStaff, isPlatformAdmin, loading, error, slug } = useSchool();
 
   if (loading) {
     return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Loading school..."}</p>;
@@ -38,7 +39,13 @@ const SchoolRoute = ({ require = "admin" }) => {
   }
 
   const allowed =
-    require === "platform" ? isPlatformAdmin : require === "staff" ? isStaff : isAdmin;
+    require === "platform"
+      ? isPlatformAdmin
+      : require === "staff"
+      ? isStaff
+      : require === "admissions"
+      ? isAdmin || role === "admissions"
+      : isAdmin;
   if (!allowed) return <Navigate to="/Dashboard" replace />;
 
   return <Outlet />;

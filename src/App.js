@@ -19,6 +19,10 @@ import ResetPassword from "./Pages/ForgotPassword/ResetPassword";
 import SetPassword from "./Pages/ForgotPassword/SetPassword";
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import Courses from "./Pages/Courses/Courses";
+import Apply from "./Pages/Admissions/Apply";
+import ApplicationStatus from "./Pages/Admissions/ApplicationStatus";
+import Admissions from "./Pages/Admissions/Admissions";
+import ApplicationDetail from "./Pages/Admissions/ApplicationDetail";
 import CourseDashboard from "./Components/Sections/CourseDashboard";
 import AssignmentDetail from "./Pages/Assignments/AssignmentDetail";
 import ExamBuilder from "./Pages/Exams/ExamBuilder";
@@ -56,6 +60,10 @@ function App() {
           <Route path="/Forgot-Password" element={<ForgotPassword />} />
           <Route path="/Reset-Password" element={<ResetPassword />} />
 
+          {/* Admissions is open to the public — an applicant has no account. */}
+          <Route path="/Apply" element={<Apply />} />
+          <Route path="/Apply/Status" element={<ApplicationStatus />} />
+
           {/* Signed in — any role */}
           <Route element={<ProtectedRoute />}>
             <Route path="/Set-Password" element={<SetPassword />} />
@@ -82,6 +90,12 @@ function App() {
               <Route path="/Courses/:courseId/Exams/New" element={<ExamBuilder />} />
               <Route path="/Exams/:examId/Edit" element={<ExamBuilder />} />
               <Route path="/Exams/:examId/Results" element={<ExamResults />} />
+            </Route>
+
+            {/* Admissions — officers as well as administrators */}
+            <Route element={<SchoolRoute require="admissions" />}>
+              <Route path="/Admissions" element={<Admissions />} />
+              <Route path="/Admissions/:applicationId" element={<ApplicationDetail />} />
             </Route>
 
             {/* School administration */}
