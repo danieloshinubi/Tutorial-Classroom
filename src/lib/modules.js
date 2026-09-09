@@ -29,12 +29,16 @@ const RUNS_THE_SCHOOL = ["owner", "admin"];
 export const MODULES = [
   {
     id: "dashboard",
+    priority: 10,
+    group: "Overview",
     path: "/Dashboard",
     label: "Dashboard",
     roles: ROLES,
   },
   {
     id: "news",
+    priority: 20,
+    group: "Overview",
     path: "/News",
     label: "News",
     // The school's own noticeboard. Everyone gets it — a parent who sees
@@ -43,18 +47,24 @@ export const MODULES = [
   },
   {
     id: "courses",
+    priority: 30,
+    group: "Teaching",
     path: "/Courses",
     label: "Courses",
     roles: [...RUNS_THE_SCHOOL, "principal", "teacher", "student"],
   },
   {
     id: "teach",
+    priority: 55,
+    group: "Teaching",
     path: "/Teach",
     label: "Teach",
     roles: [...RUNS_THE_SCHOOL, "principal", "teacher"],
   },
   {
     id: "results",
+    priority: 50,
+    group: "Teaching",
     path: "/Results",
     label: "Results",
     // A teacher enters marks; a principal or administrator approves and
@@ -63,12 +73,16 @@ export const MODULES = [
   },
   {
     id: "bursary",
+    priority: 35,
+    group: "Money",
     path: "/Bursary",
     label: "Bursary",
     roles: [...RUNS_THE_SCHOOL, "bursar"],
   },
   {
     id: "fees",
+    priority: 30,
+    group: "Money",
     path: "/Fees",
     label: "Fees",
     // The same subject from the other side: what a family owes and has paid.
@@ -76,24 +90,32 @@ export const MODULES = [
   },
   {
     id: "admissions",
+    priority: 40,
+    group: "School",
     path: "/Admissions",
     label: "Admissions",
     roles: [...RUNS_THE_SCHOOL, "principal", "admissions"],
   },
   {
     id: "reports",
+    priority: 45,
+    group: "School",
     path: "/Reports",
     label: "Reports",
     roles: [...RUNS_THE_SCHOOL, "principal", "teacher", "parent", "student"],
   },
   {
     id: "tutors",
+    priority: 70,
+    group: "School",
     path: "/Tutors",
     label: "Tutors",
     roles: [...RUNS_THE_SCHOOL, "principal", "teacher", "student"],
   },
   {
     id: "school",
+    priority: 80,
+    group: "Admin",
     path: "/School",
     label: "School",
     roles: RUNS_THE_SCHOOL,
@@ -102,13 +124,45 @@ export const MODULES = [
 
 const BY_ID = new Map(MODULES.map((m) => [m.id, m]));
 
+// How many fit across the header before it starts eating itself. A proprietor
+// holds ten modules, and a horizontal strip cannot show ten without shrinking
+// the labels until "School" reads "Sch...".
+const ACROSS_THE_TOP = 6;
+
 // The modules this person may use. `roles` is every active membership role
 // they hold at this school — usually one, but a proprietor who also teaches
 // holds two and should see the union.
 export const modulesFor = (roles = []) => {
   const held = roles.filter(Boolean);
   if (held.length === 0) return [];
-  return MODULES.filter((m) => m.roles.some((r) => held.includes(r)));
+  return MODULES.filter((m) => m.roles.some((r) => held.includes(r))).sort(
+    (a, b) => a.priority - b.priority
+  );
+};
+
+// Split into what sits in the header and what goes behind "More".
+//
+// The cut is by priority and it is per person: a bursar's six are not a
+// teacher's six. Anyone holding six or fewer sees no More at all, which is
+// most people — it only appears for those who really do run everything.
+export const navFor = (roles = []) => {
+  const mine = modulesFor(roles);
+  if (mine.length <= ACROSS_THE_TOP) return { primary: mine, more: [] };
+  return { primary: mine.slice(0, ACROSS_THE_TOP), more: mine.slice(ACROSS_THE_TOP) };
+};
+
+// The overflow, gathered under headings so it reads as a menu rather than a
+// leftovers pile.
+export const groupModules = (modules) => {
+  const order = ["Overview", "Teaching", "Money", "School", "Admin"];
+  const groups = new Map();
+  for (const module of modules) {
+    if (!groups.has(module.group)) groups.set(module.group, []);
+    groups.get(module.group).push(module);
+  }
+  return order
+    .filter((name) => groups.has(name))
+    .map((name) => ({ name, modules: groups.get(name) }));
 };
 
 export const canUseModule = (moduleId, roles = []) => {

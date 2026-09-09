@@ -3,7 +3,8 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { useSchool } from "../../context/SchoolContext";
 import Notifications from "../Notifications";
 import AccountMenu from "./AccountMenu";
-import { modulesFor } from "../../lib/modules";
+import MoreMenu from "./MoreMenu";
+import { navFor } from "../../lib/modules";
 
 // The navigation is whatever this person's roles are for, and nothing else —
 // a bursar has no use for a class stream, a parent none for a staff
@@ -21,7 +22,10 @@ const Navbar = () => {
   // you just navigated to.
   useEffect(() => setOpen(false), [location.pathname]);
 
-  const links = modulesFor(roles).map((m) => ({ to: m.path, label: m.label }));
+  // Six across the top at most; the rest go behind More, grouped. See
+  // lib/modules.js — the split is by priority and differs per role, so a
+  // bursar's header is not a teacher's.
+  const { primary, more } = navFor(roles);
 
   return (
     <>
@@ -52,15 +56,16 @@ const Navbar = () => {
           </Link>
 
           <nav className="nav-links">
-            {links.map((link) => (
+            {primary.map((module) => (
               <NavLink
-                key={link.to}
-                to={link.to}
+                key={module.path}
+                to={module.path}
                 className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
               >
-                {link.label}
+                {module.label}
               </NavLink>
             ))}
+            <MoreMenu modules={more} />
           </nav>
 
           <span className="nav-spacer" />
@@ -72,13 +77,13 @@ const Navbar = () => {
 
       {open ? (
         <div className="nav-drawer">
-          {links.map((link) => (
+          {[...primary, ...more].map((module) => (
             <NavLink
-              key={link.to}
-              to={link.to}
+              key={module.path}
+              to={module.path}
               className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
             >
-              {link.label}
+              {module.label}
             </NavLink>
           ))}
         </div>

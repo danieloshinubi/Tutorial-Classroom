@@ -1209,15 +1209,6 @@ table.data tr:last-child td { border-bottom: none; }
 .account-item.danger { color: var(--danger, #b42318); }
 .account-item.danger svg { color: currentColor; }
 
-/* Nine modules is a lot of header. Let them scroll rather than wrap or push
-   the account menu off the edge. */
-.nav-links {
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.nav-links::-webkit-scrollbar { display: none; }
-.nav-link { white-space: nowrap; }
 
 /* An event on the noticeboard carries a when and a where. */
 .event-when {
@@ -1306,3 +1297,52 @@ table.data tr:last-child td { border-bottom: none; }
 .teacher-name { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; }
 .teacher-courses { font-size: 11.5px; color: var(--ink-3); }
 .child-foot { margin: 16px 0 0; font-size: 12px; color: var(--ink-3); }
+
+/* ==========================================================================
+   The header
+
+   Six modules at most across the top, the rest behind More. Nothing is
+   allowed to shrink a label until it truncates: a link that reads "Sch..."
+   is worse than a link one click further away.
+   ========================================================================== */
+.nav-links { min-width: 0; flex-wrap: nowrap; }
+.nav-link { white-space: nowrap; flex: 0 0 auto; }
+
+/* The school's name gives way before the navigation does — you know which
+   school you are in; you need to be able to read where you can go. */
+.brand-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 26ch;
+}
+@media (max-width: 1400px) { .brand-name { max-width: 16ch; } }
+
+.more { position: relative; display: inline-flex; }
+.more-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+}
+.more-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 60;
+  width: 230px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, .16);
+}
+.more-group + .more-group {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+.account-item.current { background: var(--brand-soft); color: var(--brand-dark); font-weight: 600; }
