@@ -10,6 +10,7 @@ const linksFor = (role, isSchoolAdmin) => {
     { to: "/Dashboard", label: "Dashboard" },
     { to: "/Levels", label: "Courses" },
     { to: "/Tutors", label: "Tutors" },
+    { to: "/Reports", label: "Reports" },
   ];
   if (role === "tutor" || role === "admin") links.push({ to: "/Teach", label: "Teach" });
   if (role === "admin") links.push({ to: "/Admin", label: "Admin" });

@@ -3,6 +3,7 @@ import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import LevelsPanel from "./LevelsPanel";
+import GuardiansPanel from "./GuardiansPanel";
 import {
   fetchSchoolMembers,
   updateMemberRole,
@@ -455,6 +456,7 @@ const SchoolAdmin = () => {
           tabs={[
             { id: "people", label: "People" },
             { id: "levels", label: "Class levels" },
+            { id: "guardians", label: "Parents & children" },
             { id: "settings", label: "School settings" },
           ]}
           active={tab}
@@ -462,6 +464,7 @@ const SchoolAdmin = () => {
         />
         {tab === "people" ? <PeoplePanel /> : null}
         {tab === "levels" ? <LevelsPanel /> : null}
+        {tab === "guardians" ? <GuardiansPanel /> : null}
         {tab === "settings" ? <SettingsPanel /> : null}
       </Page>
     </div>

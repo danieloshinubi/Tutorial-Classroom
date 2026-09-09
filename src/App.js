@@ -25,6 +25,8 @@ import Teach from "./Pages/Teach/Teach";
 import CourseForm from "./Pages/Teach/CourseForm";
 import Admin from "./Pages/Admin/Admin";
 import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
+import Reports from "./Pages/Reports/Reports";
+import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
 import "./styles/theme.css";
 
@@ -52,6 +54,9 @@ function App() {
             <Route path="/Levels/:year/Courses/:code" element={<CourseDashboard />} />
             <Route path="/Assignments/:assignmentId" element={<AssignmentDetail />} />
             <Route path="/Exams/:examId" element={<TakeExam />} />
+            {/* Who may see which report is decided in Postgres, not here. */}
+            <Route path="/Reports" element={<Reports />} />
+            <Route path="/Reports/:studentId" element={<StudentReport />} />
 
             {/* Tutors and admins */}
             <Route element={<RoleRoute allow={["tutor", "admin"]} />}>

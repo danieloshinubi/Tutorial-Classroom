@@ -893,3 +893,68 @@ export const countCoursesOnLevel = async ({ schoolId, year }) => {
   if (error) throw error;
   return count || 0;
 };
+
+/* -------------------------------------------------------------------------- */
+/* reports and guardians                                                      */
+/* -------------------------------------------------------------------------- */
+
+// Computed in Postgres, which checks who is asking before returning anything —
+// a parent cannot fetch another child's rows by changing an id in the browser.
+export const fetchStudentReport = async (studentId) => {
+  const { data, error } = await supabase.rpc("student_report", {
+    target_student: studentId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+export const fetchStudentMarks = async (studentId) => {
+  const { data, error } = await supabase.rpc("student_marks", {
+    target_student: studentId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+// Students this viewer is entitled to report on: their own children, the
+// students in courses they teach, or everyone if they run the school.
+export const fetchReportableStudents = async (schoolId) => {
+  const { data, error } = await supabase.rpc("reportable_students", {
+    target_school: schoolId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+export const fetchChildren = async (guardianId) => {
+  const { data, error } = await supabase
+    .from("guardian_students")
+    .select(`id, relationship, is_primary, student:profiles!guardian_students_student_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("guardian_id", guardianId);
+  if (error) throw error;
+  return data.filter((row) => row.student);
+};
+
+export const fetchGuardiansOf = async (studentId) => {
+  const { data, error } = await supabase
+    .from("guardian_students")
+    .select(`id, relationship, guardian:profiles!guardian_students_guardian_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("student_id", studentId);
+  if (error) throw error;
+  return data.filter((row) => row.guardian);
+};
+
+export const linkGuardian = async ({ schoolId, guardianId, studentId, relationship }) => {
+  const { error } = await supabase.from("guardian_students").insert({
+    school_id: schoolId,
+    guardian_id: guardianId,
+    student_id: studentId,
+    relationship: relationship || null,
+  });
+  if (error) throw error;
+};
+
+export const unlinkGuardian = async (linkId) => {
+  const { error } = await supabase.from("guardian_students").delete().eq("id", linkId);
+  if (error) throw error;
+};

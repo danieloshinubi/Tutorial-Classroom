@@ -574,3 +574,121 @@ table.data tr:last-child td { border-bottom: none; }
   white-space: nowrap;
 }
 @media (max-width: 860px) { .brand-name { max-width: 130px; } }
+
+/* ==========================================================================
+   Charts
+   Series hues are validated for colour-vision deficiency against both the
+   light and dark chart surfaces (see scripts/validate_palette.js). Dark mode
+   is a separate set of steps, not an automatic flip of the light one.
+   ========================================================================== */
+:root {
+  --c1: #4f46e5;
+  --c2: #0d9488;
+  --c3: #d97706;
+  --grid: #eceef4;
+  --threshold: #c9ccd6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --c1: #7d7ef5;
+    --c2: #22a68c;
+    --c3: #c8801f;
+    --grid: #232d31;
+    --threshold: #33403f;
+  }
+}
+:root[data-theme="dark"] {
+  --c1: #7d7ef5;
+  --c2: #22a68c;
+  --c3: #c8801f;
+  --grid: #232d31;
+  --threshold: #33403f;
+}
+
+.chart-wrap { position: relative; }
+
+.chart-svg { width: 100%; height: auto; display: block; }
+.chart-svg .grid { stroke: var(--grid); stroke-width: 1; }
+.chart-svg .threshold { stroke: var(--threshold); stroke-width: 1; stroke-dasharray: 4 4; }
+.chart-svg .axis { fill: var(--ink-3); font-size: 11px; }
+.chart-svg .trend { fill: none; stroke: var(--c1); stroke-width: 2; stroke-linejoin: round; }
+.chart-svg .dot {
+  fill: var(--c1); stroke: var(--surface); stroke-width: 2; cursor: pointer;
+}
+.chart-svg .dot:hover { r: 7; }
+
+.chart-tip {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: var(--ink);
+  color: var(--surface);
+  padding: 8px 11px;
+  border-radius: var(--r-sm);
+  font-size: 12.5px;
+  line-height: 1.45;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 5;
+  box-shadow: var(--shadow-2);
+}
+
+/* Horizontal bars */
+.bars { position: relative; }
+.bar-row {
+  position: absolute; left: 0; right: 0; height: 30px;
+  display: flex; align-items: center; gap: 12px; cursor: default;
+}
+.bar-label {
+  width: 88px; flex: none; font-size: 13px; font-weight: 550;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bar-track {
+  flex: 1; height: 14px; background: var(--grid);
+  border-radius: 4px; overflow: hidden;
+}
+.bar-fill { display: block; height: 100%; border-radius: 4px; transition: width .3s ease; }
+.bar-value {
+  width: 46px; flex: none; text-align: right;
+  font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink-2);
+}
+
+/* Stacked part-to-whole */
+.stack { display: flex; height: 16px; border-radius: 4px; overflow: hidden; gap: 2px; }
+.stack-seg { display: block; height: 100%; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 13px; color: var(--ink-2); }
+.legend.column { flex-direction: column; gap: 8px; margin-top: 0; }
+.legend-item { display: flex; align-items: center; gap: 7px; }
+.swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+/* Donut */
+.donut-wrap { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
+.donut { width: 150px; height: 150px; flex: none; }
+.donut-total { fill: var(--ink); font-size: 26px; font-weight: 700; }
+.donut-cap { fill: var(--ink-3); font-size: 11px; }
+
+/* Stat tiles */
+.stat-row {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 22px;
+}
+.stat {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 16px 18px;
+}
+.stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-label { font-size: 13px; color: var(--ink-3); margin-top: 4px; }
+.stat-note { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+
+/* Findings */
+.finding {
+  display: flex; gap: 12px; padding: 14px 16px;
+  border-radius: var(--r); margin-bottom: 10px;
+  border-left: 3px solid var(--line); background: var(--surface);
+}
+.finding.concern  { border-left-color: var(--danger);  background: var(--danger-soft); }
+.finding.watch    { border-left-color: var(--warn-ink); background: var(--warn-soft); }
+.finding.strength { border-left-color: var(--success); background: var(--success-soft); }
+.finding-title { font-weight: 600; font-size: 14.5px; }
+.finding-detail { font-size: 13.5px; color: var(--ink-2); margin-top: 3px; }
