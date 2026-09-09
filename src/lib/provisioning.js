@@ -69,6 +69,18 @@ export const createAuthUser = async ({ email, firstName, surname, password }) =>
     if (/already registered|already exists/i.test(error.message)) {
       return { userId: null, existed: true };
     }
+
+    // While "Confirm email" is on, Supabase sends a confirmation message on
+    // every signUp — including accounts an administrator creates and hands a
+    // password to. On the free tier that is a couple of messages an hour, and
+    // then account creation stops working entirely. Say what to actually do.
+    if (/rate limit|too many requests/i.test(error.message)) {
+      throw new Error(
+        "Supabase is still sending a confirmation email for every new account, and its hourly limit has been reached. " +
+          "Turn off Confirm email in the Supabase dashboard (Authentication → Sign In / Providers → the User Signups section) " +
+          "and accounts will be created without any email at all. Until then, wait about an hour and try again."
+      );
+    }
     throw error;
   }
 
