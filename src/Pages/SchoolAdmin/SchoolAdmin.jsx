@@ -544,7 +544,7 @@ const SchoolAdmin = () => {
             { id: "people", label: "People" },
             { id: "academic", label: "Calendar" },
             { id: "classes", label: "Classes & subjects" },
-            { id: "levels", label: "Class levels" },
+            { id: "levels", label: "Classes & departments" },
             { id: "guardians", label: "Parents & children" },
             { id: "settings", label: "School settings" },
           ]}

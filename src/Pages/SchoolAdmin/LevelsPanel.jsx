@@ -10,7 +10,18 @@ import {
 import { Card, Field, Button, Badge, Notice, Empty } from "../../Components/UI";
 
 // Suggestions only — a school picks whatever it actually calls its classes.
+// Two different things a school groups its courses by, and the same table
+// holds either: year groups (JSS 1, Year 7) or streams and departments
+// (Science, Computer Science). A school picks whichever it actually uses —
+// the order number only decides how the list is sorted.
 const PRESETS = {
+  "Secondary streams": [
+    [1, "Science"], [2, "Arts"], [3, "Commercial"],
+  ],
+  "University departments": [
+    [1, "Computer Science"], [2, "Software Engineering"],
+    [3, "Accounting"], [4, "Business Administration"],
+  ],
   "Nigerian secondary": [
     [1, "JSS 1"], [2, "JSS 2"], [3, "JSS 3"],
     [4, "SS 1"], [5, "SS 2"], [6, "SS 3"],
@@ -56,7 +67,7 @@ const LevelsPanel = () => {
       );
       setCounts(Object.fromEntries(tally));
     } catch (err) {
-      setError(err.message || "Could not load class levels.");
+      setError(err.message || "Could not load these.");
     } finally {
       setLoading(false);
     }
@@ -72,7 +83,7 @@ const LevelsPanel = () => {
     setNotice("");
 
     const year = Number(form.year);
-    if (!form.label.trim()) return setError("Give the level a name.");
+    if (!form.label.trim()) return setError("Give it a name.");
     if (!Number.isInteger(year)) return setError("The order must be a whole number.");
     if (levels.some((row) => row.year === year)) {
       return setError(`Order ${year} is already used by "${levels.find((r) => r.year === year).label}".`);
@@ -82,10 +93,10 @@ const LevelsPanel = () => {
     try {
       await createLevel({ schoolId, year, label: form.label.trim() });
       setForm({ year: "", label: "" });
-      setNotice("Class level added.");
+      setNotice("Added.");
       load();
     } catch (err) {
-      setError(err.message || "Could not add that level.");
+      setError(err.message || "Could not add that.");
     } finally {
       setBusy(false);
     }
@@ -107,7 +118,7 @@ const LevelsPanel = () => {
       setNotice(`Added ${preset.length} levels.`);
       load();
     } catch (err) {
-      setError(err.message || "Could not add those levels.");
+      setError(err.message || "Could not add those.");
     } finally {
       setBusy(false);
     }
@@ -121,7 +132,7 @@ const LevelsPanel = () => {
       setEditing(null);
       load();
     } catch (err) {
-      setError(err.message || "Could not rename that level.");
+      setError(err.message || "Could not rename that.");
     } finally {
       setBusy(false);
     }
@@ -139,7 +150,7 @@ const LevelsPanel = () => {
       await deleteLevel({ schoolId, year: row.year });
       load();
     } catch (err) {
-      setError(err.message || "Could not delete that level.");
+      setError(err.message || "Could not delete that.");
     } finally {
       setBusy(false);
     }
@@ -148,7 +159,7 @@ const LevelsPanel = () => {
   return (
     <>
       <p style={{ color: "var(--ink-2)", maxWidth: "62ch" }}>
-        {"The classes your school runs. Name them whatever you actually call them — the order decides how they are listed, and courses are grouped under them."}
+        {"How your school groups its courses — year groups like \"JSS 1\", or streams and departments like \"Science\", \"Arts\" or \"Computer Science\". Name them whatever you actually call them. Only administration adds and removes these; teachers pick from the list when they create a course."}
       </p>
 
       <Notice tone="error">{error}</Notice>

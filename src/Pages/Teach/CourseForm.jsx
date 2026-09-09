@@ -220,11 +220,11 @@ const CourseForm = () => {
               </Field>
 
               <Field
-                label="Class"
+                label="Class or department"
                 hint={
                   levels.length
-                    ? "Optional. Which class takes this course."
-                    : "Optional. Add one below if you want to group courses by class."
+                    ? "Optional. Which class, stream or department this course belongs to."
+                    : "Optional. Your school has not set any up yet."
                 }
               >
                 {levels.length ? (
@@ -273,7 +273,7 @@ const CourseForm = () => {
                 </Field>
               ) : levels.length === 0 ? (
                 <Notice tone="muted">
-                  {"Your school has not named its classes yet. An administrator or the principal sets those up — until then, leave the class blank."}
+                  {"Your school has not set up its classes or departments yet. An administrator or the principal adds those on the School page — until then, leave this blank."}
                 </Notice>
               ) : null}
               <Field label="Description">
