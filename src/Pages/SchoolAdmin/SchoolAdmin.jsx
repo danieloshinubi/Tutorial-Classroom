@@ -11,7 +11,7 @@ import {
   updateMemberRole,
   setMemberActive,
   removeMember,
-  inviteSchoolUser,
+  addSchoolUser,
   updateSchool,
 } from "../../lib/api";
 import {
@@ -114,19 +114,22 @@ const PeoplePanel = () => {
 
     setInviting(true);
     try {
-      const result = await inviteSchoolUser({ schoolId, ...invite });
+      const result = await addSchoolUser({ schoolId, ...invite });
+      const who =
+        [invite.firstName, invite.surname].filter(Boolean).join(" ") || invite.email;
 
-      if (result?.password) {
+      if (result.password) {
         setIssued({
-          name: [invite.firstName, invite.surname].filter(Boolean).join(" ") || invite.email,
+          name: who,
           email: result.email,
           password: result.password,
           role: ROLE_LABEL[invite.role],
-          mustChange: result.mustChange,
+          invited: result.invited,
+          emailed: result.emailed,
         });
         setNotice("");
       } else {
-        setNotice(`${invite.email} was added as ${ROLE_LABEL[invite.role]}.`);
+        setNotice(`${who} has been emailed a link to set their password.`);
       }
 
       setInvite({ email: "", firstName: "", surname: "", role: "student" });
@@ -223,7 +226,9 @@ const PeoplePanel = () => {
         <Card style={{ marginBottom: 18, maxWidth: 640 }}>
           <h3 style={{ marginTop: 0 }}>{"Add someone to this school"}</h3>
           <p style={{ color: "var(--ink-3)", fontSize: 14, marginTop: 0 }}>
-            {"They receive an invitation and choose their own password. You never see it."}
+            {invite.role === "parent"
+              ? "Parents use their own email address, so they are sent a link and choose their own password."
+              : "You will be given a password to pass on. They must replace it the first time they sign in."}
           </p>
           <form onSubmit={handleInvite}>
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
@@ -264,7 +269,11 @@ const PeoplePanel = () => {
               </select>
             </Field>
             <Button type="submit" disabled={inviting}>
-              {inviting ? "Adding..." : "Send invitation"}
+              {inviting
+                ? "Working..."
+                : invite.role === "parent"
+                ? "Send invitation"
+                : "Create account"}
             </Button>
           </form>
         </Card>
@@ -284,9 +293,9 @@ const PeoplePanel = () => {
         >
           <h3 style={{ marginTop: 0 }}>{`${issued.name} can now sign in`}</h3>
           <p style={{ fontSize: 14, marginTop: 0 }}>
-            {issued.mustChange
-              ? "Give them these details. They will be asked to choose their own password the first time they sign in."
-              : "Give them these details."}
+            {issued.emailed === false
+              ? "The invitation email could not be sent — most likely the hourly limit. Give them these details instead; they will choose their own password when they sign in."
+              : "Give them these details. They will be asked to choose their own password the first time they sign in."}
           </p>
 
           <div style={{ display: "grid", gap: 10, maxWidth: 420 }}>

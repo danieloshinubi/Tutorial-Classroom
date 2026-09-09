@@ -1,5 +1,9 @@
 import { supabase } from "./supabaseClient";
-import { createAuthUser, temporaryPassword } from "./provisioning";
+import {
+  createAuthUser,
+  temporaryPassword,
+  invitePasswordSetup,
+} from "./provisioning";
 
 // Fields selected wherever a row carries its author/owner, so names render
 // consistently across the app.
@@ -820,48 +824,33 @@ export const removeMember = async (memberId) => {
   if (error) throw error;
 };
 
-// Adds someone to this school, creating their login if they do not have one.
+// Adds someone to this school and creates their login.
 //
-// Tries the Edge Function first — that is the better route, because it can
-// send a real invitation and reuse an existing account by email. When it is
-// not deployed, falls back to creating the account from the browser: see
-// lib/provisioning.js for why that is safe.
-export const inviteSchoolUser = async ({ schoolId, email, firstName, surname, role }) => {
+// Two routes, because the two kinds of account are genuinely different:
+//
+//   Staff and students hold school addresses. The administrator creates the
+//   account outright and hands over a password the person replaces on first
+//   sign-in. No email is involved, which matters when a bursar is setting up
+//   three hundred pupils.
+//
+//   Parents use their own personal address. The administrator has no business
+//   issuing them a password, and cannot hand one over in person anyway — so
+//   they are emailed a link and choose their own.
+export const addSchoolUser = async ({ schoolId, email, firstName, surname, role }) => {
   const address = email.trim().toLowerCase();
-
-  const { data, error } = await supabase.functions.invoke("create-school-user", {
-    body: {
-      school_id: schoolId,
-      email: address,
-      first_name: firstName.trim(),
-      surname: surname.trim(),
-      role,
-    },
-  });
-
-  if (!error) return data;
-
-  // A refusal from the function itself is a real answer — surface it.
-  const detail = await error.context?.json?.().catch(() => null);
-  if (detail?.error) throw new Error(detail.error);
-
-  const missing =
-    error.context?.status === 404 ||
-    /failed to send|fetch|not found/i.test(error.message || "");
-  if (!missing) throw new Error(error.message || "Could not create that user.");
-
-  return addSchoolUserDirect({ schoolId, email: address, firstName, surname, role });
-};
-
-// The no-Edge-Function path: create the login, issue a temporary password,
-// and require it to be replaced at first sign-in.
-export const addSchoolUserDirect = async ({ schoolId, email, firstName, surname, role }) => {
+  const byInvitation = role === "parent";
   const password = temporaryPassword();
+
   let userId = null;
   let existed = false;
 
   try {
-    const created = await createAuthUser({ email, firstName, surname, password });
+    const created = await createAuthUser({
+      email: address,
+      firstName: firstName.trim(),
+      surname: surname.trim(),
+      password,
+    });
     userId = created.userId;
     existed = created.existed;
   } catch (err) {
@@ -871,7 +860,7 @@ export const addSchoolUserDirect = async ({ schoolId, email, firstName, surname,
   if (!userId) {
     throw new Error(
       existed
-        ? `${email} already has an account. Supabase will not reveal its id to the browser, so ask them to sign in here once — then adding them will work.`
+        ? `${address} already has an account. Supabase will not reveal its id to the browser, so ask them to sign in here once — then adding them will work.`
         : "The account was created but its id was not returned. Ask them to sign in once, then add them again."
     );
   }
@@ -884,8 +873,29 @@ export const addSchoolUserDirect = async ({ schoolId, email, firstName, surname,
     );
   if (memberError) throw new Error(memberError.message);
 
-  // Flag the account so the temporary password is only good for getting in
-  // once. Not fatal if it fails — they simply are not forced to change it.
+  if (byInvitation) {
+    try {
+      await invitePasswordSetup(address);
+      return { user_id: userId, email: address, role, invited: true, emailed: true };
+    } catch {
+      // The mailer failed — commonly the free-tier hourly limit. The account
+      // exists either way, so fall back to handing the password over rather
+      // than leaving the parent locked out with no explanation.
+      await supabase
+        .rpc("require_password_change", { target_user: userId })
+        .catch(() => {});
+      return {
+        user_id: userId,
+        email: address,
+        role,
+        invited: true,
+        emailed: false,
+        password,
+      };
+    }
+  }
+
+  // Flag the account so the issued password is only good for getting in once.
   let mustChange = true;
   try {
     const { error } = await supabase.rpc("require_password_change", {
@@ -896,7 +906,7 @@ export const addSchoolUserDirect = async ({ schoolId, email, firstName, surname,
     mustChange = false;
   }
 
-  return { user_id: userId, email, role, password, mustChange, viaFallback: true };
+  return { user_id: userId, email: address, role, password, mustChange };
 };
 
 // Called by the forced-change screen once the new password has been set.
