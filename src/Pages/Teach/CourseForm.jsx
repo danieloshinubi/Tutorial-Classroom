@@ -25,7 +25,7 @@ const CourseForm = () => {
   const isEditing = Boolean(courseId);
 
   const { user } = useAuth();
-  const { schoolId } = useSchool();
+  const { schoolId, isAdmin, isPrincipal } = useSchool();
   const navigate = useNavigate();
 
   const [levels, setLevels] = useState([]);
@@ -99,6 +99,11 @@ const CourseForm = () => {
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
 
+  // Naming a class is school administration: the name lands in everybody's
+  // dropdown. A teacher picks from the list instead — offering them a button
+  // the database then refuses is how the raw policy error ended up on screen.
+  const canNameClasses = isAdmin || isPrincipal;
+
   const handleAddClass = async () => {
     const label = newClass.trim();
     if (!label) return;
@@ -116,7 +121,11 @@ const CourseForm = () => {
       setForm((current) => ({ ...current, level_year: String(created.year) }));
       setNewClass("");
     } catch (err) {
-      setError(err.message || "Could not add that class.");
+      setError(
+        /row-level security/i.test(err.message || "")
+          ? "Only an administrator or the principal can name a new class. Ask them to add it, then it will appear in the list."
+          : err.message || "Could not add that class."
+      );
     } finally {
       setAddingClass(false);
     }
@@ -234,33 +243,39 @@ const CourseForm = () => {
                 ) : null}
               </Field>
 
-              <Field
-                label={levels.length ? "Add another class" : "Add a class"}
-                hint='Call it whatever your school calls it — "JSS 1", "Year 7", "Grade 4".'
-              >
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input
-                    className="input"
-                    value={newClass}
-                    placeholder="JSS 1"
-                    onChange={(e) => setNewClass(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        handleAddClass();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={addingClass || !newClass.trim()}
-                    onClick={handleAddClass}
-                  >
-                    {addingClass ? "Adding..." : "Add"}
-                  </Button>
-                </div>
-              </Field>
+              {canNameClasses ? (
+                <Field
+                  label={levels.length ? "Add another class" : "Add a class"}
+                  hint='Call it whatever your school calls it — "JSS 1", "Year 7", "Grade 4".'
+                >
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input
+                      className="input"
+                      value={newClass}
+                      placeholder="JSS 1"
+                      onChange={(e) => setNewClass(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddClass();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={addingClass || !newClass.trim()}
+                      onClick={handleAddClass}
+                    >
+                      {addingClass ? "Adding..." : "Add"}
+                    </Button>
+                  </div>
+                </Field>
+              ) : levels.length === 0 ? (
+                <Notice tone="muted">
+                  {"Your school has not named its classes yet. An administrator or the principal sets those up — until then, leave the class blank."}
+                </Notice>
+              ) : null}
               <Field label="Description">
                 <textarea
                   className="textarea"
