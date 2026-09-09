@@ -673,6 +673,15 @@ export const removeParticipant = async ({ courseId, userId }) => {
 /* notifications                                                              */
 /* -------------------------------------------------------------------------- */
 
+// Due and overdue reminders are generated on demand as well as by pg_cron:
+// the extension is not available on every plan, and a student who opens the
+// app should still be told what is about to close. The function only ever
+// writes a reminder once per piece of work, so calling it often is harmless.
+export const generateDueReminders = async () => {
+  const { error } = await supabase.rpc("generate_due_reminders");
+  if (error) throw error;
+};
+
 export const fetchNotifications = async ({ courseId } = {}) => {
   let query = supabase
     .from("notifications")
@@ -1325,6 +1334,56 @@ export const updateMessage = async ({ id, body }) => {
 
 export const deleteMessage = async (id) => {
   const { error } = await supabase.from("messages").delete().eq("id", id);
+  if (error) throw error;
+};
+
+/* -------------------------------------------------------------------------- */
+/* comments under a stream post                                               */
+/* -------------------------------------------------------------------------- */
+
+const COMMENT_FIELDS = `id, message_id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} )`;
+
+// One request for the whole stream rather than one per post: a course with
+// thirty announcements should not fire thirty queries on every render.
+export const fetchCommentsFor = async (messageIds) => {
+  if (!messageIds || messageIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("message_comments")
+    .select(COMMENT_FIELDS)
+    .in("message_id", messageIds)
+    .order("created_at");
+  if (error) throw error;
+
+  const byMessage = {};
+  for (const row of data) {
+    (byMessage[row.message_id] = byMessage[row.message_id] || []).push(row);
+  }
+  return byMessage;
+};
+
+export const postComment = async ({ messageId, userId, body }) => {
+  const { data, error } = await supabase
+    .from("message_comments")
+    .insert({ message_id: messageId, user_id: userId, body })
+    .select(COMMENT_FIELDS)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateComment = async ({ id, body }) => {
+  const { data, error } = await supabase
+    .from("message_comments")
+    .update({ body, edited_at: new Date().toISOString() })
+    .eq("id", id)
+    .select(COMMENT_FIELDS)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteComment = async (id) => {
+  const { error } = await supabase.from("message_comments").delete().eq("id", id);
   if (error) throw error;
 };
 

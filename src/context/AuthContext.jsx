@@ -28,6 +28,8 @@ export const AuthProvider = ({ children }) => {
   // Who the profile currently belongs to, so a token refresh can be told
   // apart from an actual change of person.
   const loadedForRef = useRef(null);
+  // One user object per person, reused across token refreshes.
+  const userRef = useRef(null);
 
   const loadProfile = useCallback(async (sessionUser) => {
     if (!sessionUser) {
@@ -173,10 +175,21 @@ export const AuthProvider = ({ children }) => {
     if (error) throw error;
   }, []);
 
+  // Stable while it is the same person signed in. See the note above
+  // loadedForRef: this is what stops a tab switch from remounting the app.
+  const user = useMemo(() => {
+    const next = session?.user ?? null;
+    if (next && userRef.current && userRef.current.id === next.id) {
+      return userRef.current;
+    }
+    userRef.current = next;
+    return next;
+  }, [session]);
+
   const value = useMemo(
     () => ({
       session,
-      user: session?.user ?? null,
+      user,
       profile,
       loading,
       signUp,
@@ -186,12 +199,13 @@ export const AuthProvider = ({ children }) => {
       sendPasswordReset,
       updatePassword,
       refreshProfile: () => {
-        loadedForRef.current = session?.user?.id ?? null;
-        return loadProfile(session?.user);
+        loadedForRef.current = user?.id ?? null;
+        return loadProfile(user);
       },
     }),
     [
       session,
+      user,
       profile,
       loading,
       signUp,

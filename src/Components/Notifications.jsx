@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   fetchNotifications,
+  generateDueReminders,
   markNotificationRead,
   markAllNotificationsRead,
   subscribeToNotifications,
@@ -18,7 +19,11 @@ const Notifications = () => {
 
   const load = useCallback(() => {
     if (!user) return;
-    fetchNotifications()
+    // Top up the due-soon and overdue reminders first, so what is listed is
+    // current even where pg_cron is not running.
+    generateDueReminders()
+      .catch(() => {})
+      .then(fetchNotifications)
       .then(setItems)
       .catch(() => setItems([]));
   }, [user]);

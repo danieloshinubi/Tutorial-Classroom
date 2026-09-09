@@ -7,11 +7,170 @@ import {
   updateMessage,
   deleteMessage,
   subscribeToMessages,
+  fetchCommentsFor,
+  postComment,
+  updateComment,
+  deleteComment,
 } from "../../lib/api";
 import { Card, Notice, Button, displayName } from "../UI";
 
+// A textarea that grows with what is being typed, so a long announcement is
+// visible while it is written instead of scrolling inside two lines.
+const Growing = React.forwardRef(({ value, minRows = 3, ...rest }, ref) => {
+  const inner = useRef(null);
+  const node = ref || inner;
+
+  useEffect(() => {
+    const el = node.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value, node]);
+
+  return <textarea ref={node} rows={minRows} value={value} {...rest} />;
+});
+
+const timeOf = (iso) =>
+  new Date(iso).toLocaleTimeString(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+// Comments on one announcement. Kept collapsed until there is something to
+// read or the reader opens it, so a busy stream stays skimmable.
+const Comments = ({ message, comments, onPost, onEdit, onRemove }) => {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [error, setError] = useState("");
+
+  const rows = comments || [];
+  const showing = open || rows.length > 0;
+
+  const send = async () => {
+    const body = draft.trim();
+    if (!body) return;
+    setBusy(true);
+    setError("");
+    try {
+      await onPost(message.id, body);
+      setDraft("");
+      setOpen(true);
+    } catch (err) {
+      setError(err.message || "Could not add that comment.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveEdit = async (comment) => {
+    const body = editDraft.trim();
+    if (!body || body === comment.body) {
+      setEditingId(null);
+      return;
+    }
+    try {
+      await onEdit(comment, body);
+      setEditingId(null);
+    } catch (err) {
+      setError(err.message || "Could not save that change.");
+    }
+  };
+
+  if (!showing) {
+    return (
+      <button type="button" className="comment-toggle" onClick={() => setOpen(true)}>
+        {"Add a comment"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="comments">
+      {rows.length ? (
+        <div className="comment-count">
+          {rows.length === 1 ? "1 comment" : `${rows.length} comments`}
+        </div>
+      ) : null}
+
+      {rows.map((comment) => {
+        const mine = comment.user_id === user?.id;
+        return (
+          <div key={comment.id} className="comment">
+            <div className="chat-meta">
+              <span className="chat-author">{displayName(comment.profiles)}</span>
+              <span className="chat-time">{timeOf(comment.created_at)}</span>
+              {comment.edited_at ? <span className="chat-time">{"· edited"}</span> : null}
+              {mine && editingId !== comment.id ? (
+                <span className="chat-actions">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingId(comment.id);
+                      setEditDraft(comment.body);
+                    }}
+                  >
+                    {"Edit"}
+                  </button>
+                  <button type="button" onClick={() => onRemove(comment)}>
+                    {"Delete"}
+                  </button>
+                </span>
+              ) : null}
+            </div>
+
+            {editingId === comment.id ? (
+              <div className="composer composer-inline">
+                <Growing
+                  autoFocus
+                  minRows={2}
+                  value={editDraft}
+                  onChange={(e) => setEditDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                />
+                <div className="btn-row">
+                  <Button size="sm" onClick={() => saveEdit(comment)}>
+                    {"Save"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                    {"Cancel"}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="chat-body">{comment.body}</p>
+            )}
+          </div>
+        );
+      })}
+
+      <Notice tone="error">{error}</Notice>
+
+      <div className="composer composer-inline">
+        <Growing
+          minRows={2}
+          value={draft}
+          placeholder="Add a comment..."
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <div className="btn-row">
+          <Button size="sm" disabled={busy || !draft.trim()} onClick={send}>
+            {"Comment"}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ClassChat = ({ courseId }) => {
   const [messages, setMessages] = useState([]);
+  const [comments, setComments] = useState({});
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -19,7 +178,6 @@ const ClassChat = ({ courseId }) => {
   const [draftEdit, setDraftEdit] = useState("");
 
   const { user } = useAuth();
-  const listRef = useRef(null);
 
   // Guards against both the realtime echo of a message this client just
   // inserted and any duplicate delivery from the channel.
@@ -35,11 +193,16 @@ const ClassChat = ({ courseId }) => {
     let active = true;
 
     fetchMessages(courseId)
-      .then((data) => {
-        if (active) setMessages(data);
+      .then(async (data) => {
+        if (!active) return;
+        setMessages(data);
+        const byMessage = await fetchCommentsFor(data.map((m) => m.id)).catch(
+          () => ({})
+        );
+        if (active) setComments(byMessage);
       })
       .catch((err) => {
-        if (active) setError(err.message || "Could not load the class chat.");
+        if (active) setError(err.message || "Could not load the class stream.");
       });
 
     const channel = subscribeToMessages(courseId, async (row) => {
@@ -54,10 +217,6 @@ const ClassChat = ({ courseId }) => {
       channel.unsubscribe();
     };
   }, [courseId, addMessage]);
-
-  useEffect(() => {
-    if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages]);
 
   const saveEdit = async (message) => {
     const body = draftEdit.trim();
@@ -78,18 +237,53 @@ const ClassChat = ({ courseId }) => {
   };
 
   const removeMessage = async (message) => {
-    if (!window.confirm("Delete this message?")) return;
+    if (!window.confirm("Delete this post and its comments?")) return;
     setError("");
     try {
       await deleteMessage(message.id);
       setMessages((current) => current.filter((row) => row.id !== message.id));
     } catch (err) {
-      setError(err.message || "Could not delete that message.");
+      setError(err.message || "Could not delete that post.");
     }
   };
 
+  const addComment = async (messageId, body) => {
+    const saved = await postComment({ messageId, userId: user.id, body });
+    setComments((current) => ({
+      ...current,
+      [messageId]: [...(current[messageId] || []), saved],
+    }));
+  };
+
+  const editComment = async (comment, body) => {
+    const saved = await updateComment({ id: comment.id, body });
+    setComments((current) => ({
+      ...current,
+      [comment.message_id]: (current[comment.message_id] || []).map((row) =>
+        row.id === saved.id ? saved : row
+      ),
+    }));
+  };
+
+  const removeComment = async (comment) => {
+    if (!window.confirm("Delete this comment?")) return;
+    try {
+      await deleteComment(comment.id);
+      setComments((current) => ({
+        ...current,
+        [comment.message_id]: (current[comment.message_id] || []).filter(
+          (row) => row.id !== comment.id
+        ),
+      }));
+    } catch (err) {
+      setError(err.message || "Could not delete that comment.");
+    }
+  };
+
+  // Only this handler publishes. Enter inside the box makes a new line, so a
+  // half-written announcement is never posted by accident.
   const handleSend = async (event) => {
-    event.preventDefault();
+    if (event) event.preventDefault();
     setError("");
 
     const body = draft.trim();
@@ -101,7 +295,7 @@ const ClassChat = ({ courseId }) => {
       addMessage(saved);
       setDraft("");
     } catch (err) {
-      setError(err.message || "Could not send that message.");
+      setError(err.message || "Could not post that.");
     } finally {
       setSending(false);
     }
@@ -111,89 +305,102 @@ const ClassChat = ({ courseId }) => {
     <Card>
       <h3>{"Class stream"}</h3>
 
-      <ul className="chat-list" ref={listRef}>
+      {/* The composer sits above the stream: writing is what this panel is
+          for, and a long post should not push the box off screen. */}
+      <div className="composer composer-block">
+        <Growing
+          minRows={4}
+          value={draft}
+          placeholder="Share something with the class. Enter starts a new line — press Post when you are ready."
+          onChange={(e) => setDraft(e.target.value)}
+        />
+        <div className="composer-foot">
+          <span className="composer-hint">
+            {"Enter makes a new line. Nothing is published until you press Post."}
+          </span>
+          <Button size="sm" disabled={sending || !draft.trim()} onClick={handleSend}>
+            {sending ? "Posting..." : "Post"}
+          </Button>
+        </div>
+      </div>
+
+      <Notice tone="error">{error}</Notice>
+
+      <ul className="chat-list">
         {messages.length === 0 ? (
           <li className="chat-item" style={{ color: "var(--ink-3)" }}>
             {"No announcements yet — say something to the class."}
           </li>
         ) : null}
-        {messages.map((message) => {
-          const mine = message.user_id === user?.id;
-          return (
-            <li key={message.id} className="chat-item">
-              <div className="chat-meta">
-                <span className="chat-author">{displayName(message.profiles)}</span>
-                <span className="chat-time">
-                  {new Date(message.created_at).toLocaleTimeString(undefined, {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </span>
-                {message.edited_at ? (
-                  <span className="chat-time">{"· edited"}</span>
-                ) : null}
-                {mine && editingId !== message.id ? (
-                  <span className="chat-actions">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingId(message.id);
-                        setDraftEdit(message.body);
-                      }}
-                    >
-                      {"Edit"}
-                    </button>
-                    <button type="button" onClick={() => removeMessage(message)}>
-                      {"Delete"}
-                    </button>
-                  </span>
-                ) : null}
-              </div>
-
-              {editingId === message.id ? (
-                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                  <input
-                    className="input"
-                    autoFocus
-                    value={draftEdit}
-                    onChange={(e) => setDraftEdit(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") saveEdit(message);
-                      if (e.key === "Escape") setEditingId(null);
-                    }}
-                  />
-                  <Button size="sm" onClick={() => saveEdit(message)}>
-                    {"Save"}
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
-                    {"Cancel"}
-                  </Button>
+        {[...messages]
+          .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+          .map((message) => {
+            const mine = message.user_id === user?.id;
+            return (
+              <li key={message.id} className="chat-item">
+                <div className="chat-meta">
+                  <span className="chat-author">{displayName(message.profiles)}</span>
+                  <span className="chat-time">{timeOf(message.created_at)}</span>
+                  {message.edited_at ? (
+                    <span className="chat-time">{"· edited"}</span>
+                  ) : null}
+                  {mine && editingId !== message.id ? (
+                    <span className="chat-actions">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingId(message.id);
+                          setDraftEdit(message.body);
+                        }}
+                      >
+                        {"Edit"}
+                      </button>
+                      <button type="button" onClick={() => removeMessage(message)}>
+                        {"Delete"}
+                      </button>
+                    </span>
+                  ) : null}
                 </div>
-              ) : (
-                <p className="chat-body">{message.body}</p>
-              )}
-            </li>
-          );
-        })}
+
+                {editingId === message.id ? (
+                  <div className="composer composer-inline">
+                    <Growing
+                      autoFocus
+                      minRows={3}
+                      value={draftEdit}
+                      onChange={(e) => setDraftEdit(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                    />
+                    <div className="btn-row">
+                      <Button size="sm" onClick={() => saveEdit(message)}>
+                        {"Save"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingId(null)}
+                      >
+                        {"Cancel"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="chat-body">{message.body}</p>
+                )}
+
+                <Comments
+                  message={message}
+                  comments={comments[message.id]}
+                  onPost={addComment}
+                  onEdit={editComment}
+                  onRemove={removeComment}
+                />
+              </li>
+            );
+          })}
       </ul>
-
-      <Notice tone="error">{error}</Notice>
-
-      <form onSubmit={handleSend} className="composer">
-        <input
-          type="text"
-          value={draft}
-          placeholder="Announce something to the class..."
-          onChange={(e) => setDraft(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="btn btn-primary btn-sm"
-          disabled={sending || !draft.trim()}
-        >
-          {"Send"}
-        </button>
-      </form>
     </Card>
   );
 };

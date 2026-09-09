@@ -31,6 +31,8 @@ const Reports = () => {
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
+    // Waiting for the school: without this the query goes out with
+    // school_id=eq.null and Postgres rejects "null" as a uuid.
     if (!schoolId || !user) return;
     setLoading(true);
     try {

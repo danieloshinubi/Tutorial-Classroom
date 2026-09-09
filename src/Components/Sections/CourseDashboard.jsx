@@ -34,6 +34,9 @@ const CourseDashboard = () => {
     isSchoolAdmin || (course && course.owner_id && course.owner_id === user?.id);
 
   const load = useCallback(async () => {
+    // Waiting for the school: without this the query goes out with
+    // school_id=eq.null and Postgres rejects "null" as a uuid.
+    if (!schoolId) return;
     setLoading(true);
     setError("");
     try {
@@ -107,6 +110,10 @@ const CourseDashboard = () => {
     );
   }
 
+  // The database already refuses to hand a non-member any of this course's
+  // content. Saying so is kinder than five empty tabs.
+  const hasAccess = canManage || membership?.status === "approved";
+
   const tabs = [
     { id: "stream", label: "Stream" },
     { id: "materials", label: "Materials" },
@@ -128,7 +135,7 @@ const CourseDashboard = () => {
             <h1>{course.code}</h1>
             <p className="hero-sub">{course.title || "No title yet"}</p>
           </div>
-          {membership?.status === "approved" ? (
+          {canManage ? null : membership?.status === "approved" ? (
             <Button variant="secondary" disabled={busy} onClick={handleLeave}>
               {"Leave course"}
             </Button>
@@ -147,34 +154,57 @@ const CourseDashboard = () => {
           <p style={{ color: "var(--ink-2)", marginTop: 18 }}>{course.description}</p>
         ) : null}
 
-        <div style={{ marginTop: 22 }}>
-          <Tabs tabs={tabs} active={tab} onChange={setTab} />
-        </div>
-
-        <Notice tone="error">{error}</Notice>
-
-        {tab === "stream" ? (
-          <div className="split">
-            <ClassChat courseId={course.id} />
-            <Upcoming courseId={course.id} />
+        {hasAccess ? (
+          <div style={{ marginTop: 22 }}>
+            <Tabs tabs={tabs} active={tab} onChange={setTab} />
           </div>
         ) : null}
 
-        {tab === "materials" ? (
-          <MaterialsTab courseId={course.id} canManage={canManage} />
-        ) : null}
+        <Notice tone="error">{error}</Notice>
 
-        {tab === "assignments" ? (
-          <AssignmentsTab courseId={course.id} canManage={canManage} />
-        ) : null}
+        {!hasAccess ? (
+          <div className="locked">
+            <h2>{"You are not in this course yet"}</h2>
+            <p>
+              {membership?.status === "pending"
+                ? "Your request is with the tutor. Once it is approved the stream, materials, assignments and exams appear here."
+                : membership?.status === "declined"
+                ? "Your last request was declined. You can ask again, or speak to the tutor."
+                : "Request to join and the tutor will decide. Until then the course content, including its exams, stays closed."}
+            </p>
+            {membership?.status === "pending" ? null : (
+              <Button disabled={busy} onClick={handleJoin}>
+                {membership?.status === "declined" ? "Ask again" : "Request to join"}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <>
+            {tab === "stream" ? (
+              <div className="split">
+                <ClassChat courseId={course.id} />
+                <Upcoming courseId={course.id} />
+              </div>
+            ) : null}
 
-        {tab === "exams" ? (
-          <ExamsTab courseId={course.id} canManage={canManage} />
-        ) : null}
+            {tab === "materials" ? (
+              <MaterialsTab courseId={course.id} canManage={canManage} />
+            ) : null}
 
-        {tab === "people" ? (
-          <PeopleTab course={course} canManage={canManage} />
-        ) : null}
+            {tab === "assignments" ? (
+              <AssignmentsTab courseId={course.id} canManage={canManage} />
+            ) : null}
+
+            {tab === "exams" ? (
+              <ExamsTab courseId={course.id} canManage={canManage} />
+            ) : null}
+
+            {tab === "people" ? (
+              <PeopleTab course={course} canManage={canManage} />
+            ) : null}
+          </>
+        )}
+
       </Page>
     </div>
   );
