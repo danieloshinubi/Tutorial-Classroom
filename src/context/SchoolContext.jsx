@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useRef,
   useCallback,
   useContext,
   useEffect,
@@ -24,6 +25,8 @@ export const useSchool = () => {
 // security is what actually enforces the boundary.
 export const SchoolProvider = ({ children }) => {
   const { user, loading: authLoading } = useAuth();
+  // The id is stable across token refreshes; the user object is not.
+  const userId = user?.id ?? null;
   const slug = useMemo(() => resolveSlug(), []);
 
   const [school, setSchool] = useState(null);
@@ -31,11 +34,13 @@ export const SchoolProvider = ({ children }) => {
   const [memberships, setMemberships] = useState([]);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [levels, setLevels] = useState([]);
+  const loadedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    if (!user) {
+    if (!userId) {
+      loadedRef.current = false;
       setSchool(null);
       setMembership(null);
       setMemberships([]);
@@ -43,7 +48,8 @@ export const SchoolProvider = ({ children }) => {
       return;
     }
 
-    setLoading(true);
+    const firstTime = !loadedRef.current;
+    if (firstTime) setLoading(true);
     setError("");
     try {
       const { data: schoolRow, error: schoolError } = await supabase
@@ -68,17 +74,17 @@ export const SchoolProvider = ({ children }) => {
           .from("school_members")
           .select("id, role, is_active")
           .eq("school_id", schoolRow.id)
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .maybeSingle(),
         supabase
           .from("school_members")
           .select("role, schools ( id, name, slug )")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("is_active", true),
         supabase
           .from("platform_admins")
           .select("user_id")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .maybeSingle(),
       ]);
 
@@ -104,9 +110,10 @@ export const SchoolProvider = ({ children }) => {
     } catch (err) {
       setError(err.message || "Could not load this school.");
     } finally {
+      loadedRef.current = true;
       setLoading(false);
     }
-  }, [user, slug]);
+  }, [userId, slug]);
 
   useEffect(() => {
     if (!authLoading) load();

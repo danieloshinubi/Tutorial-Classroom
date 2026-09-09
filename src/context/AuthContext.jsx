@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { supabase } from "../lib/supabaseClient";
@@ -24,6 +25,9 @@ export const AuthProvider = ({ children }) => {
   // Starts true so ProtectedRoute waits for the stored session to be restored
   // instead of bouncing a signed-in user straight back to /Login on refresh.
   const [loading, setLoading] = useState(true);
+  // Who the profile currently belongs to, so a token refresh can be told
+  // apart from an actual change of person.
+  const loadedForRef = useRef(null);
 
   const loadProfile = useCallback(async (sessionUser) => {
     if (!sessionUser) {
@@ -81,6 +85,7 @@ export const AuthProvider = ({ children }) => {
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
+      loadedForRef.current = data.session?.user?.id ?? null;
       loadProfile(data.session?.user).finally(() => {
         if (active) setLoading(false);
       });
@@ -89,8 +94,17 @@ export const AuthProvider = ({ children }) => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const nextId = newSession?.user?.id ?? null;
       setSession(newSession);
-      loadProfile(newSession?.user);
+
+      // Returning to a tab refreshes the token, which arrives as a brand new
+      // session object for the same person. Re-fetching the profile on that
+      // would restart every provider below it and wipe whatever the user was
+      // half-way through typing, so only reload when the person changes.
+      if (nextId !== loadedForRef.current) {
+        loadedForRef.current = nextId;
+        loadProfile(newSession?.user);
+      }
     });
 
     return () => {
@@ -171,7 +185,10 @@ export const AuthProvider = ({ children }) => {
       signOut,
       sendPasswordReset,
       updatePassword,
-      refreshProfile: () => loadProfile(session?.user),
+      refreshProfile: () => {
+        loadedForRef.current = session?.user?.id ?? null;
+        return loadProfile(session?.user);
+      },
     }),
     [
       session,
