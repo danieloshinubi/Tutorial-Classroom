@@ -104,6 +104,25 @@ export const updateCourse = async (id, changes) => {
   return data;
 };
 
+// The whole row, for the edit form.
+//
+// fetchAllCourses() deliberately selects a short list of columns for the
+// listing pages, and the edit form used to read from it — so description and
+// session_id arrived as undefined, became "" in the form, and were written
+// back as null over perfectly good data. An edit form has to load every
+// column it is going to save.
+export const fetchCourseById = async (id) => {
+  const { data, error } = await supabase
+    .from("courses")
+    .select(
+      "id, code, title, description, level_year, session_id, archived, owner_id, join_policy, school_id"
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
 export const deleteCourse = async (id) => {
   const { error } = await supabase.from("courses").delete().eq("id", id);
   if (error) throw error;

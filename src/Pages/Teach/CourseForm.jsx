@@ -8,7 +8,7 @@ import {
   updateCourse,
   fetchLevelsForSchool,
   createLevel,
-  fetchAllCourses,
+  fetchCourseById,
   fetchSessions,
 } from "../../lib/api";
 import {
@@ -38,6 +38,9 @@ const CourseForm = () => {
     session_id: "",
   });
   const [loading, setLoading] = useState(isEditing);
+  // Did the existing course actually arrive? If the load failed we must not
+  // show an empty form that saves blanks over the real row.
+  const [loaded, setLoaded] = useState(!isEditing);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // A tutor should not have to wait for an administrator to define a class
@@ -50,6 +53,10 @@ const CourseForm = () => {
     fetchSessions(schoolId)
       .then((rows) => {
         setSessions(rows);
+        // Defaults are for a NEW course only. Filling a blank on an existing
+        // one would quietly assign it a session its tutor never chose, and
+        // then save it.
+        if (isEditing) return;
         setForm((current) =>
           current.session_id || rows.length === 0
             ? current
@@ -64,8 +71,8 @@ const CourseForm = () => {
     fetchLevelsForSchool(schoolId)
       .then((rows) => {
         setLevels(rows);
-        // Preselect the first class so the form is never in a state where
-        // nothing is chosen.
+        // Same again: preselect for a new course, never for an existing one.
+        if (isEditing) return;
         setForm((current) =>
           current.level_year || rows.length === 0
             ? current
@@ -73,13 +80,12 @@ const CourseForm = () => {
         );
       })
       .catch(() => setLevels([]));
-  }, [schoolId]);
+  }, [schoolId, isEditing]);
 
   useEffect(() => {
     if (!isEditing) return;
-    fetchAllCourses()
-      .then((all) => {
-        const course = all.find((row) => row.id === courseId);
+    fetchCourseById(courseId)
+      .then((course) => {
         if (!course) {
           setError("That course no longer exists.");
           return;
@@ -91,6 +97,7 @@ const CourseForm = () => {
           level_year: course.level_year == null ? "" : String(course.level_year),
           session_id: course.session_id || "",
         });
+        setLoaded(true);
       })
       .catch((err) => setError(err.message || "Could not load the course."))
       .finally(() => setLoading(false));
@@ -134,6 +141,11 @@ const CourseForm = () => {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
+
+    if (isEditing && !loaded) {
+      setError("This course has not finished loading — saving now would blank it.");
+      return;
+    }
 
     const code = form.code.trim().toUpperCase();
     if (!code) {
@@ -179,6 +191,15 @@ const CourseForm = () => {
         <Card style={{ maxWidth: "620px" }}>
           {loading ? (
             <p>{"Loading..."}</p>
+          ) : isEditing && !loaded ? (
+            <>
+              <Notice tone="error">
+                {error || "Could not load that course, so it cannot be edited safely."}
+              </Notice>
+              <Button variant="secondary" onClick={() => navigate("/Teach")}>
+                {"Back to teaching"}
+              </Button>
+            </>
           ) : (
             <form onSubmit={handleSubmit}>
               <Field label="Course code" hint="For example COSC205.">
