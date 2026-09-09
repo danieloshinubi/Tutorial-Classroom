@@ -32,8 +32,9 @@ import Tutors from "./Pages/Tutors/Tutors";
 import Profile from "./Pages/Profile/Profile";
 import Teach from "./Pages/Teach/Teach";
 import CourseForm from "./Pages/Teach/CourseForm";
-import Platform from "./Pages/Platform/Platform";
 import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
+import PlatformApp from "./platform/PlatformApp";
+import { isPlatformHost } from "./lib/tenant";
 import Reports from "./Pages/Reports/Reports";
 import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
@@ -47,6 +48,11 @@ const LegacyCourseRedirect = () => {
 };
 
 function App() {
+  // admin.schoolivio.com is not a school. It gets its own application, with no
+  // SchoolProvider and no tenant to resolve, rather than a page inside
+  // whichever tenant the subdomain happened to name.
+  if (isPlatformHost()) return <PlatformApp />;
+
   return (
     <Router>
       <AuthProvider>
@@ -103,10 +109,11 @@ function App() {
               <Route path="/School" element={<SchoolAdmin />} />
             </Route>
 
-            {/* The vendor's own console, across every school */}
-            <Route element={<SchoolRoute require="platform" />}>
-              <Route path="/Platform" element={<Platform />} />
-            </Route>
+            {/* The platform console used to live here, at /Platform on a
+                school's own subdomain. It does not any more: it manages every
+                tenant, so it belongs to none of them. It is a separate
+                application on admin.schoolivio.com — see PlatformApp. */}
+            <Route path="/Platform" element={<Navigate to="/Dashboard" replace />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/Dashboard" replace />} />

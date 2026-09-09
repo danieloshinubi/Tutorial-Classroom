@@ -40,7 +40,26 @@ export const schoolUrl = (slug) => {
   return `${protocol}//${slug}.${base}${port ? `:${port}` : ""}`;
 };
 
+// The platform console's own host.
+//
+//   admin.schoolivio.com    → the console
+//   admin.localhost:3000    → the console, locally
+//
+// Only "admin". "app" stays a reserved name that falls back to a tenant, so
+// nobody lands in the console by typing a host that merely sounds like it.
 export const isPlatformHost = (hostname = window.location.hostname) => {
   const first = hostname.toLowerCase().split(":")[0].split(".")[0];
-  return first === "app" || first === "admin";
+  return first === "admin";
+};
+
+// Where the console lives, from wherever you are now.
+export const platformUrl = () => {
+  const { protocol, hostname, port } = window.location;
+  const host = hostname.toLowerCase();
+  const parts = host.split(".");
+  const base =
+    host.endsWith("localhost") || host === "localhost"
+      ? "localhost"
+      : parts.slice(-2).join(".");
+  return `${protocol}//admin.${base}${port ? `:${port}` : ""}`;
 };

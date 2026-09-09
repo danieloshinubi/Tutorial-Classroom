@@ -5,25 +5,19 @@ import { useSchool } from "../../context/SchoolContext";
 import Notifications from "../Notifications";
 import { schoolUrl } from "../../lib/tenant";
 import { displayName, initials } from "../UI";
+import { modulesFor } from "../../lib/modules";
 
-const linksFor = ({ role, isStaff, isAdmin, isPlatformAdmin }) => {
-  const links = [
-    { to: "/Dashboard", label: "Dashboard" },
-    { to: "/Courses", label: "Courses" },
-    { to: "/Tutors", label: "Tutors" },
-    { to: "/Reports", label: "Reports" },
-  ];
-  if (isStaff) links.push({ to: "/Teach", label: "Teach" });
-  if (isAdmin || role === "admissions") links.push({ to: "/Admissions", label: "Admissions" });
-  if (isAdmin) links.push({ to: "/School", label: "School" });
-  if (isPlatformAdmin) links.push({ to: "/Platform", label: "Platform" });
-  return links;
-};
+// The navigation is whatever this person's roles are for, and nothing else —
+// a bursar has no use for a class stream, a parent none for a staff
+// directory. lib/modules.js holds the mapping, and the route guards read the
+// same list, so a link that is absent here is also an address that cannot be
+// typed. The platform console is not in it at all: that lives on its own
+// host, admin.schoolivio.com, and is not part of any school.
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
   const { profile, user, signOut } = useAuth();
-  const { school, memberships, role, isAdmin, isStaff, isPlatformAdmin } = useSchool();
+  const { school, memberships, role, roles } = useSchool();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,7 +25,7 @@ const Navbar = () => {
   // you just navigated to.
   useEffect(() => setOpen(false), [location.pathname]);
 
-  const links = linksFor({ role, isStaff, isAdmin, isPlatformAdmin });
+  const links = modulesFor(roles).map((m) => ({ to: m.path, label: m.label }));
   const name = profile || user ? displayName(profile || { email: user?.email }) : "";
 
   const handleSignOut = async () => {

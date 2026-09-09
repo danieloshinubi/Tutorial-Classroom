@@ -1,18 +1,21 @@
 import React from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useSchool } from "../context/SchoolContext";
+import { canUseModule, homeFor } from "../lib/modules";
 import { Page, Card, Notice } from "./UI";
 import Navbar from "./Navbar/Navbar";
 
 // Gate for everything behind a school role.
 //
-// "require" names the least privileged role that may pass: admin (owner or
-// administrator), staff (anyone who works there), admissions (officers plus
-// administrators), or platform (the vendor). The role comes from the caller's
-// membership of the school in the current subdomain, and row level security
-// enforces the same rule again in the database.
-const SchoolRoute = ({ require = "admin" }) => {
-  const { school, role, isAdmin, isStaff, isPlatformAdmin, loading, error, slug } = useSchool();
+// Prefer `module`: it reads lib/modules.js, the same list the navbar is built
+// from, so a module missing from somebody's navigation is also an address
+// they cannot reach by typing it. `require` is the older coarse form — admin,
+// staff or admissions — kept for the routes that predate the registry.
+//
+// Neither is the real boundary. Row level security decides what the database
+// will hand over, and it applies whatever the router allows.
+const SchoolRoute = ({ require = "admin", module: moduleId }) => {
+  const { school, role, roles, isAdmin, isStaff, loading, error, slug } = useSchool();
 
   if (loading) {
     return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Loading school..."}</p>;
@@ -20,7 +23,7 @@ const SchoolRoute = ({ require = "admin" }) => {
 
   // No membership of this subdomain's school — say which school, since the URL
   // is the only thing that decides it.
-  if (!school && require !== "platform") {
+  if (!school) {
     return (
       <div className="shell">
         <Navbar />
@@ -38,15 +41,17 @@ const SchoolRoute = ({ require = "admin" }) => {
     );
   }
 
-  const allowed =
-    require === "platform"
-      ? isPlatformAdmin
-      : require === "staff"
-      ? isStaff
-      : require === "admissions"
-      ? isAdmin || role === "admissions"
-      : isAdmin;
-  if (!allowed) return <Navigate to="/Dashboard" replace />;
+  const allowed = moduleId
+    ? canUseModule(moduleId, roles)
+    : require === "staff"
+    ? isStaff
+    : require === "admissions"
+    ? isAdmin || role === "admissions"
+    : isAdmin;
+
+  // Somewhere they can actually use, rather than a Dashboard their role may
+  // not even have.
+  if (!allowed) return <Navigate to={homeFor(roles)} replace />;
 
   return <Outlet />;
 };

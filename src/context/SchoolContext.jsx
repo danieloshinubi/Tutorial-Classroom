@@ -121,6 +121,20 @@ export const SchoolProvider = ({ children }) => {
 
   const role = membership?.role || null;
 
+  // Every active role this person holds AT THIS SCHOOL. Usually one, but a
+  // proprietor who also teaches holds two and should get the union of both
+  // sets of modules rather than whichever happened to be read first.
+  const roles = useMemo(() => {
+    const held = new Set();
+    if (role) held.add(role);
+    for (const row of memberships) {
+      if (row.schools?.id && school?.id && row.schools.id === school.id && row.role) {
+        held.add(row.role);
+      }
+    }
+    return [...held];
+  }, [role, memberships, school]);
+
   const value = useMemo(
     () => ({
       slug,
@@ -135,17 +149,26 @@ export const SchoolProvider = ({ children }) => {
       membership,
       memberships,
       role,
+      roles,
+      // Platform administration is no longer folded into these. It is not a
+      // role at any school — it lives on its own host, admin.schoolivio.com,
+      // so granting school powers here would be exactly the mixing-up that
+      // separating the console was meant to end.
       isPlatformAdmin,
       // Convenience predicates so pages don't repeat role arrays.
-      isAdmin: role === "owner" || role === "admin" || isPlatformAdmin,
-      isStaff: ["owner", "admin", "teacher", "bursar", "admissions"].includes(role) || isPlatformAdmin,
-      isTeacher: role === "teacher",
-      isParent: role === "parent",
+      isAdmin: roles.some((r) => r === "owner" || r === "admin"),
+      isPrincipal: roles.includes("principal"),
+      isBursar: roles.includes("bursar"),
+      isStaff: roles.some((r) =>
+        ["owner", "admin", "principal", "teacher", "bursar", "admissions"].includes(r)
+      ),
+      isTeacher: roles.includes("teacher"),
+      isParent: roles.includes("parent"),
       loading: loading || authLoading,
       error,
       reload: load,
     }),
-    [slug, school, levels, membership, memberships, role, isPlatformAdmin, loading, authLoading, error, load]
+    [slug, school, levels, membership, memberships, role, roles, isPlatformAdmin, loading, authLoading, error, load]
   );
 
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>;
