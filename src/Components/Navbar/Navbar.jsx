@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { useSchool } from "../../context/SchoolContext";
 import Notifications from "../Notifications";
-import { schoolUrl } from "../../lib/tenant";
-import { displayName, initials } from "../UI";
+import AccountMenu from "./AccountMenu";
 import { modulesFor } from "../../lib/modules";
 
 // The navigation is whatever this person's roles are for, and nothing else —
@@ -16,9 +14,7 @@ import { modulesFor } from "../../lib/modules";
 
 const Navbar = () => {
   const [open, setOpen] = useState(false);
-  const { profile, user, signOut } = useAuth();
-  const { school, memberships, role, roles } = useSchool();
-  const navigate = useNavigate();
+  const { school, roles } = useSchool();
   const location = useLocation();
 
   // Close the drawer whenever the route changes, so it never covers the page
@@ -26,12 +22,6 @@ const Navbar = () => {
   useEffect(() => setOpen(false), [location.pathname]);
 
   const links = modulesFor(roles).map((m) => ({ to: m.path, label: m.label }));
-  const name = profile || user ? displayName(profile || { email: user?.email }) : "";
-
-  const handleSignOut = async () => {
-    await signOut();
-    navigate("/Login", { replace: true });
-  };
 
   return (
     <>
@@ -75,40 +65,8 @@ const Navbar = () => {
 
           <span className="nav-spacer" />
 
-          {memberships.length > 1 ? (
-            <select
-              className="select school-switch"
-              value={school?.slug || ""}
-              onChange={(e) => {
-                window.location.href = schoolUrl(e.target.value);
-              }}
-              aria-label="Switch school"
-            >
-              {memberships.map((m) => (
-                <option key={m.schools.id} value={m.schools.slug}>
-                  {m.schools.name}
-                </option>
-              ))}
-            </select>
-          ) : null}
-
           <Notifications />
-
-          <Link to="/Profile" className="nav-user" title={user?.email || ""}>
-            {profile?.avatar_url ? (
-              <img className="nav-avatar" src={profile.avatar_url} alt="" />
-            ) : (
-              <span className="nav-avatar brand-mark">{initials(profile || { email: user?.email })}</span>
-            )}
-            <span style={{ minWidth: 0 }}>
-              <div className="nav-name">{name}</div>
-              {role ? <div className="nav-role">{role}</div> : null}
-            </span>
-          </Link>
-
-          <button type="button" className="btn btn-secondary btn-sm" onClick={handleSignOut}>
-            {"Sign out"}
-          </button>
+          <AccountMenu />
         </div>
       </header>
 
