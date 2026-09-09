@@ -1810,3 +1810,27 @@ export const withdrawPayment = async (id) => {
   const { error } = await supabase.from("payments").delete().eq("id", id);
   if (error) throw error;
 };
+
+/* -------------------------------------------------------------------------- */
+/* what a parent sees about their child, short of results                     */
+/* -------------------------------------------------------------------------- */
+
+// Engagement, not marks. Neither of these returns a score, a grade or a
+// percentage of anything examined — those wait for the school to release
+// results. Both are guarded by can_view_student() in Postgres, so a parent
+// cannot reach another family's child by changing an id in the URL.
+export const fetchChildCourses = async (studentId) => {
+  const { data, error } = await supabase.rpc("child_courses", {
+    target_student: studentId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+export const fetchChildTeachers = async (studentId) => {
+  const { data, error } = await supabase.rpc("child_teachers", {
+    target_student: studentId,
+  });
+  if (error) throw error;
+  return data || [];
+};

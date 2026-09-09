@@ -1238,3 +1238,71 @@ table.data tr:last-child td { border-bottom: none; }
   padding-top: 14px;
   border-top: 1px solid var(--line);
 }
+
+/* ==========================================================================
+   A child, seen by their parent
+
+   Engagement figures, not marks — see 034_child_overview.sql. The palette is
+   deliberately the same greens and ambers used elsewhere for "how is this
+   going", and never the grade colours, so nobody reads a turn-in rate as a
+   score.
+   ========================================================================== */
+.child-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--line);
+}
+.child-heading {
+  display: flex;
+  align-items: baseline;
+  margin: 18px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.child-course {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.child-course-head { display: flex; align-items: baseline; gap: 8px; }
+.child-course-session { font-size: 12px; color: var(--ink-3); }
+.child-course-title { font-size: 13.5px; color: var(--ink-2); }
+.child-metrics { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.metric {
+  min-width: 68px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--bg);
+  text-align: center;
+}
+.metric-value { font-size: 16px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.metric-label { font-size: 11px; color: var(--ink-3); }
+.metric.good { border-color: #86c9b0; background: rgba(13, 148, 136, .08); }
+.metric.fair { border-color: #e3c07a; background: rgba(217, 119, 6, .08); }
+.metric.poor { border-color: #e5a1a1; background: rgba(180, 35, 24, .08); }
+
+.teacher-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.teacher-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  min-width: 0;
+}
+.teacher-name { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; }
+.teacher-courses { font-size: 11.5px; color: var(--ink-3); }
+.child-foot { margin: 16px 0 0; font-size: 12px; color: var(--ink-3); }

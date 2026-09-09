@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
+import ChildOverview from "./ChildOverview";
 import {
   fetchChildren,
   fetchMyInvoices,
@@ -10,13 +11,11 @@ import {
 import {
   Page,
   Card,
-  Grid,
   Badge,
   Button,
   Notice,
   Empty,
   displayName,
-  initials,
   formatDate,
 } from "../../Components/UI";
 
@@ -86,48 +85,13 @@ const ParentDashboard = () => {
           </Empty>
         ) : null}
 
-        <Grid>
-          {children.map((row) => (
-            <Link
-              key={row.id}
-              to={`/Reports/${row.student.id}`}
-              className="card-link"
-            >
-              <Card style={{ height: "100%" }}>
-                <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                  {row.student.avatar_url ? (
-                    <img
-                      src={row.student.avatar_url}
-                      alt=""
-                      style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: "50%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : (
-                    <span
-                      className="brand-mark"
-                      style={{ width: 42, height: 42, borderRadius: "50%", fontSize: 14 }}
-                    >
-                      {initials(row.student)}
-                    </span>
-                  )}
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{displayName(row.student)}</div>
-                    <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-                      {row.relationship || "Your child"}
-                    </div>
-                  </div>
-                </div>
-                <div style={{ marginTop: 12, fontSize: 13, color: "var(--brand)" }}>
-                  {"See their report →"}
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </Grid>
+        {children.map((row) => (
+          <ChildOverview
+            key={row.id}
+            child={row.student}
+            relationship={row.relationship}
+          />
+        ))}
       </section>
 
       <section className="section">
