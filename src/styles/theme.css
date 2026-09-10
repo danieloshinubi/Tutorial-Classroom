@@ -2026,3 +2026,71 @@ table.data tr:last-child td { border-bottom: none; }
   border-radius: var(--r-sm);
   background: var(--bg);
 }
+
+/* ==========================================================================
+   Assignment brief formatter
+   Parses pasted-in quiz text where every question and every option arrived
+   on one line without breaks, and renders each question as a proper card
+   with the options as a bulleted list. Improves any brief text; degrades
+   gracefully for plain prose.
+   ========================================================================== */
+.brief-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.brief-paragraph {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+.brief-question {
+  border-left: 3px solid var(--brand);
+  padding: 4px 0 4px 14px;
+  background: color-mix(in srgb, var(--brand-soft) 40%, transparent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.brief-q-head {
+  font-weight: 600;
+  color: var(--brand-dark);
+  font-size: 13.5px;
+  letter-spacing: .01em;
+  text-transform: uppercase;
+}
+.brief-q-body {
+  margin: 6px 0 8px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.brief-q-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.brief-q-options li {
+  position: relative;
+  padding: 6px 10px 6px 30px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  border-radius: var(--r-sm);
+}
+.brief-q-options li::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--brand);
+  background: var(--surface);
+}
+.brief-q-options li:hover {
+  background: var(--brand-soft);
+  color: var(--ink);
+}

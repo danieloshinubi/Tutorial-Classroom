@@ -36,6 +36,68 @@ const humanSize = (bytes) => {
   return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
 };
 
+// Assignment briefs are often pasted from a document, and the paste keeps
+// the option-marker glyphs (○, •, -, a), b)) but drops the line breaks that
+// would separate them. This formatter parses that shape into proper blocks
+// so a student sees one question per card and one option per line, even
+// when the source is a single unformatted paragraph.
+const parseBrief = (text) => {
+  if (!text || typeof text !== "string") return null;
+
+  // Give every question and option a line of its own. Break BEFORE each
+  // marker so the terminating letters/punctuation stay with the previous
+  // token. Regex is tolerant of "Question 1", "Question 1 (1pt)",
+  // "1.", and the common option glyphs.
+  const normalised = text
+    .replace(/\r\n?/g, "\n")
+    // A Question header always starts a new block.
+    .replace(/(?<!^)(?<!\n)\s*(Question\s+\d+)/gi, "\n$1")
+    // Each option marker begins a new line.
+    .replace(/\s*([○◯⚪⬜☐•▢])/g, "\n$1")
+    // Numeric option markers (a) b) c)) at the start of an option run.
+    .replace(/\s+([a-eA-E]\))/g, "\n$1")
+    .trim();
+
+  const blocks = normalised.split(/\n(?=Question\s+\d+)/i);
+
+  return blocks.map((block, index) => {
+    // First line is the header ("Question 3   1pt"), second line the body,
+    // remaining lines the options — but any of those may be missing if the
+    // brief is just plain prose. When there is no "Question" header, render
+    // as plain paragraphs.
+    const lines = block.split("\n").map((s) => s.trim()).filter(Boolean);
+    if (!/^Question\s+\d+/i.test(lines[0])) {
+      return (
+        <p key={index} className="brief-paragraph">
+          {lines.join(" ")}
+        </p>
+      );
+    }
+
+    const header = lines[0];
+    const rest = lines.slice(1);
+    const optionRegex = /^([○◯⚪⬜☐•▢]|[a-eA-E]\))\s*/;
+    const options = rest.filter((line) => optionRegex.test(line));
+    const bodyLines = rest.filter((line) => !optionRegex.test(line));
+
+    return (
+      <div key={index} className="brief-question">
+        <div className="brief-q-head">{header}</div>
+        {bodyLines.length ? (
+          <p className="brief-q-body">{bodyLines.join(" ")}</p>
+        ) : null}
+        {options.length ? (
+          <ul className="brief-q-options">
+            {options.map((line, ix) => (
+              <li key={ix}>{line.replace(optionRegex, "")}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    );
+  });
+};
+
 // The student's own view: submit work, then see the grade once it lands.
 const SubmitPanel = ({ assignment, userId }) => {
   const [submission, setSubmission] = useState(null);
@@ -364,11 +426,11 @@ const AssignmentDetail = () => {
             </p>
 
             {assignment.description || assignment.file_path || assignment.link_url ? (
-              <Card style={{ marginBottom: "22px", maxWidth: "640px" }}>
+              <Card style={{ marginBottom: "22px", maxWidth: "720px" }}>
                 {assignment.description ? (
-                  <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                    {assignment.description}
-                  </p>
+                  <div className="brief-body">
+                    {parseBrief(assignment.description)}
+                  </div>
                 ) : null}
 
                 {/* The brief itself, one row per source, with sensible
