@@ -228,7 +228,7 @@ export const deleteMaterial = async (id) => {
 export const fetchAssignments = async (courseId) => {
   const { data, error } = await supabase
     .from("assignments")
-    .select("id, title, description, points, due_at, created_at")
+    .select("id, title, description, points, due_at, file_path, file_name, file_size, mime_type, link_url, created_at")
     .eq("course_id", courseId)
     .order("due_at", { nullsFirst: false });
   if (error) throw error;
@@ -250,7 +250,7 @@ export const fetchUpcomingAssignments = async (courseId) => {
 export const fetchAssignment = async (id) => {
   const { data, error } = await supabase
     .from("assignments")
-    .select("id, course_id, title, description, points, due_at, courses ( id, code, title, level_year, owner_id )")
+    .select("id, course_id, title, description, points, due_at, file_path, file_name, file_size, mime_type, link_url, courses ( id, code, title, level_year, owner_id )")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -261,7 +261,7 @@ export const createAssignment = async (assignment) => {
   const { data, error } = await supabase
     .from("assignments")
     .insert(assignment)
-    .select("id, title, description, points, due_at, created_at")
+    .select("id, title, description, points, due_at, file_path, file_name, file_size, mime_type, link_url, created_at")
     .single();
   if (error) throw error;
   return data;
@@ -749,13 +749,37 @@ export const subscribeToNotifications = (userId, onInsert) =>
 /* material files                                                             */
 /* -------------------------------------------------------------------------- */
 
+// A UUID that works everywhere. Prefers the built-in uuidV4()
+// where the browser has it, and falls back to crypto.getRandomValues() with
+// version 4 formatting where it does not. The last-ditch Math.random() branch
+// exists so a very old browser cannot produce a runtime error mid-upload —
+// what it hands out is not cryptographically strong, but storage paths do not
+// need it to be; RLS decides who may write here.
+const uuidV4 = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return uuidV4();
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0"));
+    return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+};
+
 const MATERIALS_BUCKET = "course-materials";
 
 // Path convention <course_id>/<random>-<name> — the first segment is what the
 // storage policy checks to decide who may write here.
 export const uploadMaterialFile = async ({ courseId, file, onProgress }) => {
   const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
-  const path = `${courseId}/${crypto.randomUUID()}-${safeName}`;
+  const path = `${courseId}/${uuidV4()}-${safeName}`;
 
   if (onProgress) onProgress(0);
   const { error } = await supabase.storage
@@ -785,6 +809,23 @@ export const signedMaterialUrl = async (path, seconds = 300) => {
 export const deleteMaterialFile = async (path) => {
   const { error } = await supabase.storage.from(MATERIALS_BUCKET).remove([path]);
   if (error) throw error;
+};
+
+// One helper for both materials and assignments; the path prefix decides how
+// downstream code treats it, and how the storage policy names it in logs.
+export const uploadCourseFile = async ({ courseId, file, prefix = "" }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `${courseId}/${prefix}${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(MATERIALS_BUCKET)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return {
+    file_path: path,
+    file_name: file.name,
+    file_size: file.size,
+    mime_type: file.type || null,
+  };
 };
 
 /* -------------------------------------------------------------------------- */
@@ -1576,7 +1617,7 @@ export const uploadApplicationDocument = async ({
   userId,
 }) => {
   const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
-  const path = `admissions/${schoolId}/${applicationId}/${crypto.randomUUID()}-${safeName}`;
+  const path = `admissions/${schoolId}/${applicationId}/${uuidV4()}-${safeName}`;
 
   const { error: uploadError } = await supabase.storage
     .from(MATERIALS_BUCKET_NAME)
@@ -1783,7 +1824,7 @@ export const fetchPaymentsFor = async (invoiceIds) => {
 // the invoice id out of the third segment to decide who may write here.
 export const uploadPaymentProof = async ({ schoolId, invoiceId, file }) => {
   const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
-  const path = `payments/${schoolId}/${invoiceId}/${crypto.randomUUID()}-${safeName}`;
+  const path = `payments/${schoolId}/${invoiceId}/${uuidV4()}-${safeName}`;
 
   const { error } = await supabase.storage
     .from("course-materials")

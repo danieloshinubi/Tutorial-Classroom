@@ -9,6 +9,7 @@ import {
   submitWork,
   fetchSubmissionsForAssignment,
   gradeSubmission,
+  signedMaterialUrl,
 } from "../../lib/api";
 import {
   Page,
@@ -21,6 +22,19 @@ import {
   displayName,
   formatDate,
 } from "../../Components/UI";
+
+// Nice size line, so a phone user knows what they are about to download.
+const humanSize = (bytes) => {
+  if (!bytes) return "";
+  const units = ["B", "KB", "MB", "GB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${units[unit]}`;
+};
 
 // The student's own view: submit work, then see the grade once it lands.
 const SubmitPanel = ({ assignment, userId }) => {
@@ -349,11 +363,54 @@ const AssignmentDetail = () => {
               {` · Due ${formatDate(assignment.due_at)} · ${assignment.points} points`}
             </p>
 
-            {assignment.description ? (
+            {assignment.description || assignment.file_path || assignment.link_url ? (
               <Card style={{ marginBottom: "22px", maxWidth: "640px" }}>
-                <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
-                  {assignment.description}
-                </p>
+                {assignment.description ? (
+                  <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                    {assignment.description}
+                  </p>
+                ) : null}
+
+                {/* The brief itself, one row per source, with sensible
+                    spacing when a description sits above them. */}
+                {assignment.file_path || assignment.link_url ? (
+                  <div
+                    className="tf-brief-row"
+                    style={{ marginTop: assignment.description ? 12 : 0 }}
+                  >
+                    {assignment.file_path ? (
+                      <button
+                        type="button"
+                        className="tf-brief-link"
+                        onClick={async () => {
+                          try {
+                            const url = await signedMaterialUrl(assignment.file_path);
+                            window.open(url, "_blank", "noopener,noreferrer");
+                          } catch (err) {
+                            window.alert(err.message || "Could not open that file.");
+                          }
+                        }}
+                      >
+                        {`📎 ${assignment.file_name || "Brief"}`}
+                        {assignment.file_size ? (
+                          <span style={{ color: "var(--ink-3)" }}>
+                            {` · ${humanSize(assignment.file_size)}`}
+                          </span>
+                        ) : null}
+                      </button>
+                    ) : null}
+                    {assignment.link_url ? (
+                      <a
+                        className="tf-brief-link"
+                        href={assignment.link_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {"🔗 Open link"}
+                      </a>
+                    ) : null}
+                  </div>
+                ) : null}
               </Card>
             ) : null}
 

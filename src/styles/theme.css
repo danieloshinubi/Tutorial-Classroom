@@ -1685,3 +1685,41 @@ table.data tr:last-child td { border-bottom: none; }
   .panel-top, .panel-aside { position: static; }
   .panel-top::after { display: none; }
 }
+
+/* ==========================================================================
+   Teacher-facing bits: the brief on an assignment card, the strip that
+   shows the file already attached to the form.
+   ========================================================================== */
+.tf-attachment {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  background: var(--surface);
+}
+.tf-brief-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+/* A soft chip so the brief reads as "attached", not as a heading. */
+.tf-brief-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+.tf-brief-link:hover { background: color-mix(in srgb, var(--brand-soft) 80%, var(--brand) 20%); }
