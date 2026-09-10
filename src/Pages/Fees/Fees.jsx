@@ -241,15 +241,39 @@ const InvoiceCard = ({
     }
 
     setBusy(true);
+    // Two things about this catch block. First, we extract the message
+    // safely: Supabase Storage errors in some versions carry a self-
+    // referencing `context` inside the error object, and reading `err.message`
+    // in a template literal, or handing the whole error to React, could
+    // recurse straight into "Maximum call stack size exceeded". Second, we
+    // log the raw error to the console so the next report has a real
+    // stack trace behind it — the user only ever sees the friendly string.
+    const messageOf = (err) => {
+      try {
+        if (!err) return "Could not send that.";
+        if (typeof err === "string") return err;
+        // A Supabase PostgrestError has string message + hint; a StorageError
+        // has string message. Never string-ify the whole object.
+        if (typeof err.message === "string" && err.message) return err.message;
+        if (typeof err.error === "string") return err.error;
+        return "Could not send that.";
+      } catch {
+        return "Could not send that.";
+      }
+    };
+
+    let stage = "start";
     try {
       let proofPath = null;
       if (file) {
+        stage = "upload";
         proofPath = await uploadPaymentProof({
           schoolId: invoice.school_id,
           invoiceId: invoice.invoice_id,
           file,
         });
       }
+      stage = "declare";
       await declarePayment({
         schoolId: invoice.school_id,
         invoiceId: invoice.invoice_id,
@@ -260,6 +284,7 @@ const InvoiceCard = ({
         paidOn,
         proofPath,
       });
+      stage = "done";
       setPaying(false);
       setAmount("");
       setReference("");
@@ -268,7 +293,9 @@ const InvoiceCard = ({
         "Sent to the bursary. They will check it against the account and confirm — the balance updates once they do."
       );
     } catch (err) {
-      onError(err.message || "Could not send that.");
+      // eslint-disable-next-line no-console
+      console.error(`Payment ${stage} failed:`, err);
+      onError(messageOf(err));
     } finally {
       setBusy(false);
     }
