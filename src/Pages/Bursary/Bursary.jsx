@@ -905,20 +905,23 @@ const Bursary = () => {
             </select>
           ) : null
         }
+        toolbar={
+          <Tabs
+            tabs={[
+              { id: "overview", label: "Overview" },
+              { id: "structures", label: "Fee structures" },
+              { id: "invoices", label: `Invoices (${invoices.length})` },
+              { id: "queue", label: queue.length ? `Payments (${queue.length})` : "Payments" },
+            ]}
+            active={tab}
+            onChange={setTab}
+          />
+        }
       >
         <Notice tone="error">{error}</Notice>
         <Notice tone="success">{notice}</Notice>
 
-        <Tabs
-          tabs={[
-            { id: "overview", label: "Overview" },
-            { id: "structures", label: "Fee structures" },
-            { id: "invoices", label: `Invoices (${invoices.length})` },
-            { id: "queue", label: queue.length ? `Payments (${queue.length})` : "Payments" },
-          ]}
-          active={tab}
-          onChange={setTab}
-        />
+
 
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 

@@ -74,8 +74,8 @@ const Courses = () => {
             </Link>
           ) : null
         }
-      >
-        <div className="btn-row" style={{ marginBottom: 18 }}>
+        toolbar={
+          <div className="filters">
           <input
             className="input"
             style={{ maxWidth: 280 }}
@@ -98,7 +98,9 @@ const Courses = () => {
               ))}
             </select>
           ) : null}
-        </div>
+          </div>
+        }
+      >
 
         <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading courses..."}</Empty> : null}

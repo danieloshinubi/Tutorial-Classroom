@@ -538,19 +538,22 @@ const SchoolAdmin = () => {
       <Page
         title="School administration"
         subtitle={school ? `${school.name} · ${school.slug}.schoolivio.com` : ""}
+        toolbar={
+          <Tabs
+            tabs={[
+              { id: "people", label: "People" },
+              { id: "academic", label: "Calendar" },
+              { id: "classes", label: "Classes & subjects" },
+              { id: "levels", label: "Classes & departments" },
+              { id: "guardians", label: "Parents & children" },
+              { id: "settings", label: "School settings" },
+            ]}
+            active={tab}
+            onChange={setTab}
+          />
+        }
       >
-        <Tabs
-          tabs={[
-            { id: "people", label: "People" },
-            { id: "academic", label: "Calendar" },
-            { id: "classes", label: "Classes & subjects" },
-            { id: "levels", label: "Classes & departments" },
-            { id: "guardians", label: "Parents & children" },
-            { id: "settings", label: "School settings" },
-          ]}
-          active={tab}
-          onChange={setTab}
-        />
+
         {tab === "people" ? <PeoplePanel /> : null}
         {tab === "academic" ? <AcademicPanel /> : null}
         {tab === "classes" ? <ClassesPanel /> : null}

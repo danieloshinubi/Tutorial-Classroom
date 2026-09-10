@@ -3,18 +3,32 @@ import React from "react";
 // Thin wrappers over the classes in styles/theme.css. Pages compose these so
 // spacing, colour and radius stay consistent without repeating inline styles.
 
-export const Page = ({ title, subtitle, action, children }) => (
+// The page frame.
+//
+// The heading, its subtitle, the primary action and anything passed as
+// `toolbar` — tabs, a filter row, a term picker — stay put while the content
+// under them scrolls. On a list of two hundred students you should not have to
+// scroll back to the top to change a filter or read which tab you are on.
+//
+// The main region is the scroll container (see .shell in theme.css), so this
+// is sticky within it rather than the window.
+export const Page = ({ title, subtitle, action, toolbar, children }) => (
   <div className="page">
-    {(title || action) && (
-      <header className="page-head">
-        <div>
-          {title ? <h1>{title}</h1> : null}
-          {subtitle ? <p>{subtitle}</p> : null}
-        </div>
-        {action}
-      </header>
+    {(title || action || toolbar) && (
+      <div className="page-top">
+        {(title || action) && (
+          <header className="page-head">
+            <div>
+              {title ? <h1>{title}</h1> : null}
+              {subtitle ? <p>{subtitle}</p> : null}
+            </div>
+            {action}
+          </header>
+        )}
+        {toolbar ? <div className="page-toolbar">{toolbar}</div> : null}
+      </div>
     )}
-    {children}
+    <div className="page-body">{children}</div>
   </div>
 );
 

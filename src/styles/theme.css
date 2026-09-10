@@ -64,7 +64,7 @@ a { color: var(--brand); }
    page needing to know about it.
    -------------------------------------------------------------------------- */
 .shell {
-  min-height: 100vh;
+  height: 100vh;
   display: grid;
   grid-template-columns: auto 1fr;
   grid-template-rows: auto 1fr;
@@ -74,7 +74,11 @@ a { color: var(--brand); }
 }
 .shell > .side   { grid-area: side; }
 .shell > .topbar { grid-area: topbar; }
-.shell > *:not(.side):not(.topbar):not(.scrim) { grid-area: main; min-width: 0; }
+.shell > *:not(.side):not(.topbar):not(.scrim) {
+  grid-area: main;
+  min-width: 0;
+  overflow-y: auto;
+}
 
 /* --- the sidebar --- */
 .side {
@@ -299,8 +303,28 @@ a { color: var(--brand); }
 .page {
   width: min(1180px, 100% - 40px);
   margin: 0 auto;
-  padding: 28px 0 72px;
+  padding: 0 0 72px;
 }
+
+/* Title, action and toolbar stay; the body below them scrolls. */
+.page-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding: 26px 0 12px;
+  background: var(--bg);
+}
+.page-top::after {
+  /* A hairline that appears only once there is something underneath it. */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--line);
+}
+.page-body { padding-top: 20px; }
 
 .page-head {
   display: flex;
@@ -308,8 +332,24 @@ a { color: var(--brand); }
   gap: 14px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
 }
+
+/* Tabs and filters that belong to the header rather than the content. */
+.page-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+.page-toolbar .tabs { margin-bottom: 0; }
+.page-toolbar .filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.page-toolbar .filters .input,
+.page-toolbar .filters .select { max-width: 280px; }
 
 .page-head p { margin: 4px 0 0; color: var(--ink-3); font-size: 14px; }
 
