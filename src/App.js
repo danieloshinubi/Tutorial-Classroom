@@ -26,6 +26,8 @@ import ApplicationDetail from "./Pages/Admissions/ApplicationDetail";
 import Applications from "./Pages/Admissions/Applications";
 import ApplyStart from "./Pages/Admissions/ApplyStart";
 import ApplicationDashboard from "./Pages/Admissions/ApplicationDashboard";
+import AdmissionsQueues from "./Pages/Admissions/AdmissionsQueues";
+import AdmissionsWorkspace from "./Pages/Admissions/AdmissionsWorkspace";
 import CourseDashboard from "./Components/Sections/CourseDashboard";
 import AssignmentDetail from "./Pages/Assignments/AssignmentDetail";
 import ExamBuilder from "./Pages/Exams/ExamBuilder";
@@ -125,6 +127,9 @@ function App() {
             <Route element={<SchoolRoute require="admissions" />}>
               <Route path="/Admissions" element={<Admissions />} />
               <Route path="/Admissions/:applicationId" element={<ApplicationDetail />} />
+              {/* Phase 2 workspace — queues and per-application operations. */}
+              <Route path="/AdmissionsWorkspace" element={<AdmissionsQueues />} />
+              <Route path="/AdmissionsWorkspace/:applicationId" element={<AdmissionsWorkspace />} />
             </Route>
 
             {/* The money. Owner, admin and bursar — a principal signs off

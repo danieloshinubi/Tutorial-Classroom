@@ -43,10 +43,18 @@ Deno.serve(async (req) => {
 
     // As the caller, so row level security decides whether this invoice is
     // theirs. A parent cannot start a payment against another family's bill.
+    // The DB schema hint is deliberate. Everything the platform runs on
+    // lives in classroom.*; without this hint, .rpc("payable_now", ...)
+    // routes through PostgREST's default schema (public) and comes back
+    // with "Could not find the function public.payable_now(target_invoice)
+    // in the schema cache."
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authorization } } },
+      {
+        db: { schema: "classroom" },
+        global: { headers: { Authorization: authorization } },
+      },
     );
 
     const { data: user } = await supabase.auth.getUser();

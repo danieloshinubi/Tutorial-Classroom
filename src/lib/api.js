@@ -889,7 +889,10 @@ export const updateSchool = async (id, changes) => {
 export const fetchSchoolMembers = async (schoolId) => {
   const { data, error } = await supabase
     .from("school_members")
-    .select(`id, role, is_active, created_at, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    // user_id is what invoices and payments and every other table joins on;
+    // without it the Bursary invoice table falls back to "Student" instead
+    // of the child's name.
+    .select(`id, user_id, role, is_active, created_at, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -1796,6 +1799,181 @@ export const fetchMyApplicationInvoice = async (applicationId) => {
     .eq("application_id", applicationId)
     .eq("purpose", "application_fee")
     .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+/* -------------------------------------------------------------------------- */
+/* admissions — Phase 2 staff workspace                                       */
+/* -------------------------------------------------------------------------- */
+
+// Every queue the admissions staff acts on, in one call, so the workspace
+// dashboard doesn't have to guess which application belongs where.
+export const fetchAdmissionsQueues = async (schoolId) => {
+  const { data, error } = await supabase.rpc("admissions_queues", {
+    target_school: schoolId,
+  });
+  if (error) throw error;
+  const groups = {};
+  for (const row of data || []) {
+    (groups[row.bucket] = groups[row.bucket] || []).push(row);
+  }
+  return groups;
+};
+
+// The whole workspace for one application: the row, screening items,
+// documents (joined to their requirement and file), reviews, interviews,
+// timeline events, and the effective config. Reads through the server-side
+// function so an admissions officer sees every child object in one shot.
+export const fetchApplicationWorkspace = async (applicationId) => {
+  const { data, error } = await supabase.rpc("application_workspace", {
+    target_application: applicationId,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/* screening */
+
+export const fetchScreeningRequirements = async ({ schoolId, sessionId }) => {
+  let query = supabase
+    .from("screening_requirements")
+    .select("id, school_id, session_id, programme_id, kind, label, is_required, position, notes")
+    .eq("school_id", schoolId)
+    .order("position");
+  if (sessionId) query = query.or(`session_id.eq.${sessionId},session_id.is.null`);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
+export const upsertScreeningRequirement = async (row) => {
+  const { data, error } = await supabase
+    .from("screening_requirements")
+    .upsert(row)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteScreeningRequirement = async (id) => {
+  const { error } = await supabase
+    .from("screening_requirements")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+};
+
+export const prepareScreeningItems = async (applicationId) => {
+  const { data, error } = await supabase.rpc(
+    "create_application_screening_items",
+    { target_application: applicationId }
+  );
+  if (error) throw error;
+  return data || [];
+};
+
+export const setScreeningItemStatus = async ({ itemId, status, note }) => {
+  const { data, error } = await supabase.rpc("set_screening_item_status", {
+    target_item: itemId,
+    new_status: status,
+    note_in: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/* documents (staff) */
+
+export const verifyDocument = async ({ docId, note }) => {
+  const { data, error } = await supabase.rpc("verify_document", {
+    target_doc: docId,
+    note_in: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const rejectDocument = async ({ docId, reason }) => {
+  const { data, error } = await supabase.rpc("reject_document", {
+    target_doc: docId,
+    reason_in: reason,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const waiveDocument = async ({ docId, reason }) => {
+  const { data, error } = await supabase.rpc("waive_document", {
+    target_doc: docId,
+    reason_in: reason,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/* review */
+
+export const assignReview = async ({ applicationId, reviewerId }) => {
+  const { data, error } = await supabase.rpc("assign_review", {
+    target_application: applicationId,
+    target_reviewer: reviewerId,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const recordReview = async ({
+  applicationId,
+  recommendation,
+  notes,
+  academicScore,
+  interviewScore,
+}) => {
+  const { data, error } = await supabase.rpc("record_review", {
+    target_application: applicationId,
+    recommendation_in: recommendation,
+    notes_in: notes || null,
+    academic_score_in: academicScore ?? null,
+    interview_score_in: interviewScore ?? null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/* interview */
+
+export const scheduleInterview = async ({
+  applicationId,
+  when,
+  location,
+  meetingLink,
+  interviewerId,
+}) => {
+  const { data, error } = await supabase.rpc("schedule_interview", {
+    target_application: applicationId,
+    when_at: when,
+    location_in: location || null,
+    meeting_link_in: meetingLink || null,
+    interviewer_in: interviewerId || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const recordInterviewOutcome = async ({
+  interviewId,
+  status,
+  outcome,
+  notes,
+}) => {
+  const { data, error } = await supabase.rpc("record_interview_outcome", {
+    target_interview: interviewId,
+    new_status: status,
+    outcome_in: outcome || null,
+    notes_in: notes || null,
+  });
   if (error) throw error;
   return data;
 };
