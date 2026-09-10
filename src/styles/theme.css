@@ -749,299 +749,248 @@ table.data tr:last-child td { border-bottom: none; }
 .locked h2 { margin: 0 0 8px; font-size: 19px; }
 .locked p { margin: 0 auto 16px; max-width: 46ch; color: var(--ink-2); font-size: 14.5px; }
 
+
+/* Password field with an eye toggle inside it. Login and the signup form
+   wrap the input in .input-icon; the button sits absolute inside. */
+.input-icon {
+  position: relative;
+  display: block;
+}
+.input-icon .input {
+  width: 100%;
+  padding-right: 44px;
+}
+.input-icon .eye {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.input-icon .eye:hover { background: var(--bg); color: var(--ink); }
+.input-icon .eye:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+
+/* Orbital motion on the sign-in art.
+   Two spins in play: the whole scene turns clockwise; each satellite turns
+   the same amount anticlockwise so its icon does not go upside down. */
+.auth-orbit-sat {
+  /* svg transform-origin defaults to 0 0, which happens to be the orbit
+     centre because the group is inside the 420x420 viewBox positioned at
+     the middle. So placing a satellite is one rotate plus one translate. */
+  transform: translate(210px, 210px) rotate(var(--a)) translate(0, calc(-1 * var(--r)));
+  animation: auth-orbit 40s linear infinite;
+  transform-box: view-box;
+  transform-origin: 210px 210px;
+}
+.auth-orbit-upright {
+  animation: auth-orbit-upright 40s linear infinite;
+  transform-origin: 0 0;
+}
+@keyframes auth-orbit {
+  from { transform: translate(210px, 210px) rotate(var(--a))                translate(0, calc(-1 * var(--r))); }
+  to   { transform: translate(210px, 210px) rotate(calc(var(--a) + 360deg)) translate(0, calc(-1 * var(--r))); }
+}
+@keyframes auth-orbit-upright {
+  from { transform: rotate(calc(-1 * var(--a))); }
+  to   { transform: rotate(calc(-1 * (var(--a) + 360deg))); }
+}
+/* Still if the reader asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .auth-orbit-sat,
+  .auth-orbit-upright { animation: none; }
+}
+
 /* ==========================================================================
    Sign-in screens
-   A two-panel layout: the school on the left, the form on the right. The
-   panel exists because this is multi-tenant — you should know whose school
-   you are signing into before you type a password.
+
+   The form on the left, the case for the product on the right, both floating
+   on a tinted ground. The right panel exists because this is multi-tenant
+   software sold to schools: somebody arriving at their school's address
+   should see whose door they are at and what the thing does, before typing
+   anything.
    ========================================================================== */
 .auth {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
-  background: var(--surface);
-}
-
-.auth-aside {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 40px;
-  padding: 40px 44px;
-  color: #fff;
-  /* Two stops of the brand hue rather than a rainbow: the accent belongs to
-     the product, and the panel is the one place it runs at full strength. */
+  place-items: center;
+  padding: 26px;
   background:
-    radial-gradient(120% 90% at 12% 8%, rgb(255 255 255 / 0.16) 0%, transparent 55%),
-    linear-gradient(158deg, #4f46e5 0%, #4338ca 46%, #312e81 100%);
+    radial-gradient(1100px 620px at 12% -10%, #ede9ff 0%, transparent 62%),
+    radial-gradient(900px 560px at 105% 108%, #e4ecff 0%, transparent 58%),
+    var(--bg);
 }
 
-.auth-brand { display: flex; align-items: center; gap: 12px; }
-.auth-wordmark { font-weight: 650; font-size: 17px; letter-spacing: -0.01em; }
-
-.auth-logo {
-  width: 34px; height: 34px;
-  border-radius: 10px;
-  object-fit: cover;
-  flex: none;
-}
-.auth-logo-fallback {
-  display: grid; place-items: center;
-  background: rgb(255 255 255 / 0.18);
-  font-weight: 700; font-size: 16px;
-  color: #fff;
+.auth-card {
+  width: min(1120px, 100%);
+  min-height: min(700px, calc(100vh - 52px));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  box-shadow: 0 30px 70px rgb(76 42 148 / .10);
 }
 
-.auth-aside-body { max-width: 22ch; }
-.auth-school {
-  font-size: clamp(28px, 3.4vw, 42px);
-  font-weight: 650;
-  line-height: 1.08;
-  letter-spacing: -0.025em;
-  margin: 0 0 14px;
-  text-wrap: balance;
-  color: #fff;
-}
-.auth-tagline {
-  margin: 0;
-  font-size: 15.5px;
-  line-height: 1.6;
-  color: rgb(255 255 255 / 0.78);
-  max-width: 30ch;
-}
-.auth-aside-foot {
-  margin: 0;
-  font-size: 13px;
-  color: rgb(255 255 255 / 0.6);
-  font-variant-numeric: tabular-nums;
-}
-
+/* --- the form side --- */
 .auth-main {
+  position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 28px;
-  padding: 48px 32px;
-  background: var(--bg);
+  padding: 22px 30px 18px;
 }
+.auth-corner { position: absolute; top: 22px; left: 30px; }
 
-.auth-form { width: min(400px, 100%); }
+.auth-form {
+  width: min(380px, 100%);
+  margin: auto;
+  padding: 40px 0;
+}
+.auth-badge {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand) 18%, transparent);
+}
+.auth-badge img { width: 34px; height: 34px; border-radius: 10px; object-fit: cover; }
+
 .auth-form h1 {
-  font-size: 27px;
-  font-weight: 650;
+  font-size: 25px;
+  text-align: center;
+  margin: 0 0 4px;
   letter-spacing: -0.02em;
+}
+.auth-school-name {
   margin: 0 0 6px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--brand-dark);
 }
 .auth-sub {
   margin: 0 0 26px;
+  text-align: center;
   color: var(--ink-3);
-  font-size: 14.5px;
+  font-size: 13.5px;
   line-height: 1.55;
 }
+.auth-form .btn-primary { width: 100%; }
 .auth-foot {
-  margin-top: 20px;
+  margin-top: 22px;
   padding-top: 18px;
   border-top: 1px solid var(--line);
-  font-size: 14px;
-  color: var(--ink-2);
   text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-2);
 }
 .auth-foot p { margin: 0 0 6px; }
 .auth-foot p:last-child { margin-bottom: 0; }
-
 .auth-legal {
-  width: min(400px, 100%);
   margin: 0;
-  font-size: 12.5px;
-  color: var(--ink-3);
-  line-height: 1.6;
   text-align: center;
+  font-size: 11.5px;
+  color: var(--ink-3);
 }
 
-/* The aside is decoration on a phone, so it goes and the school name moves
-   into the form instead of vanishing. */
-.auth-compact-brand {
-  display: none;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 26px;
-  font-weight: 600;
-  font-size: 15px;
-}
-.auth-compact-brand .auth-logo-fallback {
-  background: var(--brand);
-  color: #fff;
-}
-
-@media (max-width: 880px) {
-  .auth { grid-template-columns: 1fr; min-height: 100dvh; }
-  .auth-aside { display: none; }
-  .auth-compact-brand { display: flex; }
-  .auth-main { justify-content: flex-start; padding: 40px 24px; }
-}
-
-/* Password field with its reveal control. */
-.input-icon { position: relative; display: flex; align-items: center; }
-.input-icon .input { padding-right: 44px; }
-.input-icon .eye {
-  position: absolute; right: 8px;
-  background: none; border: none; cursor: pointer;
-  color: var(--ink-3); display: grid; place-items: center;
-  padding: 6px; border-radius: 8px;
-}
-.input-icon .eye:hover { color: var(--ink); background: var(--bg); }
-
-.divider {
-  display: flex; align-items: center; gap: 12px;
-  margin: 22px 0 16px;
-  color: var(--ink-3); font-size: 12px;
-  text-transform: uppercase; letter-spacing: .08em;
-}
-.divider::before, .divider::after {
-  content: ""; flex: 1; height: 1px; background: var(--line);
-}
-
-.google-btn {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; padding: 11px 16px;
-  background: var(--surface); color: var(--ink);
-  border: 1px solid var(--line); border-radius: var(--r);
-  font: inherit; font-size: 14.5px; cursor: pointer;
-}
-.google-btn:hover:not(:disabled) { background: var(--bg); }
-
-.forgot-row { display: flex; justify-content: flex-end; margin: -4px 0 16px; }
-.forgot-row a { font-size: 13.5px; }
-
-/* Exams */
-.q-card { border: 1px solid var(--line); border-radius: var(--r); padding: 16px; margin-bottom: 12px; background: var(--surface); }
-.q-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 10px; }
-.q-num { font-weight: 600; font-size: 14px; color: var(--ink-3); }
-.opt {
-  display: flex; gap: 10px; align-items: flex-start;
-  padding: 11px 13px; margin-bottom: 8px;
-  border: 1px solid var(--line); border-radius: var(--r);
-  cursor: pointer; font-size: 14.5px;
-}
-.opt:hover { background: var(--bg); }
-.opt.selected { border-color: var(--brand); background: var(--brand-soft); }
-.opt.correct { border-color: var(--success); background: var(--success-soft); }
-.opt.wrong { border-color: var(--danger); background: var(--danger-soft); }
-.opt input { margin-top: 3px; }
-
-.exam-timer {
-  position: sticky; top: calc(var(--nav-h) + 10px);
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r); padding: 12px 16px; margin-bottom: 18px;
-  box-shadow: var(--shadow-1); z-index: 10;
-}
-.exam-timer.urgent { border-color: var(--danger); background: var(--danger-soft); }
-.exam-clock { font-variant-numeric: tabular-nums; font-weight: 650; font-size: 18px; }
-
-.score-ring {
-  display: grid; place-items: center;
-  width: 96px; height: 96px; border-radius: 50%;
-  background: var(--brand-soft); color: var(--brand-dark);
-  font-size: 24px; font-weight: 700;
-}
-
-/* ------------------------------------------------------- connection status */
-.conn {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-radius: var(--r);
-  font-size: 13.5px;
-  margin-bottom: 14px;
-  border: 1px solid transparent;
-  line-height: 1.45;
-}
-.conn-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.conn-offline { background: var(--danger-soft); color: var(--danger); border-color: #f3c5bf; }
-.conn-offline .conn-dot { background: var(--danger); }
-.conn-slow { background: var(--warn-soft); color: var(--warn-ink); border-color: #f2ddb8; }
-.conn-slow .conn-dot { background: var(--warn-ink); }
-.conn-syncing { background: var(--brand-soft); color: var(--brand-dark); }
-.conn-syncing .conn-dot { background: var(--brand); animation: pulse 1.1s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
-
-/* ------------------------------------------------------------ notifications */
-.bell {
+/* --- the panel --- */
+.auth-aside {
   position: relative;
-  border: 1px solid var(--line);
-  background: var(--surface);
-  border-radius: var(--r-sm);
-  width: 38px; height: 38px;
-  cursor: pointer;
-  display: grid; place-items: center;
-  font-size: 16px;
-  flex: none;
-}
-.bell:hover { background: var(--bg); }
-.bell-count {
-  position: absolute; top: -6px; right: -6px;
-  min-width: 18px; height: 18px; padding: 0 5px;
-  border-radius: 999px;
-  background: var(--danger); color: #fff;
-  font-size: 11px; font-weight: 650;
-  display: grid; place-items: center;
-}
-.notif-panel {
-  position: absolute;
-  top: calc(100% + 8px); right: 0;
-  width: min(380px, calc(100vw - 32px));
-  max-height: 420px; overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-3);
-  z-index: 60;
-  padding: 6px;
-}
-.notif-item {
-  display: block;
-  padding: 12px;
-  border-radius: var(--r);
-  text-decoration: none;
-  color: inherit;
-  border-bottom: 1px solid var(--line);
-}
-.notif-item:last-child { border-bottom: none; }
-.notif-item:hover { background: var(--bg); }
-.notif-item.unread { background: var(--brand-soft); }
-.notif-title { font-size: 14px; font-weight: 550; }
-.notif-time { font-size: 12px; color: var(--ink-3); margin-top: 3px; }
-
-/* -------------------------------------------------------------- file picker */
-.dropzone {
-  border: 1.5px dashed var(--line);
-  border-radius: var(--r);
-  padding: 22px;
-  text-align: center;
-  color: var(--ink-3);
-  font-size: 14px;
-  cursor: pointer;
-  background: var(--bg);
-}
-.dropzone:hover, .dropzone.over { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-dark); }
-.file-chip {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border: 1px solid var(--line);
-  border-radius: var(--r); background: var(--surface); font-size: 14px;
-}
-.file-meta { color: var(--ink-3); font-size: 12.5px; }
-
-/* A school name can be long; clamp it so it never pushes the nav around. */
-.brand-name {
-  max-width: 210px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  border-radius: 18px;
+  color: #fdfcff;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #7f56e0 0%, transparent 60%),
+    linear-gradient(160deg, #5b32b4 0%, #3f2490 55%, #331f78 100%);
 }
-@media (max-width: 860px) { .brand-name { max-width: 130px; } }
+.auth-aside-inner {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 40px 34px 28px;
+  text-align: center;
+}
+.auth-pitch {
+  margin: 0;
+  font-size: clamp(20px, 2.1vw, 25px);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.28;
+  max-width: 20ch;
+}
+/* The second half in a lighter tone, so the sentence has a shape. */
+.auth-pitch span { color: #c9b6ff; }
+
+.auth-art { position: relative; display: grid; place-items: center; margin: 4px 0; }
+.auth-orbit { width: min(330px, 62vh); height: auto; color: #ffffff; }
+.auth-art-core {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 8px 26px rgb(31 15 74 / .3);
+}
+
+.auth-pitch-body {
+  margin: 6px 0 0;
+  max-width: 42ch;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #d9cff5;
+}
+.auth-dots { display: flex; gap: 7px; margin-top: 18px; }
+.auth-dots button {
+  width: 22px;
+  height: 4px;
+  border: none;
+  border-radius: 999px;
+  background: rgb(255 255 255 / .28);
+  cursor: pointer;
+  padding: 0;
+  transition: background .2s ease, width .2s ease;
+}
+.auth-dots button.on { width: 34px; background: #ffffff; }
+
+@media (max-width: 720px) {
+  /* The panel is the part that goes: the form is what you came for. */
+  .auth { padding: 0; place-items: stretch; }
+  .auth-card {
+    grid-template-columns: 1fr;
+    min-height: 100vh;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+    gap: 0;
+  }
+  .auth-aside { display: none; }
+  .auth-main { padding: 20px; }
+  .auth-corner { position: static; margin-bottom: 24px; }
+  .auth-form { padding: 0 0 30px; }
+}
+
 
 /* ==========================================================================
    Charts

@@ -1,18 +1,89 @@
-import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { resolveSlug } from "../lib/tenant";
-import { Mark } from "./Logo";
+import Logo, { Mark } from "./Logo";
 
-// The frame every sign-in screen sits in.
+// What the platform ties together, drawn as an orbit around the school.
 //
-// The point of the left panel is that this is multi-tenant software: someone
-// arriving at jane-nath.schoolivio.com should see Jane-Nath College before
-// they type anything, not a generic product login. The school's name comes
-// from a function that exposes only name and logo, since the visitor has not
-// signed in yet.
+// A picture of the actual proposition: the classroom, the exam hall, the
+// bursary and the parent all hanging off one place. Drawn rather than
+// illustrated so it costs nothing to ship and recolours with the theme.
+const Orbit = () => (
+  <svg className="auth-orbit" viewBox="0 0 420 420" role="img" aria-label="">
+    <defs>
+      <radialGradient id="auth-glow" cx="50%" cy="50%">
+        <stop offset="0" stopColor="#ffffff" stopOpacity=".9" />
+        <stop offset="1" stopColor="#ffffff" stopOpacity="0" />
+      </radialGradient>
+    </defs>
+
+    <circle cx="210" cy="210" r="200" fill="url(#auth-glow)" />
+    {[70, 122, 174].map((r) => (
+      <circle
+        key={r}
+        cx="210"
+        cy="210"
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity=".22"
+      />
+    ))}
+
+    {/* Each satellite is one thing a school stops doing by hand.
+        Placed on a ring at an angle rather than an x/y so it can travel
+        round. The whole scene revolves; each satellite counter-rotates so
+        the icon stays the right way up while its position moves. */}
+    {[
+      { radius: 174, degree:   0, label: "Classroom", icon: "📚" },
+      { radius: 174, degree:  72, label: "Exams",     icon: "📝" },
+      { radius: 122, degree: 144, label: "Fees",      icon: "💳" },
+      { radius: 174, degree: 216, label: "Parents",   icon: "👨‍👩‍👦" },
+      { radius: 122, degree: 288, label: "Results",   icon: "🎓" },
+    ].map((node) => (
+      <g
+        key={node.label}
+        className="auth-orbit-sat"
+        style={{
+          "--r": `${node.radius}px`,
+          "--a": `${node.degree}deg`,
+        }}
+      >
+        <g className="auth-orbit-upright">
+          <circle r="26" fill="#ffffff" />
+          <text y="7" textAnchor="middle" fontSize="20">
+            {node.icon}
+          </text>
+        </g>
+      </g>
+    ))}
+
+    {/* The centre is left blank: the Schoolivio mark is overlaid in HTML so
+        it stays crisp and shares one definition with the rest of the app. */}
+    <circle cx="210" cy="210" r="40" fill="#ffffff" />
+  </svg>
+);
+
+// Three things worth saying, rotated. The dots make it obvious there is more
+// than one rather than leaving somebody to wonder if the text changed.
+const PITCHES = [
+  {
+    head: ["Everything a school runs on,", " in one place"],
+    body: "Coursework, assignments and exams beside admissions, fees and results — so nobody is copying figures between two systems.",
+  },
+  {
+    head: ["Results reach parents", " when you release them"],
+    body: "Marks move from the teacher to the principal to the parent in that order, and the database refuses to skip a step.",
+  },
+  {
+    head: ["Fees that add up", " the same on both sides"],
+    body: "A balance is what was billed minus what the bursary approved — the school and the family are never holding different numbers.",
+  },
+];
+
 const AuthLayout = ({ title, subtitle, children, footer }) => {
   const [school, setSchool] = useState(null);
+  const [slide, setSlide] = useState(0);
   const slug = resolveSlug();
 
   useEffect(() => {
@@ -30,61 +101,89 @@ const AuthLayout = ({ title, subtitle, children, footer }) => {
     };
   }, [slug]);
 
+  // Still if the reader asked for less motion.
+  const still = useMemo(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches,
+    []
+  );
+
+  useEffect(() => {
+    if (still) return undefined;
+    const timer = setInterval(
+      () => setSlide((n) => (n + 1) % PITCHES.length),
+      7000
+    );
+    return () => clearInterval(timer);
+  }, [still]);
+
+  const pitch = PITCHES[slide];
+
   return (
     <div className="auth">
-      <aside className="auth-aside">
-        <div className="auth-brand">
-          {school?.logo_url ? (
-            <img src={school.logo_url} alt="" className="auth-logo" />
-          ) : (
-            <Mark size={38} />
-          )}
-          <span className="auth-wordmark">{"Schoolivio"}</span>
-        </div>
-
-        <div className="auth-aside-body">
-          <h2 className="auth-school">{school?.name || "Your classroom"}</h2>
-          <p className="auth-tagline">
-            {school
-              ? "Coursework, assignments, exams and results — in one place."
-              : "Sign in to your school's classroom."}
-          </p>
-        </div>
-
-        <p className="auth-aside-foot">
-          {school ? `${school.slug}.schoolivio.com` : "schoolivio.com"}
-        </p>
-      </aside>
-
-      <main className="auth-main">
-        <div className="auth-form">
-          {/* On a narrow screen the aside collapses, so the school is named
-              here instead of disappearing entirely. */}
-          <div className="auth-compact-brand">
-            {school?.logo_url ? (
-              <img src={school.logo_url} alt="" className="auth-logo" />
-            ) : (
-              <span className="auth-logo auth-logo-fallback">
-                {(school?.name || "S").charAt(0).toUpperCase()}
-              </span>
-            )}
-            <span>{school?.name || "Schoolivio"}</span>
+      <div className="auth-card">
+        <main className="auth-main">
+          <div className="auth-corner">
+            <Logo size={26} />
           </div>
 
-          <h1>{title}</h1>
-          {subtitle ? <p className="auth-sub">{subtitle}</p> : null}
+          <div className="auth-form">
+            {/* The school, named before anything is typed — this is
+                multi-tenant, and you should know whose door you are at. */}
+            <div className="auth-badge">
+              {school?.logo_url ? (
+                <img src={school.logo_url} alt="" />
+              ) : (
+                <Mark size={30} />
+              )}
+            </div>
 
-          {children}
+            <h1>{title}</h1>
+            {school ? <p className="auth-school-name">{school.name}</p> : null}
+            {subtitle ? <p className="auth-sub">{subtitle}</p> : null}
 
-          {footer ? <div className="auth-foot">{footer}</div> : null}
-        </div>
+            {children}
 
-        <p className="auth-legal">
-          {"Trouble signing in? Ask your school administrator, or use "}
-          <Link to="/Forgot-Password">{"forgot password"}</Link>
-          {"."}
-        </p>
-      </main>
+            {footer ? <div className="auth-foot">{footer}</div> : null}
+          </div>
+
+          <p className="auth-legal">
+            {school ? `${school.slug}.schoolivio.com` : "schoolivio.com"}
+          </p>
+        </main>
+
+        <aside className="auth-aside">
+          <div className="auth-aside-inner">
+            <h2 className="auth-pitch">
+              {pitch.head[0]}
+              <span>{pitch.head[1]}</span>
+            </h2>
+
+            <div className="auth-art">
+              <Orbit />
+              <span className="auth-art-core">
+                <Mark size={34} />
+              </span>
+            </div>
+
+            <p className="auth-pitch-body">{pitch.body}</p>
+
+            <div className="auth-dots">
+              {PITCHES.map((p, index) => (
+                <button
+                  key={p.head[0]}
+                  type="button"
+                  className={index === slide ? "on" : undefined}
+                  aria-label={`Slide ${index + 1}`}
+                  aria-current={index === slide}
+                  onClick={() => setSlide(index)}
+                />
+              ))}
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 };
