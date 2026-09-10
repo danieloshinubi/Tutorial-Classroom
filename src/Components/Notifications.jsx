@@ -117,46 +117,63 @@ const Notifications = () => {
       </button>
 
       {open ? (
-        <div className="notif-panel">
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "8px 10px",
-            }}
-          >
-            <strong style={{ fontSize: 14 }}>{"Notifications"}</strong>
+        <div className="notif-panel" role="dialog" aria-label="Notifications">
+          <div className="notif-head">
+            <strong>{"Notifications"}</strong>
             {unread > 0 ? (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={readAll}>
-                {"Mark all read"}
+              <button type="button" className="notif-clear" onClick={readAll}>
+                {"Mark all as read"}
               </button>
             ) : null}
           </div>
 
-          {items.length === 0 ? (
-            <p style={{ padding: 16, color: "var(--ink-3)", fontSize: 14, margin: 0 }}>
-              {"Nothing yet."}
-            </p>
-          ) : null}
-
-          {items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`notif-item${item.read_at ? "" : " unread"}`}
-              style={{ width: "100%", textAlign: "left", border: "none", cursor: "pointer" }}
-              onClick={() => openItem(item)}
-            >
-              <div className="notif-title">{item.title}</div>
-              {item.body ? (
-                <div style={{ fontSize: 13, color: "var(--ink-2)", marginTop: 2 }}>
-                  {item.body}
-                </div>
-              ) : null}
-              <div className="notif-time">{formatDate(item.created_at)}</div>
-            </button>
-          ))}
+          <div className="notif-list">
+            {items.length === 0 ? (
+              <div className="notif-empty">
+                <span className="notif-empty-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="26" height="26">
+                    <path
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 8.5a6 6 0 1 1 12 0v3.4c0 1 .3 2 .9 2.8l.9 1.3a.9.9 0 0 1-.7 1.4H4.9a.9.9 0 0 1-.7-1.4l.9-1.3c.6-.8.9-1.8.9-2.8V8.5Z"
+                    />
+                    <path
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      strokeLinecap="round"
+                      d="M10.2 20a2 2 0 0 0 3.6 0"
+                    />
+                  </svg>
+                </span>
+                <p>{"Nothing new."}</p>
+                <p className="notif-empty-hint">
+                  {"Announcements, join requests and due-soon reminders show up here."}
+                </p>
+              </div>
+            ) : (
+              items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`notif-item${item.read_at ? "" : " unread"}`}
+                  onClick={() => openItem(item)}
+                >
+                  {/* An unread dot on the left, so the row that needs a look
+                      reads at a glance without colouring the whole card. */}
+                  <span className="notif-dot" aria-hidden="true" />
+                  <span className="notif-body">
+                    <span className="notif-title">{item.title}</span>
+                    {item.body ? <span className="notif-desc">{item.body}</span> : null}
+                    <span className="notif-time">{formatDate(item.created_at)}</span>
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       ) : null}
     </span>
