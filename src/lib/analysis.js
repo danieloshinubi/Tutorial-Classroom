@@ -14,10 +14,24 @@ const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : nul
 const ASSIGNMENT_WEIGHT = 0.4;
 const EXAM_WEIGHT = 0.6;
 
+// What a reaction is worth next to a written comment.
+//
+// Not zero: a student who reads a post and taps 👍 has taken part, and plenty
+// of them have nothing to add in words. Not one either — writing something
+// costs more and is worth more, and if a tap scored the same the quickest way
+// to look engaged would be to tap everything. A quarter is deliberately
+// modest: four reactions to match one comment.
+export const REACTION_WEIGHT = 0.25;
+
+// Participation on one course, in comment-equivalents.
+export const contributionOf = (row) =>
+  (row.messages_sent || 0) + (row.reactions_given || 0) * REACTION_WEIGHT;
+
 export const summariseCourse = (row) => {
   const assignmentPct = pct(row.points_earned, row.points_possible);
   const examPct = pct(row.exam_score, row.exam_max);
   const turnInPct = pct(row.assignments_done, row.assignments_set);
+  const contribution = contributionOf(row);
   const punctualityPct = pct(row.assignments_ontime, row.assignments_done);
 
   // Weighted where both exist, otherwise whichever we actually have.
@@ -32,6 +46,8 @@ export const summariseCourse = (row) => {
 
   return {
     ...row,
+    contribution,
+    reactions_given: row.reactions_given || 0,
     assignmentPct,
     examPct,
     turnInPct,
@@ -67,6 +83,10 @@ export const analyse = (rows, marks = []) => {
   const totalDone = courses.reduce((n, c) => n + c.assignments_done, 0);
   const totalOntime = courses.reduce((n, c) => n + c.assignments_ontime, 0);
   const totalMessages = courses.reduce((n, c) => n + c.messages_sent, 0);
+  const totalReactions = courses.reduce((n, c) => n + (c.reactions_given || 0), 0);
+  // Comments and reactions together, the latter discounted. This is what
+  // "class contributions" now means.
+  const totalContribution = courses.reduce((n, c) => n + c.contribution, 0);
 
   const average =
     scored.length > 0
@@ -91,7 +111,7 @@ export const analyse = (rows, marks = []) => {
 
   // Where they talk most, which is not the same as where they score best.
   const mostActive = courses.reduce(
-    (a, b) => (b.messages_sent > (a?.messages_sent ?? -1) ? b : a),
+    (a, b) => (b.contribution > (a?.contribution ?? -1) ? b : a),
     null
   );
 
@@ -149,11 +169,25 @@ export const analyse = (rows, marks = []) => {
     });
   }
 
-  if (mostActive && mostActive.messages_sent >= 5) {
+  if (mostActive && mostActive.contribution >= 5) {
+    // Say which kind of taking part it was, so a parent reading "most
+    // involved" is not left thinking their child has been talking all term
+    // when they have mostly been reacting — or the other way round.
+    const parts = [];
+    if (mostActive.messages_sent) {
+      parts.push(
+        `${mostActive.messages_sent} post${mostActive.messages_sent === 1 ? "" : "s"}`
+      );
+    }
+    if (mostActive.reactions_given) {
+      parts.push(
+        `${mostActive.reactions_given} reaction${mostActive.reactions_given === 1 ? "" : "s"}`
+      );
+    }
     findings.push({
       kind: "strength",
-      title: `Most vocal in ${mostActive.course_code}`,
-      detail: `${mostActive.messages_sent} contributions to the class stream.`,
+      title: `Most involved in ${mostActive.course_code}`,
+      detail: `${parts.join(" and ")} on the class stream.`,
     });
   }
 
@@ -169,6 +203,9 @@ export const analyse = (rows, marks = []) => {
     totalSet,
     totalDone,
     totalMessages,
+    totalReactions,
+    // Comments plus discounted reactions — what the report calls contributions.
+    totalContribution: Math.round(totalContribution * 10) / 10,
     strengths,
     weaknesses,
     best,

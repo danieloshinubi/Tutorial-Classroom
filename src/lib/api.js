@@ -2135,3 +2135,81 @@ export const updateNoticeReply = async ({ id, body }) => {
   if (error) throw error;
   return data;
 };
+
+/* -------------------------------------------------------------------------- */
+/* reactions                                                                  */
+/* -------------------------------------------------------------------------- */
+
+// The palette, fixed to match the CHECK constraint in the database. Adding
+// one here without adding it there produces a constraint violation, so the
+// two lists have to move together.
+export const REACTIONS = ["👍", "❤️", "🎉", "👏", "😂", "😮", "🤔", "✅"];
+
+const groupReactions = (rows, key, userId) => {
+  const byTarget = {};
+  for (const row of rows) {
+    const target = (byTarget[row[key]] = byTarget[row[key]] || {});
+    const tally = (target[row.emoji] = target[row.emoji] || { count: 0, mine: false });
+    tally.count += 1;
+    if (row.user_id === userId) tally.mine = true;
+  }
+  return byTarget;
+};
+
+export const fetchMessageReactions = async (messageIds, userId) => {
+  if (!messageIds || messageIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("message_reactions")
+    .select("message_id, emoji, user_id")
+    .in("message_id", messageIds);
+  if (error) throw error;
+  return groupReactions(data, "message_id", userId);
+};
+
+export const fetchNoticeReactions = async (noticeIds, userId) => {
+  if (!noticeIds || noticeIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("notice_reactions")
+    .select("notice_id, emoji, user_id")
+    .in("notice_id", noticeIds);
+  if (error) throw error;
+  return groupReactions(data, "notice_id", userId);
+};
+
+// Tapping a reaction you already gave takes it back, which is a delete rather
+// than a second row — the unique constraint would refuse one anyway.
+export const toggleMessageReaction = async ({ messageId, userId, emoji, mine }) => {
+  if (mine) {
+    const { error } = await supabase
+      .from("message_reactions")
+      .delete()
+      .eq("message_id", messageId)
+      .eq("user_id", userId)
+      .eq("emoji", emoji);
+    if (error) throw error;
+    return false;
+  }
+  const { error } = await supabase
+    .from("message_reactions")
+    .insert({ message_id: messageId, user_id: userId, emoji });
+  if (error) throw error;
+  return true;
+};
+
+export const toggleNoticeReaction = async ({ noticeId, userId, emoji, mine }) => {
+  if (mine) {
+    const { error } = await supabase
+      .from("notice_reactions")
+      .delete()
+      .eq("notice_id", noticeId)
+      .eq("user_id", userId)
+      .eq("emoji", emoji);
+    if (error) throw error;
+    return false;
+  }
+  const { error } = await supabase
+    .from("notice_reactions")
+    .insert({ notice_id: noticeId, user_id: userId, emoji });
+  if (error) throw error;
+  return true;
+};

@@ -11,8 +11,12 @@ import {
   postComment,
   updateComment,
   deleteComment,
+  fetchMessageReactions,
+  toggleMessageReaction,
 } from "../../lib/api";
 import { Card, Notice, Button, displayName } from "../UI";
+import Reactions from "../Reactions";
+import EmojiInput from "../EmojiInput";
 
 // A textarea that grows with what is being typed, so a long announcement is
 // visible while it is written instead of scrolling inside two lines.
@@ -171,6 +175,7 @@ const Comments = ({ message, comments, onPost, onEdit, onRemove }) => {
 const ClassChat = ({ courseId }) => {
   const [messages, setMessages] = useState([]);
   const [comments, setComments] = useState({});
+  const [reactions, setReactions] = useState({});
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -178,6 +183,7 @@ const ClassChat = ({ courseId }) => {
   const [draftEdit, setDraftEdit] = useState("");
 
   const { user } = useAuth();
+  const composerRef = useRef(null);
 
   // Guards against both the realtime echo of a message this client just
   // inserted and any duplicate delivery from the channel.
@@ -196,10 +202,15 @@ const ClassChat = ({ courseId }) => {
       .then(async (data) => {
         if (!active) return;
         setMessages(data);
-        const byMessage = await fetchCommentsFor(data.map((m) => m.id)).catch(
-          () => ({})
-        );
-        if (active) setComments(byMessage);
+        const ids = data.map((m) => m.id);
+        const [byMessage, byReaction] = await Promise.all([
+          fetchCommentsFor(ids).catch(() => ({})),
+          fetchMessageReactions(ids, user?.id).catch(() => ({})),
+        ]);
+        if (active) {
+          setComments(byMessage);
+          setReactions(byReaction);
+        }
       })
       .catch((err) => {
         if (active) setError(err.message || "Could not load the class stream.");
@@ -216,7 +227,7 @@ const ClassChat = ({ courseId }) => {
       active = false;
       channel.unsubscribe();
     };
-  }, [courseId, addMessage]);
+  }, [courseId, addMessage, user]);
 
   const saveEdit = async (message) => {
     const body = draftEdit.trim();
@@ -280,6 +291,29 @@ const ClassChat = ({ courseId }) => {
     }
   };
 
+  // Optimistic: a reaction is a one-tap thing, and waiting for the round trip
+  // before the count moves feels broken. If the write fails we put it back.
+  const react = async (messageId, emoji, mine) => {
+    const before = reactions;
+    setReactions((current) => {
+      const target = { ...(current[messageId] || {}) };
+      const tally = target[emoji] || { count: 0, mine: false };
+      const next = mine
+        ? { count: tally.count - 1, mine: false }
+        : { count: tally.count + 1, mine: true };
+      if (next.count <= 0) delete target[emoji];
+      else target[emoji] = next;
+      return { ...current, [messageId]: target };
+    });
+
+    try {
+      await toggleMessageReaction({ messageId, userId: user.id, emoji, mine });
+    } catch (err) {
+      setReactions(before);
+      setError(err.message || "Could not save that reaction.");
+    }
+  };
+
   // Only this handler publishes. Enter inside the box makes a new line, so a
   // half-written announcement is never posted by accident.
   const handleSend = async (event) => {
@@ -309,6 +343,7 @@ const ClassChat = ({ courseId }) => {
           for, and a long post should not push the box off screen. */}
       <div className="composer composer-block">
         <Growing
+          ref={composerRef}
           minRows={4}
           value={draft}
           placeholder="Share something with the class. Enter starts a new line — press Post when you are ready."
@@ -316,6 +351,7 @@ const ClassChat = ({ courseId }) => {
         />
         <div className="composer-foot">
           <span className="composer-hint">
+            <EmojiInput targetRef={composerRef} value={draft} onChange={setDraft} />
             {"Enter makes a new line. Nothing is published until you press Post."}
           </span>
           <Button size="sm" disabled={sending || !draft.trim()} onClick={handleSend}>
@@ -389,6 +425,11 @@ const ClassChat = ({ courseId }) => {
                 ) : (
                   <p className="chat-body">{message.body}</p>
                 )}
+
+                <Reactions
+                  tallies={reactions[message.id]}
+                  onToggle={(emoji, mine) => react(message.id, emoji, mine)}
+                />
 
                 <Comments
                   message={message}

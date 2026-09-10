@@ -1346,3 +1346,86 @@ table.data tr:last-child td { border-bottom: none; }
   border-top: 1px solid var(--line);
 }
 .account-item.current { background: var(--brand-soft); color: var(--brand-dark); font-weight: 600; }
+
+/* ==========================================================================
+   Reactions and emoji
+
+   Only emoji somebody has actually used are shown. A fixed row of eight
+   greyed-out faces under every post is noise, and makes an empty stream look
+   like a form waiting to be filled in.
+   ========================================================================== */
+.reactions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  cursor: pointer;
+  color: var(--ink-2);
+}
+.reaction:hover:not(:disabled) { background: var(--bg); }
+.reaction:disabled { cursor: default; opacity: .75; }
+/* Your own reaction reads as pressed, because tapping again takes it back. */
+.reaction.mine {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-weight: 600;
+}
+.reaction-emoji { font-size: 14.5px; line-height: 1; }
+.reaction-count { font-variant-numeric: tabular-nums; }
+.reaction.add { color: var(--ink-3); }
+
+.reaction-picker,
+.emoji-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 14px 40px rgba(15, 23, 42, .16);
+}
+.reaction-picker { display: flex; gap: 4px; }
+.reaction-picker button,
+.emoji-grid button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 19px;
+  line-height: 1;
+  padding: 5px;
+  border-radius: 8px;
+}
+.reaction-picker button:hover,
+.emoji-grid button:hover { background: var(--bg); }
+.reaction-picker button.mine { background: var(--brand-soft); }
+
+.emoji { position: relative; display: inline-flex; }
+.emoji-trigger {
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 8px;
+}
+.emoji-trigger:hover { background: var(--bg); border-color: var(--line); }
+.emoji-panel { width: 268px; max-height: 260px; overflow-y: auto; }
+.emoji-group + .emoji-group { margin-top: 6px; }
+.emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); }

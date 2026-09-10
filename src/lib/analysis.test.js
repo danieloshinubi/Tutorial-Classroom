@@ -1,4 +1,10 @@
-import { analyse, summariseCourse, bandFor } from "./analysis";
+import {
+  analyse,
+  summariseCourse,
+  bandFor,
+  contributionOf,
+  REACTION_WEIGHT,
+} from "./analysis";
 
 const course = (over = {}) => ({
   course_id: over.course_id || Math.random().toString(36).slice(2),
@@ -15,6 +21,7 @@ const course = (over = {}) => ({
   exam_score: 0,
   exam_max: 0,
   messages_sent: 0,
+  reactions_given: 0,
   last_activity: null,
   ...over,
 });
@@ -149,5 +156,49 @@ describe("bandFor", () => {
     expect(bandFor(46).label).toBe("Fair");
     expect(bandFor(20).label).toBe("Needs attention");
     expect(bandFor(null).label).toBe("Not yet marked");
+  });
+});
+
+
+describe("reactions count toward taking part", () => {
+  it("is worth less than a written comment", () => {
+    expect(REACTION_WEIGHT).toBeGreaterThan(0);
+    expect(REACTION_WEIGHT).toBeLessThan(1);
+  });
+
+  it("counts a reaction, but at a discount", () => {
+    expect(contributionOf({ messages_sent: 0, reactions_given: 4 })).toBe(1);
+    expect(contributionOf({ messages_sent: 1, reactions_given: 0 })).toBe(1);
+  });
+
+  // The point of the whole feature: a student who never writes anything is
+  // no longer invisible.
+  it("gives a silent reactor a contribution above zero", () => {
+    const report = analyse([course({ reactions_given: 8 })]);
+    expect(report.totalContribution).toBeGreaterThan(0);
+    expect(report.totalMessages).toBe(0);
+    expect(report.totalReactions).toBe(8);
+  });
+
+  it("still ranks a writer above a tapper", () => {
+    const writer = contributionOf({ messages_sent: 5, reactions_given: 0 });
+    const tapper = contributionOf({ messages_sent: 0, reactions_given: 5 });
+    expect(writer).toBeGreaterThan(tapper);
+  });
+
+  it("treats a missing reaction count as none rather than NaN", () => {
+    expect(contributionOf({ messages_sent: 2 })).toBe(2);
+    const report = analyse([course({ messages_sent: 2, reactions_given: undefined })]);
+    expect(Number.isNaN(report.totalContribution)).toBe(false);
+  });
+
+  it("names both kinds when reporting who is most involved", () => {
+    const report = analyse([
+      course({ course_code: "BIO101", messages_sent: 3, reactions_given: 12 }),
+    ]);
+    const finding = report.findings.find((f) => f.title.includes("Most involved"));
+    expect(finding).toBeTruthy();
+    expect(finding.detail).toContain("3 posts");
+    expect(finding.detail).toContain("12 reactions");
   });
 });

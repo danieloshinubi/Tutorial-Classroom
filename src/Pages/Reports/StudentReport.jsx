@@ -144,9 +144,15 @@ const StudentReport = () => {
         : "var(--c1)",
   }));
 
+  // Contribution, not raw post count — otherwise a student who takes part by
+  // reacting rather than writing disappears from this chart entirely, which
+  // is the exact blind spot reactions were added to close.
   const participation = report.courses
-    .filter((c) => c.messages_sent > 0)
-    .map((c) => ({ label: c.course_code, value: c.messages_sent }));
+    .filter((c) => c.contribution > 0)
+    .map((c) => ({
+      label: c.course_code,
+      value: Math.round(c.contribution * 10) / 10,
+    }));
 
   return (
     <div className="shell">
@@ -179,8 +185,11 @@ const StudentReport = () => {
             },
             {
               label: "Class contributions",
-              value: report.totalMessages,
-              note: "posts across all streams",
+              value: report.totalContribution,
+              note:
+                report.totalReactions > 0
+                  ? `${report.totalMessages} posts and ${report.totalReactions} reactions`
+                  : "posts across all streams",
             },
           ]}
         />

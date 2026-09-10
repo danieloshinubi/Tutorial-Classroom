@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
@@ -12,6 +12,8 @@ import {
   replyToNotice,
   deleteNoticeReply,
   updateNoticeReply,
+  fetchNoticeReactions,
+  toggleNoticeReaction,
   NOTICE_AUDIENCES,
 } from "../../lib/api";
 import {
@@ -25,6 +27,8 @@ import {
   displayName,
   formatDate,
 } from "../../Components/UI";
+import Reactions from "../../Components/Reactions";
+import EmojiInput from "../../Components/EmojiInput";
 
 const AUDIENCE_LABEL = Object.fromEntries(NOTICE_AUDIENCES);
 
@@ -43,6 +47,7 @@ const forInput = (iso) => {
 // closure or a levy is nearly always the same question the next parent has.
 const Replies = ({ notice, replies, onReply, onEdit, onRemove, canModerate }) => {
   const { user } = useAuth();
+  const replyRef = useRef(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -159,12 +164,14 @@ const Replies = ({ notice, replies, onReply, onEdit, onRemove, canModerate }) =>
 
       <div className="composer composer-inline">
         <textarea
+          ref={replyRef}
           rows={2}
           value={draft}
           placeholder="Reply to the school..."
           onChange={(e) => setDraft(e.target.value)}
         />
         <div className="btn-row">
+          <EmojiInput targetRef={replyRef} value={draft} onChange={setDraft} />
           <Button size="sm" disabled={busy || !draft.trim()} onClick={send}>
             {"Post reply"}
           </Button>
@@ -180,12 +187,14 @@ const Replies = ({ notice, replies, onReply, onEdit, onRemove, canModerate }) =>
 const News = () => {
   const { user } = useAuth();
   const { schoolId, school, roles } = useSchool();
+  const bodyRef = useRef(null);
 
   // Posting is the office's job — a teacher has their class stream.
   const canPost = roles.some((r) => ["owner", "admin", "principal"].includes(r));
 
   const [notices, setNotices] = useState([]);
   const [replies, setReplies] = useState({});
+  const [reactions, setReactions] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -210,13 +219,19 @@ const News = () => {
     try {
       const rows = await fetchNotices(schoolId);
       setNotices(rows);
-      setReplies(await fetchNoticeReplies(rows.map((r) => r.id)).catch(() => ({})));
+      const ids = rows.map((r) => r.id);
+      const [byNotice, byReaction] = await Promise.all([
+        fetchNoticeReplies(ids).catch(() => ({})),
+        fetchNoticeReactions(ids, user?.id).catch(() => ({})),
+      ]);
+      setReplies(byNotice);
+      setReactions(byReaction);
     } catch (err) {
       setError(err.message || "Could not load the noticeboard.");
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, user]);
 
   useEffect(() => {
     load();
@@ -368,6 +383,27 @@ const News = () => {
     }));
   };
 
+  // Optimistic, and put back if the write fails.
+  const react = async (noticeId, emoji, mine) => {
+    const before = reactions;
+    setReactions((current) => {
+      const target = { ...(current[noticeId] || {}) };
+      const tally = target[emoji] || { count: 0, mine: false };
+      const next = mine
+        ? { count: tally.count - 1, mine: false }
+        : { count: tally.count + 1, mine: true };
+      if (next.count <= 0) delete target[emoji];
+      else target[emoji] = next;
+      return { ...current, [noticeId]: target };
+    });
+    try {
+      await toggleNoticeReaction({ noticeId, userId: user.id, emoji, mine });
+    } catch (err) {
+      setReactions(before);
+      setError(err.message || "Could not save that reaction.");
+    }
+  };
+
   const onEditReply = async (reply, replyBody) => {
     const saved = await updateNoticeReply({ id: reply.id, body: replyBody });
     setReplies((current) => ({
@@ -440,6 +476,7 @@ const News = () => {
 
             <Field label="What you want to say">
               <textarea
+                ref={bodyRef}
                 className="input"
                 rows={6}
                 value={body}
@@ -447,6 +484,9 @@ const News = () => {
                 onChange={(e) => setBody(e.target.value)}
                 style={{ resize: "vertical", lineHeight: 1.55 }}
               />
+              <div style={{ marginTop: 6 }}>
+                <EmojiInput targetRef={bodyRef} value={body} onChange={setBody} />
+              </div>
             </Field>
 
             <div className="split">
@@ -592,6 +632,13 @@ const News = () => {
                   {"Delete"}
                 </Button>
               </div>
+            ) : null}
+
+            {row.published_at ? (
+              <Reactions
+                tallies={reactions[row.id]}
+                onToggle={(emoji, mine) => react(row.id, emoji, mine)}
+              />
             ) : null}
 
             {row.published_at ? (
