@@ -2094,3 +2094,213 @@ table.data tr:last-child td { border-bottom: none; }
   background: var(--brand-soft);
   color: var(--ink);
 }
+
+/* ==========================================================================
+   Exam sitting — the CBT layout
+   Paper on the left, palette + clock + legend on the right. Matches the
+   pattern real CBT venues run (JAMB, ISC2, ICAN test centres): one
+   question at a time, a grid to jump between them, mark-for-review, and
+   the timer always in the same corner.
+   ========================================================================== */
+.exam-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 22px;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .exam-layout { grid-template-columns: 1fr; }
+}
+
+/* The paper — one question rendered as a card the whole width of its
+   column, options as a vertical list. */
+.exam-paper {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 26px 26px 22px;
+  min-height: 420px;
+}
+.exam-q-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.exam-q-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--brand-dark);
+  margin-bottom: 6px;
+}
+.exam-q-prompt {
+  font-size: 18px;
+  line-height: 1.5;
+  margin: 0;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.exam-options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.exam-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  background: var(--surface);
+  transition: border-color .1s, background .1s;
+  user-select: none;
+}
+.exam-option:hover { border-color: var(--brand); background: color-mix(in srgb, var(--brand-soft) 40%, transparent); }
+.exam-option input { position: absolute; opacity: 0; pointer-events: none; }
+.exam-option-letter {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+  color: var(--ink-2);
+  font-weight: 600;
+  font-size: 12.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color .1s, background .1s, color .1s;
+}
+.exam-option-body { flex: 1; line-height: 1.45; font-size: 14.5px; }
+.exam-option.selected {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.exam-option.selected .exam-option-letter {
+  background: var(--brand);
+  color: #fff;
+  border-color: var(--brand);
+}
+
+.exam-short { min-height: 200px; }
+
+.exam-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 520px) {
+  .exam-actions { grid-template-columns: 1fr; }
+}
+
+/* Right column — summary tile, palette, legend, finish. */
+.exam-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 90px;
+}
+.exam-summary {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px 18px;
+}
+.exam-summary-title {
+  font-weight: 650;
+  font-size: 15px;
+  margin-bottom: 12px;
+  line-height: 1.3;
+}
+.exam-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  border-top: 1px solid var(--line);
+}
+.exam-summary-row:first-of-type { border-top: none; }
+.exam-summary-row strong { font-size: 15px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.exam-clock-row strong { font-family: "Poppins", ui-monospace, monospace; }
+.exam-clock-row.urgent {
+  background: var(--danger-soft);
+  color: var(--danger);
+  margin: 6px -10px 0;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  border-top: none !important;
+}
+.exam-clock-row.urgent strong { color: var(--danger); }
+
+.exam-palette {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 14px 16px 16px;
+}
+.exam-palette-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+.exam-palette-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.exam-palette-cell {
+  aspect-ratio: 1;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  transition: transform .05s;
+  padding: 0;
+}
+.exam-palette-cell:hover { transform: scale(1.04); }
+.exam-palette-cell.answered { background: color-mix(in srgb, var(--success) 82%, white); color: #fff; border-color: transparent; }
+.exam-palette-cell.marked   { background: color-mix(in srgb, var(--warn-ink) 82%, white); color: #fff; border-color: transparent; }
+.exam-palette-cell.reviewed { background: color-mix(in srgb, var(--brand) 78%, white); color: #fff; border-color: transparent; }
+.exam-palette-cell.unseen   { background: var(--surface); }
+.exam-palette-cell.current  { outline: 3px solid var(--brand-dark); outline-offset: 2px; }
+
+.exam-legend {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 14px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.exam-legend > div { display: flex; align-items: center; gap: 8px; }
+.exam-legend .dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); }
+.exam-legend .dot.answered { background: color-mix(in srgb, var(--success) 82%, white); border-color: transparent; }
+.exam-legend .dot.marked   { background: color-mix(in srgb, var(--warn-ink) 82%, white); border-color: transparent; }
+.exam-legend .dot.reviewed { background: color-mix(in srgb, var(--brand) 78%, white); border-color: transparent; }
+.exam-legend .dot.unseen   { background: var(--surface); }
+.exam-legend .dot.current  { background: var(--surface); outline: 2px solid var(--brand-dark); outline-offset: 0; }

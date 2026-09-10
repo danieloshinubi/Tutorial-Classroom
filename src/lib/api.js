@@ -2511,12 +2511,25 @@ export const fetchCollectionSummary = async ({ schoolId, termId }) => {
 // as this user and charges that, so the figure cannot be argued with from
 // here. What comes back is a URL to send the family to.
 export const startOnlinePayment = async ({ invoiceId }) => {
+  // Attach the session's access token explicitly. supabase.functions.invoke
+  // is supposed to do this automatically, but a stale or lazily-initialised
+  // client has been seen to send only the anon key — which the pay-init
+  // function reads as no user at all and returns "Sign in first". Pulling
+  // the token here means the header is always present when we know it.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("Sign in first.");
+  }
+
   const { data, error } = await supabase.functions.invoke("pay-init", {
     body: {
       invoiceId,
       // Where Paystack returns them afterwards. This page only reports the
       // outcome — the webhook is what actually credits the invoice.
       callbackUrl: `${window.location.origin}/Fees/Paid`,
+    },
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
     },
   });
 

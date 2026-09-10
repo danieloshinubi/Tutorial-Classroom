@@ -53,6 +53,14 @@ const TakeExam = () => {
 
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
+  // Which question the student is on right now. One-at-a-time navigation
+  // keeps the paper focused and matches how CBT venues run in the field —
+  // no scrolling past everyone else's answers, no accidental double-answer.
+  const [currentIndex, setCurrentIndex] = useState(0);
+  // Marked-for-review is a per-attempt Set of question ids the student can
+  // come back to before submitting. Not persisted server-side; only useful
+  // during this sitting.
+  const [markedForReview, setMarkedForReview] = useState(() => new Set());
   const [attempt, setAttempt] = useState(null);
   const [answers, setAnswers] = useState({});
   const [remaining, setRemaining] = useState(null);
@@ -444,20 +452,34 @@ const TakeExam = () => {
   /* --------------------------------------------------------- in progress */
   const violationsLeft = exam.max_violations - (attempt.violations || 0);
 
+  // Bounds-safe access so a stale index (e.g. after questions were re-ordered
+  // on the server between mounts) does not crash the render.
+  const active = ordered[Math.min(currentIndex, ordered.length - 1)] || ordered[0];
+  const activeAnswer = active ? (answers[active.id] || {}) : {};
+  const isAnswered = (q) => {
+    const a = answers[q.id];
+    if (!a) return false;
+    if (q.kind === "short_answer") return Boolean(a.text && a.text.trim());
+    return Boolean(a.optionId);
+  };
+  const toggleReview = () => {
+    if (!active) return;
+    setMarkedForReview((current) => {
+      const next = new Set(current);
+      if (next.has(active.id)) next.delete(active.id);
+      else next.add(active.id);
+      return next;
+    });
+  };
+  const jumpTo = (index) => {
+    if (index < 0 || index >= ordered.length) return;
+    setCurrentIndex(index);
+  };
+
   return (
     <div className="shell">
       <Navbar />
       <Page title={exam.title} subtitle={exam.courses?.code}>
-        <div className={`exam-timer${remaining !== null && remaining < 120 ? " urgent" : ""}`}>
-          <span>{`${answered} of ${ordered.length} answered`}</span>
-          <span className="exam-clock">
-            {remaining !== null ? clock(remaining) : "No limit"}
-          </span>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit"}
-          </Button>
-        </div>
-
         <ConnectionStatus state={connection} pending={pending} />
 
         {warning ? (
@@ -475,51 +497,165 @@ const TakeExam = () => {
 
         <Notice tone="error">{error}</Notice>
 
-        {ordered.map((question, index) => {
-          const answer = answers[question.id] || {};
-          return (
-            <div className="q-card" key={question.id}>
-              <div className="q-head">
-                <span className="q-num">{`Question ${index + 1}`}</span>
-                <Badge>{`${question.points} pt`}</Badge>
-              </div>
-              <p style={{ marginTop: 0, whiteSpace: "pre-wrap" }}>{question.prompt}</p>
+        {/* Two-column: paper on the left, palette + clock on the right. */}
+        <div className="exam-layout">
+          <div className="exam-paper">
+            {active ? (
+              <>
+                <div className="exam-q-head">
+                  <div>
+                    <div className="exam-q-eyebrow">
+                      {`Question ${currentIndex + 1} of ${ordered.length}`}
+                    </div>
+                    <p className="exam-q-prompt">{active.prompt}</p>
+                  </div>
+                  <Badge>{`${active.points} pt`}</Badge>
+                </div>
 
-              {question.kind === "short_answer" ? (
-                <textarea
-                  className="textarea"
-                  value={answer.text || ""}
-                  placeholder="Your answer"
-                  onChange={(e) => recordAnswer(question.id, { text: e.target.value })}
-                  onPaste={(e) => e.preventDefault()}
-                  onCopy={(e) => e.preventDefault()}
-                  spellCheck={false}
-                  autoComplete="off"
-                />
-              ) : (
-                question.exam_options.map((option) => (
-                  <label
-                    key={option.id}
-                    className={`opt${answer.optionId === option.id ? " selected" : ""}`}
+                {active.kind === "short_answer" ? (
+                  <textarea
+                    className="textarea exam-short"
+                    value={activeAnswer.text || ""}
+                    placeholder="Your answer"
+                    onChange={(e) => recordAnswer(active.id, { text: e.target.value })}
+                    onPaste={(e) => e.preventDefault()}
+                    onCopy={(e) => e.preventDefault()}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                ) : (
+                  <ul className="exam-options" role="radiogroup" aria-label="Options">
+                    {active.exam_options.map((option, ix) => {
+                      const selected = activeAnswer.optionId === option.id;
+                      return (
+                        <li key={option.id}>
+                          <label
+                            className={`exam-option${selected ? " selected" : ""}`}
+                          >
+                            <input
+                              type="radio"
+                              name={active.id}
+                              checked={selected}
+                              onChange={() =>
+                                recordAnswer(active.id, { optionId: option.id })
+                              }
+                            />
+                            <span className="exam-option-letter">
+                              {String.fromCharCode(65 + ix)}
+                            </span>
+                            <span className="exam-option-body">{option.body}</span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {/* Bottom control bar — mark, prev/next, and, on the last
+                    question, finish. Kept as three visually equal buttons
+                    so the primary action is chosen deliberately. */}
+                <div className="exam-actions">
+                  <Button
+                    variant={markedForReview.has(active.id) ? "primary" : "secondary"}
+                    onClick={toggleReview}
                   >
-                    <input
-                      type="radio"
-                      name={question.id}
-                      checked={answer.optionId === option.id}
-                      onChange={() => recordAnswer(question.id, { optionId: option.id })}
-                    />
-                    <span>{option.body}</span>
-                  </label>
-                ))
-              )}
-            </div>
-          );
-        })}
+                    {markedForReview.has(active.id) ? "Unmark review" : "Mark for review"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={currentIndex === 0}
+                    onClick={() => jumpTo(currentIndex - 1)}
+                  >
+                    {"Previous"}
+                  </Button>
+                  {currentIndex < ordered.length - 1 ? (
+                    <Button onClick={() => jumpTo(currentIndex + 1)}>
+                      {"Next question"}
+                    </Button>
+                  ) : (
+                    <Button onClick={handleSubmit} disabled={submitting}>
+                      {submitting ? "Submitting..." : "Finish exam"}
+                    </Button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <Empty>{"No questions on this paper."}</Empty>
+            )}
+          </div>
 
-        <div className="btn-row" style={{ marginTop: 20 }}>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Submitting..." : "Submit paper"}
-          </Button>
+          <aside className="exam-side">
+            {/* Summary card: what paper, which question, time left. */}
+            <div className="exam-summary">
+              <div className="exam-summary-title">{exam.title}</div>
+              <div className="exam-summary-row">
+                <span>{"Question"}</span>
+                <strong>{`${currentIndex + 1} / ${ordered.length}`}</strong>
+              </div>
+              <div className="exam-summary-row">
+                <span>{"Answered"}</span>
+                <strong>{`${answered} / ${ordered.length}`}</strong>
+              </div>
+              <div className={`exam-summary-row exam-clock-row${remaining !== null && remaining < 120 ? " urgent" : ""}`}>
+                <span>{"Time left"}</span>
+                <strong>{remaining !== null ? clock(remaining) : "No limit"}</strong>
+              </div>
+            </div>
+
+            {/* Palette — one square per question, coloured by state. Click
+                to jump there. Reads left-to-right, five per row like the
+                mockup. */}
+            <div className="exam-palette">
+              <div className="exam-palette-title">
+                {"Click to go to that question"}
+              </div>
+              <div className="exam-palette-grid">
+                {ordered.map((q, ix) => {
+                  const answered = isAnswered(q);
+                  const marked = markedForReview.has(q.id);
+                  const current = ix === currentIndex;
+                  const cls = current
+                    ? "current"
+                    : marked && answered
+                    ? "reviewed"
+                    : marked
+                    ? "marked"
+                    : answered
+                    ? "answered"
+                    : "unseen";
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      className={`exam-palette-cell ${cls}`}
+                      onClick={() => jumpTo(ix)}
+                      aria-label={`Go to question ${ix + 1}${answered ? ", answered" : ""}${marked ? ", marked for review" : ""}`}
+                      aria-current={current ? "true" : "false"}
+                    >
+                      {ix + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Legend so the colours read as meaning, not decoration. */}
+            <div className="exam-legend">
+              <div><span className="dot current" /> Current</div>
+              <div><span className="dot answered" /> Answered</div>
+              <div><span className="dot marked" /> For review</div>
+              <div><span className="dot reviewed" /> Answered &amp; marked</div>
+              <div><span className="dot unseen" /> Not answered</div>
+            </div>
+
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="btn-block"
+            >
+              {submitting ? "Submitting..." : "Finish exam"}
+            </Button>
+          </aside>
         </div>
       </Page>
     </div>
