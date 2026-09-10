@@ -30,33 +30,52 @@ const Orbit = () => (
       />
     ))}
 
-    {/* Each satellite is one thing a school stops doing by hand.
-        Placed on a ring at an angle rather than an x/y so it can travel
-        round. The whole scene revolves; each satellite counter-rotates so
-        the icon stays the right way up while its position moves. */}
-    {[
-      { radius: 174, degree:   0, label: "Classroom", icon: "📚" },
-      { radius: 174, degree:  72, label: "Exams",     icon: "📝" },
-      { radius: 122, degree: 144, label: "Fees",      icon: "💳" },
-      { radius: 174, degree: 216, label: "Parents",   icon: "👨‍👩‍👦" },
-      { radius: 122, degree: 288, label: "Results",   icon: "🎓" },
-    ].map((node) => (
-      <g
-        key={node.label}
-        className="auth-orbit-sat"
-        style={{
-          "--r": `${node.radius}px`,
-          "--a": `${node.degree}deg`,
-        }}
-      >
-        <g className="auth-orbit-upright">
-          <circle r="26" fill="#ffffff" />
-          <text y="7" textAnchor="middle" fontSize="20">
-            {node.icon}
-          </text>
-        </g>
-      </g>
-    ))}
+    {/* One ring, all five satellites in it, one animation on the ring so
+        they move in step. animateTransform is used instead of CSS transforms
+        because SVG groups do not honour animated CSS transforms consistently
+        across browsers — Firefox in particular ignored the CSS I tried
+        first. Each satellite carries a counter-rotation so its icon stays
+        upright while it travels round. */}
+    <g>
+      <animateTransform
+        attributeName="transform"
+        type="rotate"
+        from="0 210 210"
+        to="360 210 210"
+        dur="32s"
+        repeatCount="indefinite"
+      />
+      {[
+        { radius: 174, degree:   0, icon: "📚", label: "Classroom" },
+        { radius: 174, degree:  72, icon: "📝", label: "Exams" },
+        { radius: 122, degree: 144, icon: "💳", label: "Fees" },
+        { radius: 174, degree: 216, icon: "👨‍👩‍👦", label: "Parents" },
+        { radius: 122, degree: 288, icon: "🎓", label: "Results" },
+      ].map((node) => {
+        // Angle measured from twelve o'clock, so degree 0 sits at the top.
+        const rad = (node.degree - 90) * (Math.PI / 180);
+        const x = 210 + node.radius * Math.cos(rad);
+        const y = 210 + node.radius * Math.sin(rad);
+        return (
+          <g key={node.label} transform={`translate(${x} ${y})`}>
+            <g>
+              <animateTransform
+                attributeName="transform"
+                type="rotate"
+                from="0 0 0"
+                to="-360 0 0"
+                dur="32s"
+                repeatCount="indefinite"
+              />
+              <circle r="26" fill="#ffffff" />
+              <text y="7" textAnchor="middle" fontSize="20">
+                {node.icon}
+              </text>
+            </g>
+          </g>
+        );
+      })}
+    </g>
 
     {/* The centre is left blank: the Schoolivio mark is overlaid in HTML so
         it stays crisp and shares one definition with the rest of the app. */}

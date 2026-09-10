@@ -782,35 +782,6 @@ table.data tr:last-child td { border-bottom: none; }
 }
 
 
-/* Orbital motion on the sign-in art.
-   Two spins in play: the whole scene turns clockwise; each satellite turns
-   the same amount anticlockwise so its icon does not go upside down. */
-.auth-orbit-sat {
-  /* svg transform-origin defaults to 0 0, which happens to be the orbit
-     centre because the group is inside the 420x420 viewBox positioned at
-     the middle. So placing a satellite is one rotate plus one translate. */
-  transform: translate(210px, 210px) rotate(var(--a)) translate(0, calc(-1 * var(--r)));
-  animation: auth-orbit 40s linear infinite;
-  transform-box: view-box;
-  transform-origin: 210px 210px;
-}
-.auth-orbit-upright {
-  animation: auth-orbit-upright 40s linear infinite;
-  transform-origin: 0 0;
-}
-@keyframes auth-orbit {
-  from { transform: translate(210px, 210px) rotate(var(--a))                translate(0, calc(-1 * var(--r))); }
-  to   { transform: translate(210px, 210px) rotate(calc(var(--a) + 360deg)) translate(0, calc(-1 * var(--r))); }
-}
-@keyframes auth-orbit-upright {
-  from { transform: rotate(calc(-1 * var(--a))); }
-  to   { transform: rotate(calc(-1 * (var(--a) + 360deg))); }
-}
-/* Still if the reader asked for less motion. */
-@media (prefers-reduced-motion: reduce) {
-  .auth-orbit-sat,
-  .auth-orbit-upright { animation: none; }
-}
 
 /* ==========================================================================
    Sign-in screens
@@ -826,10 +797,13 @@ table.data tr:last-child td { border-bottom: none; }
   display: grid;
   place-items: center;
   padding: 26px;
+  /* Same purple as the brand mark. The panel on the right and the ground
+     behind the card are one visual family, so the eye reads the whole page
+     as Schoolivio rather than as a card sitting on an unrelated backdrop. */
   background:
-    radial-gradient(1100px 620px at 12% -10%, #ede9ff 0%, transparent 62%),
-    radial-gradient(900px 560px at 105% 108%, #e4ecff 0%, transparent 58%),
-    var(--bg);
+    radial-gradient(1100px 620px at 12% -10%, #ece3ff 0%, transparent 62%),
+    radial-gradient(900px 560px at 105% 108%, #d8caff 0%, transparent 58%),
+    #f2ecff;
 }
 
 .auth-card {
@@ -870,6 +844,13 @@ table.data tr:last-child td { border-bottom: none; }
   border: 1px solid color-mix(in srgb, var(--brand) 18%, transparent);
 }
 .auth-badge img { width: 34px; height: 34px; border-radius: 10px; object-fit: cover; }
+
+.forgot-row a {
+  color: var(--danger);
+  padding: 2px 0;
+  display: inline-block;
+}
+.forgot-row a:hover { color: color-mix(in srgb, var(--danger) 85%, black); }
 
 .auth-form h1 {
   font-size: 25px;
@@ -915,9 +896,10 @@ table.data tr:last-child td { border-bottom: none; }
   overflow: hidden;
   border-radius: 18px;
   color: #fdfcff;
+  /* The mark's own gradient, extended to fill the panel. */
   background:
-    radial-gradient(120% 90% at 50% -10%, #7f56e0 0%, transparent 60%),
-    linear-gradient(160deg, #5b32b4 0%, #3f2490 55%, #331f78 100%);
+    radial-gradient(120% 90% at 50% -10%, #8657d4 0%, transparent 62%),
+    linear-gradient(160deg, #6d3fc4 0%, #4c2a94 58%, #3a2078 100%);
 }
 .auth-aside-inner {
   height: 100%;
@@ -938,7 +920,7 @@ table.data tr:last-child td { border-bottom: none; }
   max-width: 20ch;
 }
 /* The second half in a lighter tone, so the sentence has a shape. */
-.auth-pitch span { color: #c9b6ff; }
+.auth-pitch span { color: #b79bf0; }
 
 .auth-art { position: relative; display: grid; place-items: center; margin: 4px 0; }
 .auth-orbit { width: min(330px, 62vh); height: auto; color: #ffffff; }
