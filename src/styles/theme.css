@@ -5,9 +5,13 @@
    ========================================================================== */
 
 :root {
-  --brand: #4f46e5;
-  --brand-dark: #4338ca;
-  --brand-soft: #eef2ff;
+  /* The Schoolivio purple, taken from the mark itself. Everything the
+     product paints in the brand — buttons, active tabs, badges, focus
+     rings, the auth panel — reads from these three, so matching the logo
+     is one edit. */
+  --brand: #6d3fc4;
+  --brand-dark: #4c2a94;
+  --brand-soft: #efe6ff;
 
   --ink: #14161a;
   --ink-2: #4a5160;
