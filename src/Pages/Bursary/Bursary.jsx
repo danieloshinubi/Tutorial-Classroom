@@ -55,6 +55,9 @@ const useMoney = (currency) =>
 
 const Overview = ({ summary, debtors, money, termName }) => (
   <>
+    {/* The figures are the point of the page; scrolling a long debtors list
+        should not take them off screen. */}
+    <div className="panel-top">
     <StatRow
       stats={[
         {
@@ -88,6 +91,7 @@ const Overview = ({ summary, debtors, money, termName }) => (
         {`${money(summary.awaiting)} declared by families is waiting on you. It is not counted as collected until you approve it.`}
       </Notice>
     ) : null}
+    </div>
 
     <section className="section">
       <h2>{"Who owes the most"}</h2>

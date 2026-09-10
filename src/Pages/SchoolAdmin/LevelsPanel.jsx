@@ -165,7 +165,8 @@ const LevelsPanel = () => {
       <Notice tone="error">{error}</Notice>
       <Notice tone="success">{notice}</Notice>
 
-      <Card style={{ maxWidth: 620, marginBottom: 20 }}>
+      <div className="panel-top">
+      <Card style={{ maxWidth: 620 }}>
         <h3 style={{ marginTop: 0 }}>{"Add a class level"}</h3>
         <form onSubmit={handleAdd}>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "110px 1fr" }}>
@@ -214,6 +215,7 @@ const LevelsPanel = () => {
           </div>
         ) : null}
       </Card>
+      </div>
 
       {loading ? <Empty>{"Loading..."}</Empty> : null}
       {!loading && levels.length === 0 ? (

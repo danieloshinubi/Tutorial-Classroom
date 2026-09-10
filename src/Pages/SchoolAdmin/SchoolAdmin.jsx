@@ -195,7 +195,10 @@ const PeoplePanel = () => {
 
   return (
     <>
-      <div className="page-head" style={{ marginBottom: 14 }}>
+      {/* Searching a roster of two hundred means scrolling; the box you
+          searched with has to still be there when you get to the bottom. */}
+      <div className="panel-top">
+        <div className="page-head">
         <div className="btn-row">
           <input
             className="input"
@@ -224,6 +227,7 @@ const PeoplePanel = () => {
         >
           {showInvite ? "Cancel" : "Add someone"}
         </Button>
+        </div>
       </div>
 
       {showInvite ? (

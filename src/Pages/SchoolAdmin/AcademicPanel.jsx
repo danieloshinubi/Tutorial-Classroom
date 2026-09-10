@@ -253,7 +253,9 @@ const AcademicPanel = () => {
           ))}
         </div>
 
-        <div>
+        {/* The forms stay level with the list they are filling, so adding a
+            third term does not mean scrolling back up to find the box. */}
+        <div className="panel-aside">
           <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Add a session"}</h3>
             <form onSubmit={addSession}>

@@ -133,7 +133,8 @@ const GuardiansPanel = () => {
       ) : null}
 
       {parents.length > 0 ? (
-        <Card style={{ maxWidth: 640, marginBottom: 22 }}>
+        <div className="panel-top">
+        <Card style={{ maxWidth: 640 }}>
           <h3 style={{ marginTop: 0 }}>{"Link a child to a parent"}</h3>
           <form onSubmit={handleLink}>
             <Field label="Parent">
@@ -188,6 +189,7 @@ const GuardiansPanel = () => {
             </Button>
           </form>
         </Card>
+        </div>
       ) : null}
 
       {parents.map((p) => {

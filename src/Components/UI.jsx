@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 
 // Thin wrappers over the classes in styles/theme.css. Pages compose these so
 // spacing, colour and radius stay consistent without repeating inline styles.
@@ -12,10 +12,33 @@ import React from "react";
 //
 // The main region is the scroll container (see .shell in theme.css), so this
 // is sticky within it rather than the window.
-export const Page = ({ title, subtitle, action, toolbar, children }) => (
-  <div className="page">
+export const Page = ({ title, subtitle, action, toolbar, children }) => {
+  // Anything inside a page that also wants to stay put — a filter row, an
+  // "add" form, a row of totals — has to sit below the page header rather
+  // than under it. The header's height is not fixed (a subtitle wraps, a tab
+  // strip appears), so it is measured and published as --page-top-h for
+  // .panel-top and .panel-aside to use as their sticky offset.
+  const pageRef = useRef(null);
+  const topRef = useRef(null);
+
+  useEffect(() => {
+    const top = topRef.current;
+    const page = pageRef.current;
+    if (!top || !page || typeof ResizeObserver === "undefined") return undefined;
+
+    const publish = () => {
+      page.style.setProperty("--page-top-h", `${top.offsetHeight}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(top);
+    return () => observer.disconnect();
+  });
+
+  return (
+  <div className="page" ref={pageRef}>
     {(title || action || toolbar) && (
-      <div className="page-top">
+      <div className="page-top" ref={topRef}>
         {(title || action) && (
           <header className="page-head">
             <div>
@@ -30,7 +53,8 @@ export const Page = ({ title, subtitle, action, toolbar, children }) => (
     )}
     <div className="page-body">{children}</div>
   </div>
-);
+  );
+};
 
 export const Card = ({ children, className = "", ...rest }) => (
   <div className={`card ${className}`} {...rest}>

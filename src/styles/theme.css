@@ -1709,3 +1709,44 @@ table.data tr:last-child td { border-bottom: none; }
 .emoji-panel { width: 268px; max-height: 260px; overflow-y: auto; }
 .emoji-group + .emoji-group { margin-top: 6px; }
 .emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); }
+
+/* ==========================================================================
+   A second sticky layer, inside the page
+
+   The page header pins at the top of the scroll area. Controls that belong
+   to a panel rather than the page — a filter row, an "add" form, a row of
+   totals — pin directly beneath it, so only the list moves. The offset comes
+   from --page-top-h, which Page measures, because the header's height
+   changes with a subtitle, a tab strip, or a wrapped toolbar.
+   ========================================================================== */
+.panel-top {
+  position: sticky;
+  top: var(--page-top-h, 0px);
+  z-index: 15;
+  padding: 14px 0;
+  margin-top: -14px;
+  background: var(--bg);
+}
+.panel-top::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--line);
+}
+.panel-top + * { margin-top: 18px; }
+
+/* A form in a side column stays level with the list it is filling. */
+.panel-aside {
+  position: sticky;
+  top: calc(var(--page-top-h, 0px) + 14px);
+  align-self: start;
+}
+
+@media (max-width: 900px) {
+  /* Pinning several things at once leaves no room to read on a phone. */
+  .panel-top, .panel-aside { position: static; }
+  .panel-top::after { display: none; }
+}
