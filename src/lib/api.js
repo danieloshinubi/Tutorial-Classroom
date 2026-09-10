@@ -1593,6 +1593,213 @@ export const enrolApplicant = async ({ id, studentId, classId }) => {
   return Array.isArray(data) ? data[0] : data;
 };
 
+/* -------------------------------------------------------------------------- */
+/* admissions — accounted applicant workflow (Phase 1)                        */
+/* -------------------------------------------------------------------------- */
+
+// Best-match admissions configuration for a session, falling back to the
+// school default, then to a hard-coded default. The applicant portal reads
+// this before showing anything, since fee gating, referees, next-of-kin and
+// faculty hierarchy all depend on it.
+export const fetchAdmissionConfig = async ({ schoolId, sessionId }) => {
+  const { data, error } = await supabase.rpc("effective_admission_config", {
+    target_school: schoolId,
+    target_session: sessionId,
+  });
+  if (error) throw error;
+  return data || {};
+};
+
+export const fetchAdmissionProgrammes = async ({ schoolId, sessionId }) => {
+  const { data, error } = await supabase
+    .from("admission_programmes")
+    .select("id, name, code, faculty, department, study_mode, entry_requirements")
+    .eq("school_id", schoolId)
+    .eq("session_id", sessionId)
+    .eq("is_active", true)
+    .order("faculty", { nullsFirst: true })
+    .order("name");
+  if (error) throw error;
+  return data;
+};
+
+export const fetchDocumentRequirements = async ({
+  schoolId,
+  sessionId,
+  programmeId,
+}) => {
+  let query = supabase
+    .from("document_requirements")
+    .select("id, kind, label, is_required, position, notes, programme_id")
+    .eq("school_id", schoolId)
+    .order("position");
+  if (sessionId) query = query.or(`session_id.eq.${sessionId},session_id.is.null`);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []).filter(
+    (r) => !r.programme_id || r.programme_id === programmeId
+  );
+};
+
+// The applicant's own account for this school. One row per (school, user).
+export const createApplicantAccount = async ({
+  schoolId,
+  firstName,
+  surname,
+  email,
+  phone,
+  middleName,
+  dateOfBirth,
+  nationality,
+}) => {
+  const { data, error } = await supabase.rpc("create_applicant_account", {
+    target_school: schoolId,
+    first_name_in: firstName,
+    surname_in: surname,
+    email_in: email,
+    phone_in: phone || null,
+    middle_name_in: middleName || null,
+    date_of_birth_in: dateOfBirth || null,
+    nationality_in: nationality || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchMyApplicantAccount = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("applicant_accounts")
+    .select("*")
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const fetchMyApplications = async () => {
+  const { data, error } = await supabase.rpc("my_applications");
+  if (error) throw error;
+  return data || [];
+};
+
+export const startApplication = async ({ sessionId, programmeId }) => {
+  const { data, error } = await supabase.rpc("start_application", {
+    target_session: sessionId,
+    target_programme: programmeId || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const saveApplicationSection = async ({
+  applicationId,
+  section,
+  payload,
+}) => {
+  const { data, error } = await supabase.rpc("save_application_section", {
+    target_application: applicationId,
+    section_name: section,
+    payload,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const submitMyApplication = async ({
+  applicationId,
+  declarationAccepted,
+}) => {
+  const { data, error } = await supabase.rpc("submit_my_application", {
+    target_application: applicationId,
+    declaration_accepted: declarationAccepted,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// A payment attempt is in flight, so the applicant is not asked to pay again
+// while the gateway confirms. Handles the "PROCESSING" state end-to-end.
+export const markApplicationPaymentInitiated = async (applicationId) => {
+  const { data, error } = await supabase.rpc("pay_application_fee_initiated", {
+    target_application: applicationId,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// Manual path — a finance officer confirms a proof upload or a teller slip.
+// The gateway path runs from the Paystack webhook and is not exposed here.
+export const verifyApplicationPayment = async ({ paymentId, note }) => {
+  const { data, error } = await supabase.rpc("verify_application_payment", {
+    target_payment: paymentId,
+    note_in: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const setApplicantDocumentStatus = async ({
+  docId,
+  status,
+  note,
+}) => {
+  const { data, error } = await supabase.rpc("set_document_status", {
+    target_doc: docId,
+    new_status: status,
+    note_in: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const requestApplicationCorrection = async ({
+  applicationId,
+  sections,
+  reason,
+}) => {
+  const { data, error } = await supabase.rpc(
+    "request_application_correction",
+    {
+      target_application: applicationId,
+      sections_in: sections,
+      reason_in: reason,
+    }
+  );
+  if (error) throw error;
+  return data;
+};
+
+export const resubmitApplicationCorrection = async (applicationId) => {
+  const { data, error } = await supabase.rpc(
+    "resubmit_application_correction",
+    { target_application: applicationId }
+  );
+  if (error) throw error;
+  return data;
+};
+
+// The progress-tracker rows for this application — steps are computed
+// server-side against the admission config, so a session with interviews
+// disabled never shows the Interview step.
+export const fetchApplicationWorkflowSteps = async (applicationId) => {
+  const { data, error } = await supabase.rpc("application_workflow_steps", {
+    target_application: applicationId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+export const fetchMyApplicationInvoice = async (applicationId) => {
+  const { data, error } = await supabase
+    .from("invoices")
+    .select("id, reference, status, purpose, application_id, notes, due_on, issued_at")
+    .eq("application_id", applicationId)
+    .eq("purpose", "application_fee")
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
 /* documents ---------------------------------------------------------------- */
 
 const MATERIALS_BUCKET_NAME = "course-materials";

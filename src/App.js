@@ -23,6 +23,9 @@ import Apply from "./Pages/Admissions/Apply";
 import ApplicationStatus from "./Pages/Admissions/ApplicationStatus";
 import Admissions from "./Pages/Admissions/Admissions";
 import ApplicationDetail from "./Pages/Admissions/ApplicationDetail";
+import Applications from "./Pages/Admissions/Applications";
+import ApplyStart from "./Pages/Admissions/ApplyStart";
+import ApplicationDashboard from "./Pages/Admissions/ApplicationDashboard";
 import CourseDashboard from "./Components/Sections/CourseDashboard";
 import AssignmentDetail from "./Pages/Assignments/AssignmentDetail";
 import ExamBuilder from "./Pages/Exams/ExamBuilder";
@@ -97,6 +100,14 @@ function App() {
             <Route path="/Assignments/:assignmentId" element={<AssignmentDetail />} />
             <Route path="/Exams/:examId" element={<TakeExam />} />
             {/* Who may see which report is decided in Postgres, not here. */}
+            {/* The accounted admissions flow — a signed-in applicant sees
+                their applications, starts new ones and completes each one
+                through its own dashboard. The RLS on applicant_accounts
+                and my_applications() scopes everything to the caller. */}
+            <Route path="/Applications" element={<Applications />} />
+            <Route path="/Apply/Start" element={<ApplyStart />} />
+            <Route path="/Applications/:applicationId" element={<ApplicationDashboard />} />
+
             <Route path="/Reports" element={<Reports />} />
             <Route path="/Reports/:studentId" element={<StudentReport />} />
 
