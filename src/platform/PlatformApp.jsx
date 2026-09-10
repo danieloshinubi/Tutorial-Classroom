@@ -15,6 +15,7 @@ import Overview from "./Overview";
 import Tenants from "./Tenants";
 import TenantDetail from "./TenantDetail";
 import { Page, Card, Notice, Button } from "../Components/UI";
+import { Mark } from "../Components/Logo";
 
 // The console at admin.schoolivio.com.
 //
@@ -35,7 +36,7 @@ const PlatformNav = () => {
     <header className="nav">
       <div className="nav-inner">
         <Link to="/" className="brand" title="Schoolivio platform">
-          <span className="brand-mark platform-mark">{"S"}</span>
+          <Mark size={26} />
           <span className="brand-name">
             {"Schoolivio"}
             <span className="brand-suffix">{"platform"}</span>

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Field, Button, Notice } from "../Components/UI";
+import { Mark } from "../Components/Logo";
 
 // Deliberately not the school sign-in screen.
 //
@@ -42,7 +43,7 @@ const PlatformLogin = () => {
     <div className="platform-login">
       <form className="platform-login-card" onSubmit={submit}>
         <div className="platform-login-brand">
-          <span className="brand-mark platform-mark">{"S"}</span>
+          <Mark size={34} />
           <div>
             <div className="platform-login-word">{"Schoolivio"}</div>
             <div className="platform-login-sub">{"Platform console"}</div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { resolveSlug } from "../lib/tenant";
+import { Mark } from "./Logo";
 
 // The frame every sign-in screen sits in.
 //
@@ -36,9 +37,7 @@ const AuthLayout = ({ title, subtitle, children, footer }) => {
           {school?.logo_url ? (
             <img src={school.logo_url} alt="" className="auth-logo" />
           ) : (
-            <span className="auth-logo auth-logo-fallback">
-              {(school?.name || "S").charAt(0).toUpperCase()}
-            </span>
+            <Mark size={38} />
           )}
           <span className="auth-wordmark">{"Schoolivio"}</span>
         </div>
