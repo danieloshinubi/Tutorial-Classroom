@@ -849,12 +849,63 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .auth-badge img { width: 34px; height: 34px; border-radius: 10px; object-fit: cover; }
 
+/* Under the password field, centred so it reads as a discreet offer rather
+   than a left-aligned prompt fighting the primary action below it. */
+.forgot-row {
+  display: flex;
+  justify-content: center;
+  padding: 6px 0 2px;
+}
 .forgot-row a {
   color: var(--danger);
-  padding: 2px 0;
-  display: inline-block;
+  font-size: 13.5px;
+  text-decoration: none;
 }
 .forgot-row a:hover { color: color-mix(in srgb, var(--danger) 85%, black); }
+
+/* ==========================================================================
+   Notifications bell in the top bar.
+
+   Round tap target with a soft hover, and a compact count badge that never
+   competes with the number in the count. Same size and same idle colour as
+   the account chip beside it, so the two read as a matched pair.
+   ========================================================================== */
+.bell {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color .15s, border-color .15s, color .15s;
+}
+.bell:hover { background: var(--brand-soft); border-color: color-mix(in srgb, var(--brand) 25%, transparent); color: var(--brand-dark); }
+.bell:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--brand-soft); border-color: var(--brand); }
+.bell-icon { display: block; }
+
+/* The count. Small, on the top-right of the button, semantic red so it reads
+   as "attention" without carrying a lot of visual weight. */
+.bell-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid var(--bg);
+}
 
 .auth-form h1 {
   font-size: 25px;

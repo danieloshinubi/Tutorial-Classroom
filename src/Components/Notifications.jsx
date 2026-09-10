@@ -84,7 +84,35 @@ const Notifications = () => {
         aria-label={`Notifications${unread ? ` (${unread} unread)` : ""}`}
         onClick={() => setOpen((value) => !value)}
       >
-        {"\u{1F514}"}
+        {/* A drawn bell rather than the U+1F514 emoji: the emoji renders at
+            each OS's own colour, size and style — orange with a red count on
+            Windows, dark on Android — and always looked out of place beside
+            the rest of the navbar. This one inherits currentColor and
+            responds to :hover like every other control here. */}
+        <svg
+          className="bell-icon"
+          viewBox="0 0 24 24"
+          width="20"
+          height="20"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6 8.5a6 6 0 1 1 12 0v3.4c0 1 .3 2 .9 2.8l.9 1.3a.9.9 0 0 1-.7 1.4H4.9a.9.9 0 0 1-.7-1.4l.9-1.3c.6-.8.9-1.8.9-2.8V8.5Z"
+          />
+          <path
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            d="M10.2 20a2 2 0 0 0 3.6 0"
+          />
+        </svg>
         {unread > 0 ? <span className="bell-count">{unread > 9 ? "9+" : unread}</span> : null}
       </button>
 
