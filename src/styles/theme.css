@@ -2143,6 +2143,15 @@ table.data tr:last-child td { border-bottom: none; }
   color: var(--ink);
   white-space: pre-wrap;
 }
+.exam-q-image {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  margin: 14px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  object-fit: contain;
+}
 
 .exam-options {
   list-style: none;
@@ -2304,3 +2313,536 @@ table.data tr:last-child td { border-bottom: none; }
 .exam-legend .dot.reviewed { background: color-mix(in srgb, var(--brand) 78%, white); border-color: transparent; }
 .exam-legend .dot.unseen   { background: var(--surface); }
 .exam-legend .dot.current  { background: var(--surface); outline: 2px solid var(--brand-dark); outline-offset: 0; }
+
+/* ==========================================================================
+   Applicant dashboard (ApplicationDashboard.jsx) — own classes throughout so
+   this revamp cannot bleed into the staff workspace or the anonymous Apply/
+   status pages, which reuse some of the same-sounding names above.
+   ========================================================================== */
+
+.appdash-hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px;
+  margin-bottom: 18px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, var(--brand-soft) 0%, var(--surface) 65%);
+  box-shadow: var(--shadow-1);
+}
+.appdash-hero.good {
+  background: linear-gradient(135deg, var(--success-soft) 0%, var(--surface) 65%);
+}
+.appdash-hero.somber {
+  background: linear-gradient(135deg, var(--bg) 0%, var(--surface) 65%);
+}
+.appdash-hero-ref {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  letter-spacing: .02em;
+}
+.appdash-hero-title { margin: 4px 0 6px; font-size: 21px; }
+.appdash-hero-sub { margin: 0; color: var(--ink-2); font-size: 14px; max-width: 48ch; }
+.appdash-hero-status { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+/* Compact stepper — flows left to right, wraps to a plain stacked list on a
+   narrow screen so a long checklist (interview, referees, clearance...)
+   never gets cramped into unreadable pills. */
+.appdash-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+.appdash-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 14px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.appdash-step:not(:last-child)::after {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  height: 1px;
+  background: var(--line);
+  margin-left: 14px;
+}
+.appdash-step-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+.appdash-step.done { color: var(--ink-2); }
+.appdash-step.done .appdash-step-glyph { background: var(--brand); color: #fff; }
+.appdash-step.current { color: var(--brand-dark); font-weight: 600; }
+.appdash-step.current .appdash-step-glyph {
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  border: 2px solid var(--brand);
+}
+@media (max-width: 720px) {
+  .appdash-steps { flex-direction: column; flex-wrap: nowrap; gap: 8px; }
+  .appdash-step { white-space: normal; padding-right: 0; }
+  .appdash-step:not(:last-child)::after { display: none; }
+}
+
+/* The offer card — the one moment on this whole page worth making feel like
+   a moment. Same Card shape, warmer surface only while there's something to
+   react to; a resolved offer (accepted/declined/expired) settles back down. */
+.appdash-offer.issued {
+  border-color: var(--brand);
+  background: linear-gradient(180deg, var(--brand-soft) 0%, var(--surface) 55%);
+}
+.appdash-offer.accepted {
+  border-color: var(--success);
+  background: linear-gradient(180deg, var(--success-soft) 0%, var(--surface) 55%);
+}
+
+/* Application-form accordion — one outer card, each section a collapsible
+   row inside it rather than five full-height cards stacked on the page. */
+.appdash-form-section {
+  border-bottom: 1px solid var(--line);
+  padding: 16px 0;
+}
+.appdash-form-section:first-child { padding-top: 2px; }
+.appdash-form-section:last-child { border-bottom: none; padding-bottom: 2px; }
+.appdash-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+  background: none;
+  border: none;
+  width: 100%;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.appdash-section-head h3 { margin: 0; }
+.appdash-section-caret {
+  color: var(--ink-3);
+  font-size: 18px;
+  line-height: 1;
+  transition: transform .15s ease;
+  flex: 0 0 auto;
+}
+.appdash-section-caret.open { transform: rotate(90deg); }
+.appdash-section-summary { margin: 8px 0 0; color: var(--ink-3); font-size: 13.5px; }
+
+.appdash-timeline { list-style: none; margin: 0; padding: 0; }
+.appdash-timeline li {
+  display: flex;
+  gap: 14px;
+  padding: 0 0 18px 0;
+  position: relative;
+}
+.appdash-timeline li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 16px;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+}
+.appdash-timeline-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex: none;
+  margin-top: 4px;
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
+.appdash-timeline-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+.appdash-timeline-note { margin: 6px 0 0; font-size: 14px; color: var(--ink-2); }
+
+/* ==========================================================================
+   Public Apply form (Apply.jsx) — additions only. .apply/.apply-head/
+   .apply-inner/.apply-form/.apply-grid/.apply-facts etc. above are shared
+   with ApplicationStatus.jsx, so nothing here redefines them — every new
+   rule is its own class, scoped to elements only Apply.jsx renders.
+   ========================================================================== */
+
+/* The three-section overview strip under the hero lede — decorative only
+   (this stays a single scrolling form, not a wizard), but it gives a family
+   the same "here's the whole shape of this" read the dashboard's stepper
+   gives a signed-in applicant. */
+.apply-outline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 4px;
+  margin-top: 18px;
+  list-style: none;
+  padding: 0;
+}
+.apply-outline li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: rgb(255 255 255 / 0.82);
+  padding-right: 12px;
+}
+.apply-outline li:not(:last-child)::after {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 1px;
+  background: rgb(255 255 255 / 0.3);
+  margin-left: 12px;
+}
+.apply-outline-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+/* Section number badge inside each <h2> in the form itself. */
+.apply-form h2 { display: flex; align-items: center; gap: 10px; }
+.apply-h2-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand-dark);
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.apply-required-key {
+  margin: -18px 0 22px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.apply-req-mark { color: var(--danger); margin-left: 2px; }
+
+/* The success screen — a short, plain-language sense of what happens next,
+   rather than leaving a family staring at a reference number wondering. */
+.apply-next {
+  text-align: left;
+  max-width: 420px;
+  margin: 0 auto 28px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+.apply-next-title { font-size: 13px; font-weight: 650; margin-bottom: 12px; }
+.apply-next ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.apply-next li { display: flex; gap: 10px; font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+.apply-next-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.apply-attach { display: flex; flex-direction: column; gap: 8px; }
+.apply-attach-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+}
+.apply-attach-info { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.apply-attach-name {
+  font-size: 13.5px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.apply-attach-size { font-size: 11.5px; color: var(--ink-3); }
+.apply-attach-status { font-size: 12.5px; color: var(--ink-3); flex: 0 0 auto; }
+.apply-attach-status.error { color: var(--danger); }
+.apply-attach-kind { flex: 0 0 auto; width: auto; padding: 6px 26px 6px 10px; font-size: 12.5px; }
+.apply-attach-remove {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+.apply-attach-remove:hover { color: var(--danger); text-decoration: underline; }
+
+/* ==========================================================================
+   Document preview modal (Components/DocumentPreview.jsx) — used everywhere
+   a document used to open in a new tab pointed at a raw storage URL.
+   ========================================================================== */
+.docprev-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgb(15 15 20 / 0.72);
+  backdrop-filter: blur(2px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.docprev-shell {
+  width: min(1000px, 100%);
+  height: min(88vh, 900px);
+  background: #14151a;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.4);
+}
+.docprev-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #1c1d24;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  flex: none;
+}
+.docprev-title {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.docprev-tools { display: flex; align-items: center; gap: 6px; flex: none; }
+.docprev-btn {
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+  border: none;
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+.docprev-btn:hover { background: rgb(255 255 255 / 0.16); }
+.docprev-close { background: transparent; font-size: 16px; }
+.docprev-zoom { color: rgb(255 255 255 / 0.7); font-size: 12.5px; min-width: 40px; text-align: center; }
+.docprev-body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0e0f13;
+  background-image:
+    linear-gradient(45deg, rgb(255 255 255 / 0.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgb(255 255 255 / 0.03) 25%, transparent 25%);
+  background-size: 20px 20px;
+}
+.docprev-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.15s ease;
+}
+.docprev-frame { width: 100%; height: 100%; border: none; background: #fff; }
+.docprev-fallback { text-align: center; color: #fff; }
+
+/* ==========================================================================
+   Live-update banner (Components/LiveUpdateBanner.jsx) — a page viewing one
+   application's live state prompts to reload rather than refreshing itself
+   silently underneath whatever the viewer is doing.
+   ========================================================================== */
+.live-update-banner {
+  position: sticky;
+  top: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
+  border-radius: var(--r);
+  background: var(--brand-dark);
+  color: #fff;
+  font-size: 13.5px;
+  box-shadow: var(--shadow-1);
+  animation: live-update-in 0.2s ease-out;
+}
+.live-update-banner .btn-primary {
+  background: #fff;
+  color: var(--brand-dark);
+}
+@keyframes live-update-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Scientific calculator (Components/ScientificCalculator.jsx) — a floating
+   panel available during an exam only when the tutor turns it on. Styled to
+   read as a physical calculator, not another form on the page.
+   ========================================================================== */
+.calc-launcher {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  background: var(--brand-dark);
+  color: #fff;
+  font-size: 22px;
+  box-shadow: var(--shadow-2, 0 8px 24px rgb(0 0 0 / 0.25));
+  cursor: pointer;
+}
+.calc-shell {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 60;
+  width: 300px;
+  background: #1c1d24;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+}
+.calc-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #26272f;
+  color: #fff;
+  font-size: 13px;
+  font-family: var(--font, inherit);
+  cursor: default;
+}
+.calc-close {
+  background: none;
+  border: none;
+  color: rgb(255 255 255 / 0.7);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+}
+.calc-close:hover { color: #fff; }
+.calc-display {
+  background: #cdd6c4;
+  padding: 10px 12px 8px;
+}
+.calc-mode-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+  min-height: 14px;
+}
+.calc-mode {
+  font-size: 10px;
+  font-weight: 700;
+  color: #33421f;
+  background: rgb(255 255 255 / 0.4);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.calc-mode.shift { color: #6b4400; }
+.calc-field {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  background: transparent;
+  border: none;
+  font-size: 17px;
+  color: #17210c;
+  --ml__base-font-size: 17px;
+}
+.calc-result {
+  text-align: right;
+  font-size: 22px;
+  font-weight: 600;
+  color: #17210c;
+  min-height: 28px;
+  padding-top: 4px;
+  border-top: 1px solid rgb(0 0 0 / 0.12);
+  overflow-wrap: anywhere;
+}
+.calc-error {
+  font-size: 12px;
+  font-weight: 500;
+  color: #7a1f1f;
+}
+.calc-pad {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.calc-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.calc-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 9px 0;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  background: #33343d;
+  color: #f0f0f2;
+}
+.calc-btn:hover { filter: brightness(1.15); }
+.calc-btn:active { filter: brightness(0.9); }
+.calc-digit { background: #43444e; }
+.calc-op { background: #4a4432; color: #ffcf6b; }
+.calc-fn { background: #33343d; font-size: 11.5px; }
+.calc-clear { background: #5a2a2a; color: #ffb4b4; }
+.calc-shift { background: #2f3a4a; color: #9fd0ff; }
+.calc-shift.active { background: #3d6ea8; color: #fff; }
+.calc-modebtn { background: #2f3a4a; color: #9fd0ff; font-size: 11px; }
+.calc-equals { background: var(--brand-dark); color: #fff; font-weight: 700; }

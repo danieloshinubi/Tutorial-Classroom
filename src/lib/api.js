@@ -279,7 +279,7 @@ export const deleteAssignment = async (id) => {
 export const fetchMySubmission = async ({ assignmentId, userId }) => {
   const { data, error } = await supabase
     .from("submissions")
-    .select("id, body, url, submitted_at, grade, feedback, graded_at")
+    .select("id, body, url, file_path, file_name, file_size, submitted_at, grade, feedback, graded_at")
     .eq("assignment_id", assignmentId)
     .eq("user_id", userId)
     .maybeSingle();
@@ -289,7 +289,7 @@ export const fetchMySubmission = async ({ assignmentId, userId }) => {
 
 // One row per student per assignment, so a resubmission updates in place and
 // clears any previous grade rather than stacking up duplicates.
-export const submitWork = async ({ assignmentId, userId, body, url }) => {
+export const submitWork = async ({ assignmentId, userId, body, url, filePath, fileName, fileSize }) => {
   const { data, error } = await supabase
     .from("submissions")
     .upsert(
@@ -298,6 +298,9 @@ export const submitWork = async ({ assignmentId, userId, body, url }) => {
         user_id: userId,
         body,
         url,
+        file_path: filePath || null,
+        file_name: fileName || null,
+        file_size: fileSize || null,
         submitted_at: new Date().toISOString(),
         grade: null,
         feedback: null,
@@ -306,7 +309,7 @@ export const submitWork = async ({ assignmentId, userId, body, url }) => {
       },
       { onConflict: "assignment_id,user_id" }
     )
-    .select("id, body, url, submitted_at, grade, feedback, graded_at")
+    .select("id, body, url, file_path, file_name, file_size, submitted_at, grade, feedback, graded_at")
     .single();
   if (error) throw error;
   return data;
@@ -315,7 +318,7 @@ export const submitWork = async ({ assignmentId, userId, body, url }) => {
 export const fetchSubmissionsForAssignment = async (assignmentId) => {
   const { data, error } = await supabase
     .from("submissions")
-    .select(`id, body, url, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, url, file_path, file_name, file_size, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .eq("assignment_id", assignmentId)
     .order("submitted_at");
   if (error) throw error;
@@ -332,7 +335,7 @@ export const gradeSubmission = async ({ id, grade, feedback, graderId }) => {
       graded_at: new Date().toISOString(),
     })
     .eq("id", id)
-    .select(`id, body, url, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, url, file_path, file_name, file_size, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .single();
   if (error) throw error;
   return data;
@@ -439,7 +442,7 @@ export const subscribeToMessages = (courseId, onInsert) =>
 export const fetchExams = async (courseId) => {
   const { data, error } = await supabase
     .from("exams")
-    .select("id, title, instructions, duration_mins, opens_at, closes_at, published, show_results, created_at, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations")
+    .select("id, title, kind, instructions, duration_mins, opens_at, closes_at, published, show_results, created_at, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations")
     .eq("course_id", courseId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -449,7 +452,7 @@ export const fetchExams = async (courseId) => {
 export const fetchExam = async (id) => {
   const { data, error } = await supabase
     .from("exams")
-    .select("id, course_id, title, instructions, duration_mins, opens_at, closes_at, published, show_results, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations, grace_seconds, courses ( id, code, title, level_year, owner_id )")
+    .select("id, course_id, title, kind, instructions, duration_mins, opens_at, closes_at, published, show_results, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations, grace_seconds, allow_calculator, courses ( id, code, title, level_year, owner_id )")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;
@@ -483,7 +486,7 @@ export const deleteExam = async (id) => {
 export const fetchQuestionsForSitting = async (examId) => {
   const { data, error } = await supabase
     .from("exam_questions")
-    .select("id, kind, prompt, points, position, exam_options ( id, body, position )")
+    .select("id, kind, prompt, image_path, points, position, exam_options ( id, body, position )")
     .eq("exam_id", examId)
     .order("position");
   if (error) throw error;
@@ -495,7 +498,7 @@ export const fetchQuestionsForSitting = async (examId) => {
 export const fetchQuestionsForEditing = async (examId) => {
   const { data, error } = await supabase
     .from("exam_questions")
-    .select("id, kind, prompt, points, position, answer_key, exam_options ( id, body, position, is_correct )")
+    .select("id, kind, prompt, image_path, points, position, answer_key, exam_options ( id, body, position, is_correct )")
     .eq("exam_id", examId)
     .order("position");
   if (error) throw error;
@@ -730,6 +733,26 @@ export const markAllNotificationsRead = async (userId) => {
   if (error) throw error;
 };
 
+// A live "something changed here" signal for one application's timeline —
+// screening, review, a decision, a payment settling — so whoever has the
+// page open (staff or the applicant themselves) sees a "reload" prompt
+// instead of having to guess when to refresh. Same channel-per-entity,
+// INSERT-only pattern subscribeToNotifications already uses.
+export const subscribeToApplicationEvents = (applicationId, onInsert) =>
+  supabase
+    .channel(`application_events:${applicationId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "classroom",
+        table: "application_events",
+        filter: `application_id=eq.${applicationId}`,
+      },
+      (payload) => onInsert(payload.new)
+    )
+    .subscribe();
+
 export const subscribeToNotifications = (userId, onInsert) =>
   supabase
     .channel(`notifications:${userId}`)
@@ -757,7 +780,7 @@ export const subscribeToNotifications = (userId, onInsert) =>
 // need it to be; RLS decides who may write here.
 const uuidV4 = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return uuidV4();
+    return crypto.randomUUID();
   }
   if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
     const bytes = new Uint8Array(16);
@@ -794,6 +817,38 @@ export const uploadMaterialFile = async ({ courseId, file, onProgress }) => {
     file_size: file.size,
     mime_type: file.type || null,
   };
+};
+
+// Path convention exam-questions/<course_id>/<random>-<name> — for a
+// diagram, equation or graph a textarea prompt can't express. Scoped by
+// course rather than exam id (059) so an image can be attached while
+// building a brand-new, not-yet-saved exam, which has no exam id yet.
+export const uploadExamQuestionImage = async ({ courseId, file }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `exam-questions/${courseId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(MATERIALS_BUCKET)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return path;
+};
+
+export const removeExamQuestionImage = async (path) => {
+  await supabase.storage.from(MATERIALS_BUCKET).remove([path]).catch(() => {});
+};
+
+// Path convention submissions/<assignment_id>/<user_id>/<random>-<name> — the
+// storage policy (057) reads segment [3] (the user id) to decide who may
+// write and, together with can_manage_assignment on segment [2], who may
+// read it back.
+export const uploadSubmissionFile = async ({ assignmentId, userId, file }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `submissions/${assignmentId}/${userId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(MATERIALS_BUCKET)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return { file_path: path, file_name: file.name, file_size: file.size };
 };
 
 // The bucket is private, so downloads go through a short-lived signed URL
@@ -1174,7 +1229,7 @@ export const joinSchool = async (slug) => {
 export const fetchSessions = async (schoolId) => {
   const { data, error } = await supabase
     .from("sessions")
-    .select("id, name, starts_on, ends_on, is_current")
+    .select("id, name, starts_on, ends_on, is_current, applications_open")
     .eq("school_id", schoolId)
     .order("name", { ascending: false });
   if (error) throw error;
@@ -1504,9 +1559,34 @@ export const submitApplication = async ({ slug, ...fields }) => {
     address: fields.address || null,
     notes: fields.notes || null,
     document_links: fields.documentLinks || null,
+    document_uploads: fields.documentUploads?.length ? fields.documentUploads : null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
+};
+
+// Uploaded before the application exists — there's no application_id yet,
+// so this writes straight to storage under admissions/<schoolId>/<random>-
+// <name>. The RLS policy (051) is what actually decides an anonymous caller
+// may write there at all; this function does nothing to enforce that itself.
+// submitApplication() registers the result into application_documents once
+// the application id exists.
+export const uploadPublicApplicationDocument = async ({ schoolId, file, kind }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `admissions/${schoolId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(MATERIALS_BUCKET_NAME)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return { path, name: file.name, size: file.size, mime_type: file.type || null, kind: kind || "other" };
+};
+
+// Lets a family remove an attachment before submitting. Once submitted, the
+// same storage policy refuses this — the file is application_documents'
+// responsibility from then on, the same as a staff-uploaded one.
+export const removePublicApplicationDocument = async (path) => {
+  const { error } = await supabase.storage.from(MATERIALS_BUCKET_NAME).remove([path]);
+  if (error) throw error;
 };
 
 // Public: needs the reference and the guardian's email together, so a
@@ -1575,12 +1655,13 @@ export const fetchAdmissionsSummary = async (schoolId) => {
 
 // The legal transitions are enforced in the database; a refusal here means
 // the move genuinely was not allowed.
-export const decideApplication = async ({ id, status, note, offerExpires }) => {
+export const decideApplication = async ({ id, status, note, offerExpires, conditions }) => {
   const { data, error } = await supabase.rpc("decide_application", {
     target_application: id,
     new_status: status,
     note: note || null,
     offer_expires: offerExpires || null,
+    conditions_in: conditions || null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
@@ -1741,6 +1822,16 @@ export const verifyApplicationPayment = async ({ paymentId, note }) => {
   return data;
 };
 
+// Same manual path, for the acceptance fee raised once an offer is accepted.
+export const verifyAcceptancePayment = async ({ paymentId, note }) => {
+  const { data, error } = await supabase.rpc("verify_acceptance_payment", {
+    target_payment: paymentId,
+    note_in: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
 export const setApplicantDocumentStatus = async ({
   docId,
   status,
@@ -1792,13 +1883,48 @@ export const fetchApplicationWorkflowSteps = async (applicationId) => {
   return data || [];
 };
 
-export const fetchMyApplicationInvoice = async (applicationId) => {
+// purpose defaults to the application fee; pass 'acceptance_fee' for the
+// invoice raised once an offer is accepted — same table, same RLS, only the
+// purpose column tells them apart.
+export const fetchMyApplicationInvoice = async (applicationId, purpose = "application_fee") => {
   const { data, error } = await supabase
     .from("invoices")
     .select("id, reference, status, purpose, application_id, notes, due_on, issued_at")
     .eq("application_id", applicationId)
-    .eq("purpose", "application_fee")
+    .eq("purpose", purpose)
     .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+// The applicant's own offer on this application, if one has been issued.
+// Read directly off admission_offers — RLS (is_applicant_for) is what makes
+// this safe, the same way fetchMyApplicationInvoice reads invoices directly.
+export const fetchMyOffer = async (applicationId) => {
+  const { data, error } = await supabase
+    .from("admission_offers")
+    .select("id, status, issued_at, expires_at, accepted_at, declined_at, decline_reason, conditions")
+    .eq("application_id", applicationId)
+    .order("issued_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const acceptOffer = async (offerId) => {
+  const { data, error } = await supabase.rpc("accept_offer", {
+    target_offer: offerId,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const declineOffer = async ({ offerId, reason }) => {
+  const { data, error } = await supabase.rpc("decline_offer", {
+    target_offer: offerId,
+    reason_in: reason || null,
+  });
   if (error) throw error;
   return data;
 };
@@ -2207,7 +2333,18 @@ export const fetchPaymentsFor = async (invoiceIds) => {
 
 // The receipt for a transfer. Path shape matters: the storage policy reads
 // the invoice id out of the third segment to decide who may write here.
+// The bucket itself caps an object at 20MB — a limit Supabase Storage
+// enforces regardless of what this checks, and reports back as a bare
+// "exceeded the maximum allowed size" (no mention of what the max IS or
+// that it's about a file at all). Checked here first so the message a
+// parent actually sees says the number, before the upload is even attempted.
+const PAYMENT_PROOF_MAX_BYTES = 20 * 1024 * 1024;
+
 export const uploadPaymentProof = async ({ schoolId, invoiceId, file }) => {
+  if (file.size > PAYMENT_PROOF_MAX_BYTES) {
+    throw new Error("That file is too large — receipts and screenshots must be under 20MB. Try a smaller photo, or compress it first.");
+  }
+
   const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
   const path = `payments/${schoolId}/${invoiceId}/${uuidV4()}-${safeName}`;
 

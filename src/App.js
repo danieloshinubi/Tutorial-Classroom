@@ -113,8 +113,10 @@ function App() {
             <Route path="/Reports" element={<Reports />} />
             <Route path="/Reports/:studentId" element={<StudentReport />} />
 
-            {/* Staff who may run a course */}
-            <Route element={<SchoolRoute require="staff" />}>
+            {/* Staff who may run a course. Uses the "teach" module, not the
+                broader isStaff check — a bursar or admissions officer has no
+                reason to be here and never sees it in their own nav either. */}
+            <Route element={<SchoolRoute module="teach" />}>
               <Route path="/Teach" element={<Teach />} />
               <Route path="/Teach/New" element={<CourseForm />} />
               <Route path="/Teach/:courseId/Edit" element={<CourseForm />} />
@@ -123,8 +125,12 @@ function App() {
               <Route path="/Exams/:examId/Results" element={<ExamResults />} />
             </Route>
 
-            {/* Admissions — officers as well as administrators */}
-            <Route element={<SchoolRoute require="admissions" />}>
+            {/* Admissions — officers as well as administrators. Reads the
+                "admissions" module (owner/admin/principal/admissions) so a
+                principal, who already sees this in their nav, can actually
+                open it — a route guard hand-written separately from the
+                module registry had drifted out of sync and forgotten them. */}
+            <Route element={<SchoolRoute module="admissions" />}>
               <Route path="/Admissions" element={<Admissions />} />
               <Route path="/Admissions/:applicationId" element={<ApplicationDetail />} />
               {/* Phase 2 workspace — queues and per-application operations. */}
@@ -139,7 +145,7 @@ function App() {
             </Route>
 
             {/* School administration */}
-            <Route element={<SchoolRoute require="admin" />}>
+            <Route element={<SchoolRoute module="school" />}>
               <Route path="/School" element={<SchoolAdmin />} />
             </Route>
 

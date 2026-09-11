@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import React, { useEffect, useRef, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import {
@@ -13,12 +13,16 @@ import {
   fetchExam,
   fetchQuestionsForEditing,
   countAttempts,
+  uploadExamQuestionImage,
+  removeExamQuestionImage,
 } from "../../lib/api";
 import { Page, Card, Field, Button, Badge, Notice } from "../../Components/UI";
+import { useDocumentPreview } from "../../Components/DocumentPreview";
 
 const blankQuestion = (kind = "multiple_choice") => ({
   kind,
   prompt: "",
+  image_path: null,
   points: 1,
   answer_key: "",
   options:
@@ -47,9 +51,12 @@ const toLocalInput = (iso) => {
 // new paper and editing an unpublished one.
 const ExamBuilder = () => {
   const { courseId: routeCourseId, examId } = useParams();
+  const [searchParams] = useSearchParams();
   const isEditing = Boolean(examId);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const imageInputs = useRef({});
+  const preview = useDocumentPreview();
 
   const [courseId, setCourseId] = useState(routeCourseId || null);
   const [loading, setLoading] = useState(isEditing);
@@ -57,6 +64,7 @@ const ExamBuilder = () => {
 
   const [exam, setExam] = useState({
     title: "",
+    kind: searchParams.get("kind") === "midterm" ? "midterm" : "exam",
     instructions: "",
     duration_mins: "60",
     closes_at: "",
@@ -66,9 +74,11 @@ const ExamBuilder = () => {
     shuffle_questions: true,
     shuffle_options: true,
     max_violations: "3",
+    allow_calculator: false,
   });
   const [questions, setQuestions] = useState([blankQuestion()]);
   const [removedIds, setRemovedIds] = useState([]);
+  const [imageUploading, setImageUploading] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -92,6 +102,7 @@ const ExamBuilder = () => {
         setAttemptCount(attempts);
         setExam({
           title: examRow.title || "",
+          kind: examRow.kind === "midterm" ? "midterm" : "exam",
           instructions: examRow.instructions || "",
           duration_mins: examRow.duration_mins ? String(examRow.duration_mins) : "",
           closes_at: toLocalInput(examRow.closes_at),
@@ -101,6 +112,7 @@ const ExamBuilder = () => {
           shuffle_questions: examRow.shuffle_questions,
           shuffle_options: examRow.shuffle_options,
           max_violations: String(examRow.max_violations ?? 3),
+          allow_calculator: !!examRow.allow_calculator,
         });
         setQuestions(
           questionRows.length
@@ -108,6 +120,7 @@ const ExamBuilder = () => {
                 id: row.id,
                 kind: row.kind,
                 prompt: row.prompt,
+                image_path: row.image_path || null,
                 points: String(row.points),
                 answer_key: row.answer_key || "",
                 options: [...(row.exam_options || [])]
@@ -149,6 +162,29 @@ const ExamBuilder = () => {
     );
 
   const changeKind = (index, kind) => patchQuestion(index, blankQuestion(kind));
+
+  const attachQuestionImage = async (index, file) => {
+    if (!file || !courseId) return;
+    if (file.size > 10 * 1024 * 1024) {
+      setError("That image is over 10MB.");
+      return;
+    }
+    setImageUploading((c) => ({ ...c, [index]: true }));
+    setError("");
+    try {
+      const path = await uploadExamQuestionImage({ courseId, file });
+      patchQuestion(index, { image_path: path });
+    } catch (err) {
+      setError(err.message || "Could not attach that image.");
+    } finally {
+      setImageUploading((c) => ({ ...c, [index]: false }));
+    }
+  };
+
+  const removeQuestionImage = (index, path) => {
+    patchQuestion(index, { image_path: null });
+    if (path) removeExamQuestionImage(path);
+  };
 
   const patchOption = (qi, oi, patch) =>
     setQuestions((current) =>
@@ -268,6 +304,7 @@ const ExamBuilder = () => {
     try {
       const fields = {
         title: exam.title.trim(),
+        kind: exam.kind === "midterm" ? "midterm" : "exam",
         instructions: exam.instructions.trim() || null,
         duration_mins: exam.duration_mins ? Number(exam.duration_mins) : null,
         closes_at: exam.closes_at
@@ -279,6 +316,7 @@ const ExamBuilder = () => {
         shuffle_questions: exam.shuffle_questions,
         shuffle_options: exam.shuffle_options,
         max_violations: Number(exam.max_violations) || 0,
+        allow_calculator: exam.allow_calculator,
         published: publish,
       };
 
@@ -295,6 +333,7 @@ const ExamBuilder = () => {
         const shape = {
           kind: question.kind,
           prompt: question.prompt.trim(),
+          image_path: question.image_path || null,
           points: Number(question.points) || 1,
           position: i,
           answer_key:
@@ -377,6 +416,17 @@ const ExamBuilder = () => {
               placeholder="Mid-semester test"
             />
           </Field>
+          <Field label="Kind" hint="Which list this shows up in on the course page.">
+            <select
+              className="select"
+              style={{ width: "auto" }}
+              value={exam.kind}
+              onChange={setExamField("kind")}
+            >
+              <option value="exam">{"Exam"}</option>
+              <option value="midterm">{"Mid-exam"}</option>
+            </select>
+          </Field>
           <Field label="Instructions">
             <textarea
               className="textarea"
@@ -448,6 +498,7 @@ const ExamBuilder = () => {
             ["require_fullscreen", "Run fullscreen, and record any exit"],
             ["shuffle_questions", "Shuffle question order per student"],
             ["shuffle_options", "Shuffle answer options per student"],
+            ["allow_calculator", "Allow a scientific calculator during the exam"],
           ].map(([field, label]) => (
             <label
               key={field}
@@ -519,6 +570,49 @@ const ExamBuilder = () => {
                 style={{ minHeight: 70 }}
                 value={question.prompt}
                 onChange={(e) => patchQuestion(qi, { prompt: e.target.value })}
+              />
+            </Field>
+
+            <Field label="Image" hint="Optional — a diagram, graph or equation students need to see.">
+              {question.image_path ? (
+                <div className="btn-row">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => preview.open(question.image_path, `Question ${qi + 1} image`)}
+                  >
+                    {"View image"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeQuestionImage(qi, question.image_path)}
+                  >
+                    {"Remove"}
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={imageUploading[qi]}
+                  onClick={() => imageInputs.current[qi]?.click()}
+                >
+                  {imageUploading[qi] ? "Uploading..." : "Attach an image"}
+                </Button>
+              )}
+              <input
+                ref={(el) => { imageInputs.current[qi] = el; }}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(e) => {
+                  attachQuestionImage(qi, e.target.files?.[0]);
+                  e.target.value = "";
+                }}
               />
             </Field>
 
@@ -643,6 +737,7 @@ const ExamBuilder = () => {
           </Button>
         </div>
       </Page>
+      {preview.node}
     </div>
   );
 };

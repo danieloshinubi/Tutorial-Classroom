@@ -16,6 +16,8 @@ import {
   recordInterviewOutcome,
   requestApplicationCorrection,
   decideApplication,
+  verifyApplicationPayment,
+  verifyAcceptancePayment,
   fetchSchoolMembers,
 } from "../../lib/api";
 import {
@@ -28,6 +30,7 @@ import {
   Empty,
   formatDate,
 } from "../../Components/UI";
+import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 
 // Phase 2 staff workspace. Reads application_workspace() in one call and
 // exposes each domain (screening, documents, review, interview, decision)
@@ -43,6 +46,7 @@ const AdmissionsWorkspace = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const live = useLiveApplicationUpdates(applicationId);
 
   const load = useCallback(async () => {
     if (!applicationId) return;
@@ -110,6 +114,9 @@ const AdmissionsWorkspace = () => {
   const interviews = workspace?.interviews || [];
   const events = workspace?.events || [];
   const config = workspace?.config || {};
+  const offer = workspace?.offer || null;
+  const applicationInvoice = workspace?.application_invoice || null;
+  const acceptanceInvoice = workspace?.acceptance_invoice || null;
 
   const canFinalise = isAdmin || isPrincipal || role === "owner";
   const activeReview = reviews.find((r) => !r.completed_at);
@@ -129,6 +136,7 @@ const AdmissionsWorkspace = () => {
         title={`${app.reference} — ${app.first_name} ${app.surname}`}
         subtitle="Admissions workspace"
       >
+        <LiveUpdateBanner count={live.count} onReload={() => { live.reset(); load(); }} />
         <Notice tone="error">{error}</Notice>
 
         {/* State strip — the whole application at a glance */}
@@ -157,6 +165,45 @@ const AdmissionsWorkspace = () => {
               app.decision_state === "waitlist" ? "warn" : "muted")}
           </div>
         </Card>
+
+        {/* Application fee — the first payment gate, raised the moment the
+            applicant started their application. Manual (proof-upload)
+            payments sit here awaiting a bursar/admissions officer's
+            approval; online payments settle themselves automatically. */}
+        {applicationInvoice?.invoice ? (
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+              <h3 style={{ marginTop: 0, marginBottom: 0 }}>{"Application fee"}</h3>
+              <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{applicationInvoice.invoice.reference}</span>
+            </div>
+            {applicationInvoice.payments.length === 0 ? (
+              <Empty>{"No payment recorded against it yet."}</Empty>
+            ) : (
+              <ul className="doc-list">
+                {applicationInvoice.payments.map((p) => (
+                  <li key={p.id} className="doc-row">
+                    <div>
+                      {`${p.amount} · ${p.method} · ${formatDate(p.paid_on, { withTime: false })}`}
+                      {p.reference ? <div className="doc-note">{p.reference}</div> : null}
+                    </div>
+                    <div className="doc-actions">
+                      <Badge tone={
+                        p.status === "approved" ? "success" :
+                        p.status === "rejected" ? "danger" : "warn"
+                      }>{p.status === "submitted" ? "being checked" : p.status}</Badge>
+                      {p.status === "submitted" ? (
+                        <Button size="sm" variant="secondary" disabled={busy}
+                          onClick={() => run(() => verifyApplicationPayment({ paymentId: p.id }), "verify payment")}>
+                          {"Verify payment"}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        ) : null}
 
         {/* Documents panel */}
         <Card style={{ marginBottom: 16 }}>
@@ -346,12 +393,80 @@ const AdmissionsWorkspace = () => {
           </Card>
         ) : null}
 
-        {/* Final decision — only for finaliser roles */}
-        {canFinalise ? (
-          <Card style={{ marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0 }}>{"Final decision"}</h3>
+        {/* Final decision — the form is finaliser-only; everyone else still
+            sees why, rather than the section vanishing with no explanation. */}
+        <Card style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0 }}>{"Final decision"}</h3>
+          {canFinalise ? (
             <DecisionForm application={app} disabled={busy}
               onDone={load} onError={setError} />
+          ) : (
+            <Notice tone="muted">
+              {"Only owner/admin/principal can make the final admission decision. Screening, review and interview can still be recorded above."}
+            </Notice>
+          )}
+        </Card>
+
+        {/* Offer & acceptance */}
+        {offer ? (
+          <Card style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>{"Offer"}</h3>
+            <div className="btn-row" style={{ marginBottom: 10 }}>
+              <Badge tone={
+                offer.status === "accepted" ? "success" :
+                offer.status === "declined" ? "danger" :
+                offer.status === "expired" ? "muted" : "brand"
+              }>{offer.status}</Badge>
+              {offer.expires_at ? (
+                <Badge tone={offer.status === "issued" && new Date(offer.expires_at) < new Date() ? "danger" : undefined}>
+                  {`expires ${formatDate(offer.expires_at, { withTime: false })}`}
+                </Badge>
+              ) : null}
+            </div>
+            {offer.conditions ? <p style={{ marginTop: 0 }}>{offer.conditions}</p> : null}
+            {offer.status === "issued" ? (
+              <Notice tone="muted">{"Waiting on the applicant to accept or decline from their own dashboard."}</Notice>
+            ) : null}
+            {offer.status === "declined" ? (
+              <Notice tone="warn">
+                {offer.decline_reason ? `Declined — ${offer.decline_reason}` : "Declined."}
+              </Notice>
+            ) : null}
+
+            {offer.status === "accepted" && acceptanceInvoice?.invoice ? (
+              <div style={{ marginTop: 14 }}>
+                <h4 style={{ marginBottom: 6 }}>{"Acceptance fee"}</h4>
+                <p style={{ marginTop: 0, color: "var(--ink-3)", fontSize: 13.5 }}>
+                  {`Invoice ${acceptanceInvoice.invoice.reference}`}
+                </p>
+                {acceptanceInvoice.payments.length === 0 ? (
+                  <Empty>{"No payment recorded against it yet."}</Empty>
+                ) : (
+                  <ul className="doc-list">
+                    {acceptanceInvoice.payments.map((p) => (
+                      <li key={p.id} className="doc-row">
+                        <div>
+                          {`${p.amount} · ${p.method} · ${formatDate(p.paid_on, { withTime: false })}`}
+                          {p.reference ? <div className="doc-note">{p.reference}</div> : null}
+                        </div>
+                        <div className="doc-actions">
+                          <Badge tone={
+                            p.status === "approved" ? "success" :
+                            p.status === "rejected" ? "danger" : "warn"
+                          }>{p.status === "submitted" ? "being checked" : p.status}</Badge>
+                          {p.status === "submitted" ? (
+                            <Button size="sm" variant="secondary" disabled={busy}
+                              onClick={() => run(() => verifyAcceptancePayment({ paymentId: p.id }), "verify payment")}>
+                              {"Verify payment"}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            ) : null}
           </Card>
         ) : null}
 
@@ -548,15 +663,17 @@ const DecisionForm = ({ application, disabled, onDone, onError }) => {
   const [decision, setDecision] = useState("");
   const [note, setNote] = useState("");
   const [expires, setExpires] = useState("");
+  const [conditions, setConditions] = useState("");
   const submit = async (e) => {
     e.preventDefault();
     if (!decision) return onError("Choose a decision.");
     try {
       await decideApplication({
         id: application.id,
-        newStatus: decision,
+        status: decision,
         note,
         offerExpires: expires ? new Date(expires).toISOString() : null,
+        conditions: decision === "offered" ? conditions : null,
       });
       onDone();
     } catch (err) {
@@ -583,10 +700,16 @@ const DecisionForm = ({ application, disabled, onDone, onError }) => {
           onChange={(e) => setNote(e.target.value)} />
       </Field>
       {decision === "offered" ? (
-        <Field label="Offer expires">
-          <input className="input" type="datetime-local"
-            value={expires} onChange={(e) => setExpires(e.target.value)} />
-        </Field>
+        <>
+          <Field label="Offer expires">
+            <input className="input" type="datetime-local"
+              value={expires} onChange={(e) => setExpires(e.target.value)} />
+          </Field>
+          <Field label="Conditions" hint="Optional — shown to the applicant on their offer.">
+            <textarea className="textarea" value={conditions}
+              onChange={(e) => setConditions(e.target.value)} />
+          </Field>
+        </>
       ) : null}
       <Button type="submit" disabled={disabled}>{"Record decision"}</Button>
     </form>

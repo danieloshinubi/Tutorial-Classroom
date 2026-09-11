@@ -119,6 +119,7 @@ const CourseDashboard = () => {
     { id: "materials", label: "Materials" },
     { id: "assignments", label: "Assignments" },
     { id: "exams", label: "Exams" },
+    { id: "midexams", label: "Mid-exams" },
     { id: "people", label: "People" },
   ];
 
@@ -196,7 +197,11 @@ const CourseDashboard = () => {
             ) : null}
 
             {tab === "exams" ? (
-              <ExamsTab courseId={course.id} canManage={canManage} />
+              <ExamsTab courseId={course.id} canManage={canManage} kind="exam" />
+            ) : null}
+
+            {tab === "midexams" ? (
+              <ExamsTab courseId={course.id} canManage={canManage} kind="midterm" />
             ) : null}
 
             {tab === "people" ? (

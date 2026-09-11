@@ -7,7 +7,6 @@ import {
   updateAssignment,
   deleteAssignment,
   uploadCourseFile,
-  signedMaterialUrl,
   deleteMaterialFile,
 } from "../../lib/api";
 import {
@@ -19,6 +18,7 @@ import {
   Badge,
   formatDate,
 } from "../UI";
+import { useDocumentPreview } from "../DocumentPreview";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -53,6 +53,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
+  const preview = useDocumentPreview();
   const fileInputRef = useRef(null);
 
   const load = () => {
@@ -213,13 +214,8 @@ const AssignmentsTab = ({ courseId, canManage }) => {
     }
   };
 
-  const openAttachment = async (assignment) => {
-    try {
-      const url = await signedMaterialUrl(assignment.file_path);
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      setError(err.message || "Could not open that file.");
-    }
+  const openAttachment = (assignment) => {
+    preview.open(assignment.file_path, assignment.file_name);
   };
 
   const isOverdue = (dueAt) => dueAt && new Date(dueAt) < new Date();
@@ -430,6 +426,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
           </div>
         </Card>
       ))}
+      {preview.node}
     </>
   );
 };

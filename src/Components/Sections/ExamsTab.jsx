@@ -3,7 +3,11 @@ import { Link } from "react-router-dom";
 import { fetchExams, updateExam, deleteExam } from "../../lib/api";
 import { Card, Button, Badge, Notice, Empty, formatDate } from "../UI";
 
-const ExamsTab = ({ courseId, canManage }) => {
+// kind picks which list this renders: "exam" (the default "Exams" tab) or
+// "midterm" (the "Mid-exams" tab) — same table, same component, just a
+// different slice of it, so nothing about creating, editing, publishing or
+// grading needs its own copy.
+const ExamsTab = ({ courseId, canManage, kind = "exam" }) => {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -11,12 +15,12 @@ const ExamsTab = ({ courseId, canManage }) => {
   const load = () => {
     setLoading(true);
     fetchExams(courseId)
-      .then(setExams)
+      .then((rows) => setExams(rows.filter((r) => (r.kind || "exam") === kind)))
       .catch((err) => setError(err.message || "Could not load exams."))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [courseId]);
+  useEffect(load, [courseId, kind]);
 
   const togglePublished = async (exam) => {
     setError("");
@@ -56,8 +60,8 @@ const ExamsTab = ({ courseId, canManage }) => {
     <>
       {canManage ? (
         <div style={{ marginBottom: 16 }}>
-          <Link to={`/Courses/${courseId}/Exams/New`}>
-            <Button>{"Create exam"}</Button>
+          <Link to={`/Courses/${courseId}/Exams/New${kind === "midterm" ? "?kind=midterm" : ""}`}>
+            <Button>{kind === "midterm" ? "Create mid-exam" : "Create exam"}</Button>
           </Link>
         </div>
       ) : null}
@@ -67,8 +71,8 @@ const ExamsTab = ({ courseId, canManage }) => {
       {!loading && exams.length === 0 ? (
         <Empty>
           {canManage
-            ? "No exams yet — create one to get started."
-            : "No exams or tests have been set for this course."}
+            ? `No ${kind === "midterm" ? "mid-exams" : "exams"} yet — create one to get started.`
+            : `No ${kind === "midterm" ? "mid-exams" : "exams or tests"} have been set for this course.`}
         </Empty>
       ) : null}
 

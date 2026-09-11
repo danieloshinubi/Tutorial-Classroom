@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
@@ -9,7 +9,7 @@ import {
   submitWork,
   fetchSubmissionsForAssignment,
   gradeSubmission,
-  signedMaterialUrl,
+  uploadSubmissionFile,
 } from "../../lib/api";
 import {
   Page,
@@ -22,6 +22,7 @@ import {
   displayName,
   formatDate,
 } from "../../Components/UI";
+import { useDocumentPreview } from "../../Components/DocumentPreview";
 
 // Nice size line, so a phone user knows what they are about to download.
 const humanSize = (bytes) => {
@@ -102,10 +103,14 @@ const parseBrief = (text) => {
 const SubmitPanel = ({ assignment, userId }) => {
   const [submission, setSubmission] = useState(null);
   const [form, setForm] = useState({ body: "", url: "" });
+  const [attachment, setAttachment] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const preview = useDocumentPreview();
+  const fileInput = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -114,7 +119,12 @@ const SubmitPanel = ({ assignment, userId }) => {
       .then((data) => {
         if (!active) return;
         setSubmission(data);
-        if (data) setForm({ body: data.body || "", url: data.url || "" });
+        if (data) {
+          setForm({ body: data.body || "", url: data.url || "" });
+          if (data.file_path) {
+            setAttachment({ path: data.file_path, name: data.file_name, size: data.file_size });
+          }
+        }
       })
       .catch((err) => {
         if (active) setError(err.message || "Could not load your submission.");
@@ -131,13 +141,31 @@ const SubmitPanel = ({ assignment, userId }) => {
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
 
+  const attachFile = async (file) => {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      setError("That file is over 20MB.");
+      return;
+    }
+    setError("");
+    setUploading(true);
+    try {
+      const uploaded = await uploadSubmissionFile({ assignmentId: assignment.id, userId, file });
+      setAttachment({ path: uploaded.file_path, name: uploaded.file_name, size: uploaded.file_size });
+    } catch (err) {
+      setError(err.message || "Could not attach that file.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setNotice("");
 
-    if (!form.body.trim() && !form.url.trim()) {
-      setError("Add your work as text, a link, or both.");
+    if (!form.body.trim() && !form.url.trim() && !attachment) {
+      setError("Add your work as text, a link, a file, or any combination.");
       return;
     }
 
@@ -148,6 +176,9 @@ const SubmitPanel = ({ assignment, userId }) => {
         userId,
         body: form.body.trim() || null,
         url: form.url.trim() || null,
+        filePath: attachment?.path || null,
+        fileName: attachment?.name || null,
+        fileSize: attachment?.size || null,
       });
       setSubmission(saved);
       setNotice("Work submitted.");
@@ -198,6 +229,39 @@ const SubmitPanel = ({ assignment, userId }) => {
           />
         </Field>
 
+        <Field label="File" hint="Optional — a document, spreadsheet, or a photo of written work.">
+          {attachment ? (
+            <div className="tf-brief-row">
+              <button type="button" className="tf-brief-link" onClick={() => preview.open(attachment.path, attachment.name)}>
+                {`📎 ${attachment.name}`}
+                {attachment.size ? <span style={{ color: "var(--ink-3)" }}>{` · ${humanSize(attachment.size)}`}</span> : null}
+              </button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setAttachment(null)}>
+                {"Remove"}
+              </Button>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={uploading}
+              onClick={() => fileInput.current?.click()}
+            >
+              {uploading ? "Uploading..." : "Attach a file"}
+            </Button>
+          )}
+          <input
+            ref={fileInput}
+            type="file"
+            hidden
+            onChange={(e) => {
+              attachFile(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </Field>
+
         <Notice tone="error">{error}</Notice>
         <Notice tone="success">{notice}</Notice>
 
@@ -209,10 +273,11 @@ const SubmitPanel = ({ assignment, userId }) => {
           </Notice>
         ) : null}
 
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving || uploading}>
           {saving ? "Submitting..." : submission ? "Resubmit" : "Submit work"}
         </Button>
       </form>
+      {preview.node}
     </Card>
   );
 };
@@ -224,6 +289,7 @@ const GradePanel = ({ assignment, graderId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [savingId, setSavingId] = useState(null);
+  const preview = useDocumentPreview();
 
   const load = useCallback(() => {
     setLoading(true);
@@ -324,6 +390,18 @@ const GradePanel = ({ assignment, graderId }) => {
               {submission.url}
             </a>
           ) : null}
+          {submission.file_path ? (
+            <button
+              type="button"
+              className="tf-brief-link"
+              onClick={() => preview.open(submission.file_path, submission.file_name)}
+            >
+              {`📎 ${submission.file_name || "Attached file"}`}
+              {submission.file_size ? (
+                <span style={{ color: "var(--ink-3)" }}>{` · ${humanSize(submission.file_size)}`}</span>
+              ) : null}
+            </button>
+          ) : null}
 
           <div
             style={{
@@ -365,6 +443,7 @@ const GradePanel = ({ assignment, graderId }) => {
           </div>
         </Card>
       ))}
+      {preview.node}
     </>
   );
 };
@@ -377,6 +456,7 @@ const AssignmentDetail = () => {
   const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const briefPreview = useDocumentPreview();
 
   useEffect(() => {
     let active = true;
@@ -444,14 +524,7 @@ const AssignmentDetail = () => {
                       <button
                         type="button"
                         className="tf-brief-link"
-                        onClick={async () => {
-                          try {
-                            const url = await signedMaterialUrl(assignment.file_path);
-                            window.open(url, "_blank", "noopener,noreferrer");
-                          } catch (err) {
-                            window.alert(err.message || "Could not open that file.");
-                          }
-                        }}
+                        onClick={() => briefPreview.open(assignment.file_path, assignment.file_name)}
                       >
                         {`📎 ${assignment.file_name || "Brief"}`}
                         {assignment.file_size ? (
@@ -484,6 +557,7 @@ const AssignmentDetail = () => {
           </>
         ) : null}
       </Page>
+      {briefPreview.node}
     </div>
   );
 };

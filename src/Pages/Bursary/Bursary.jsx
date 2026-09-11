@@ -22,9 +22,9 @@ import {
   takePayment,
   fetchDebtors,
   fetchCollectionSummary,
-  signedMaterialUrl,
   PAYMENT_METHODS,
 } from "../../lib/api";
+import { useDocumentPreview } from "../../Components/DocumentPreview";
 import {
   Page,
   Card,
@@ -34,6 +34,7 @@ import {
   Notice,
   Empty,
   Tabs,
+  MoneyInput,
   displayName,
   formatDate,
 } from "../../Components/UI";
@@ -426,14 +427,7 @@ const Structures = ({
                   />
                 </Field>
                 <Field label="Amount">
-                  <input
-                    className="input"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={itemAmount}
-                    onChange={(e) => setItemAmount(e.target.value)}
-                  />
+                  <MoneyInput value={itemAmount} onChange={setItemAmount} />
                 </Field>
                 <Field label="Optional" hint="Charged only to families who ask for it.">
                   <label className="check">
@@ -679,14 +673,12 @@ const InvoiceRow = ({ invoice, who, money, onChange, onError }) => {
         <tr>
           <td colSpan={7}>
             <div className="btn-row" style={{ padding: "8px 0", flexWrap: "wrap" }}>
-              <input
-                className="input"
+              <MoneyInput
                 style={{ maxWidth: 140 }}
-                type="number"
                 autoFocus
                 placeholder="Amount"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={setAmount}
               />
               <select
                 className="select"
@@ -723,6 +715,7 @@ const InvoiceRow = ({ invoice, who, money, onChange, onError }) => {
 const Queue = ({ queue, invoices, money, onChange, onError }) => {
   const [note, setNote] = useState({});
   const [busy, setBusy] = useState(null);
+  const preview = useDocumentPreview();
 
   const refOf = (invoiceId) =>
     invoices.find((i) => i.invoice_id === invoiceId)?.reference || "—";
@@ -750,13 +743,8 @@ const Queue = ({ queue, invoices, money, onChange, onError }) => {
     }
   };
 
-  const openProof = async (path) => {
-    try {
-      const url = await signedMaterialUrl(path, 300);
-      window.open(url, "_blank", "noopener");
-    } catch (err) {
-      onError("Could not open that receipt.");
-    }
+  const openProof = (path) => {
+    preview.open(path, "Receipt");
   };
 
   if (queue.length === 0) {
@@ -818,6 +806,7 @@ const Queue = ({ queue, invoices, money, onChange, onError }) => {
           </div>
         </Card>
       ))}
+      {preview.node}
     </>
   );
 };

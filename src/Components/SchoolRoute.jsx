@@ -7,15 +7,20 @@ import Navbar from "./Navbar/Navbar";
 
 // Gate for everything behind a school role.
 //
-// Prefer `module`: it reads lib/modules.js, the same list the navbar is built
-// from, so a module missing from somebody's navigation is also an address
-// they cannot reach by typing it. `require` is the older coarse form — admin,
-// staff or admissions — kept for the routes that predate the registry.
+// Reads lib/modules.js — the same list the navbar is built from — so a
+// module missing from somebody's navigation is also an address they cannot
+// reach by typing it. The two used to be able to disagree: a hand-written
+// `require` prop (admin/staff/admissions) duplicated the role lists here
+// instead of reading them, and drifted — "admissions" forgot principal even
+// after modules.js already listed them, and "staff" was wider than any
+// module actually granted, letting bursar/admissions reach teaching screens
+// whose RLS never intended them to. Every route now reads `module` instead.
 //
-// Neither is the real boundary. Row level security decides what the database
-// will hand over, and it applies whatever the router allows.
-const SchoolRoute = ({ require = "admin", module: moduleId }) => {
-  const { school, role, roles, isAdmin, isStaff, loading, error, slug } = useSchool();
+// Neither this nor the navbar is the real boundary. Row level security
+// decides what the database will hand over, and it applies regardless of
+// anything here.
+const SchoolRoute = ({ module: moduleId }) => {
+  const { school, roles, loading, error, slug } = useSchool();
 
   if (loading) {
     return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Loading school..."}</p>;
@@ -41,13 +46,7 @@ const SchoolRoute = ({ require = "admin", module: moduleId }) => {
     );
   }
 
-  const allowed = moduleId
-    ? canUseModule(moduleId, roles)
-    : require === "staff"
-    ? isStaff
-    : require === "admissions"
-    ? isAdmin || role === "admissions"
-    : isAdmin;
+  const allowed = canUseModule(moduleId, roles);
 
   // Somewhere they can actually use, rather than a Dashboard their role may
   // not even have.

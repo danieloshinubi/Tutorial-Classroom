@@ -93,6 +93,33 @@ export const Field = ({ label, hint, children }) => (
   </label>
 );
 
+// A plain number input for an amount of money reads as a wall of digits —
+// "3560000" takes a beat to parse as 3.56 million. This shows it with
+// thousand separators as it's typed, while the value handed back through
+// onChange stays a plain digits-and-one-decimal-point string, exactly what a
+// numeric <input> would have given, so nothing downstream needs to change.
+const formatMoneyDisplay = (raw) => {
+  if (raw === "" || raw === null || raw === undefined) return "";
+  const [intPart, ...rest] = String(raw).replace(/[^\d.]/g, "").split(".");
+  const withCommas = (intPart || "").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return rest.length ? `${withCommas}.${rest.join("")}` : withCommas;
+};
+
+export const MoneyInput = ({ value, onChange, className = "input", ...props }) => (
+  <input
+    {...props}
+    type="text"
+    inputMode="decimal"
+    className={className}
+    value={formatMoneyDisplay(value)}
+    onChange={(e) => {
+      const raw = e.target.value.replace(/,/g, "");
+      if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+      onChange(raw);
+    }}
+  />
+);
+
 export const Badge = ({ children, tone }) => (
   <span className={`badge${tone ? ` ${tone}` : ""}`}>{children}</span>
 );

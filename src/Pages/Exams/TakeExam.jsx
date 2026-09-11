@@ -11,6 +11,7 @@ import {
   submitAttempt,
   fetchAnswers,
   reportViolation,
+  signedMaterialUrl,
 } from "../../lib/api";
 import {
   startProctoring,
@@ -29,6 +30,7 @@ import {
   isNetworkError,
 } from "../../lib/offline";
 import ConnectionStatus from "../../Components/ConnectionStatus";
+import ScientificCalculator from "../../Components/ScientificCalculator";
 import {
   Page,
   Card,
@@ -45,6 +47,28 @@ const clock = (seconds) => {
   const s = Math.max(0, seconds);
   const m = Math.floor(s / 60);
   return `${pad(Math.floor(m / 60))}:${pad(m % 60)}:${pad(s % 60)}`;
+};
+
+// Self-contained so the parent's own hooks/state don't need to know about
+// image resolution at all — it just resolves its own signed URL whenever
+// the path it's given changes, and shows nothing while there is none.
+const QuestionImage = ({ path }) => {
+  const [url, setUrl] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!path) {
+      setUrl(null);
+      return;
+    }
+    signedMaterialUrl(path)
+      .then((signed) => { if (active) setUrl(signed); })
+      .catch(() => { if (active) setUrl(null); });
+    return () => { active = false; };
+  }, [path]);
+
+  if (!path || !url) return null;
+  return <img src={url} alt="" className="exam-q-image" />;
 };
 
 const TakeExam = () => {
@@ -66,6 +90,7 @@ const TakeExam = () => {
   const [remaining, setRemaining] = useState(null);
   const [warning, setWarning] = useState("");
   const [connection, setConnection] = useState("online");
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [pending, setPending] = useState(0);
   const [pendingSubmit, setPendingSubmit] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -512,6 +537,8 @@ const TakeExam = () => {
                   <Badge>{`${active.points} pt`}</Badge>
                 </div>
 
+                <QuestionImage path={active.image_path} />
+
                 {active.kind === "short_answer" ? (
                   <textarea
                     className="textarea exam-short"
@@ -658,6 +685,22 @@ const TakeExam = () => {
           </aside>
         </div>
       </Page>
+
+      {exam.allow_calculator ? (
+        calculatorOpen ? (
+          <ScientificCalculator onClose={() => setCalculatorOpen(false)} />
+        ) : (
+          <button
+            type="button"
+            className="calc-launcher"
+            onClick={() => setCalculatorOpen(true)}
+            aria-label="Open calculator"
+            title="Calculator"
+          >
+            {"🖩"}
+          </button>
+        )
+      ) : null}
     </div>
   );
 };

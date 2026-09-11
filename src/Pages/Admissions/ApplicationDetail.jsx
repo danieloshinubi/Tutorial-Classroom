@@ -9,7 +9,6 @@ import {
   fetchApplicationDocuments,
   uploadApplicationDocument,
   deleteApplicationDocument,
-  signedMaterialUrl,
   decideApplication,
   enrolApplicant,
   addSchoolUser,
@@ -19,6 +18,7 @@ import {
   STATUS_LABEL,
   STATUS_TONE,
 } from "../../lib/api";
+import { useDocumentPreview } from "../../Components/DocumentPreview";
 import {
   Page,
   Card,
@@ -64,6 +64,7 @@ const ApplicationDetail = () => {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  const preview = useDocumentPreview();
   const [note, setNote] = useState("");
   const [offerExpires, setOfferExpires] = useState("");
   const [docKind, setDocKind] = useState("birth_certificate");
@@ -206,13 +207,9 @@ const ApplicationDetail = () => {
     }
   };
 
-  const openDocument = async (doc) => {
+  const openDocument = (doc) => {
     setError("");
-    try {
-      window.open(await signedMaterialUrl(doc.file_path), "_blank", "noopener");
-    } catch (err) {
-      setError(err.message || "Could not open that document.");
-    }
+    preview.open(doc.file_path, doc.file_name);
   };
 
   if (loading) {
@@ -596,6 +593,7 @@ const ApplicationDetail = () => {
           </div>
         </div>
       </Page>
+      {preview.node}
     </div>
   );
 };

@@ -143,21 +143,35 @@ const AttemptDetail = ({ attempt, onGraded }) => {
               </p>
             ) : null}
 
-            <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
-              {"Marks:"}
-              <input
-                type="number"
-                min="0"
-                max={question.points}
-                className="input"
-                style={{ width: 90 }}
-                value={marks[row.id] ?? ""}
-                onChange={(e) =>
-                  setMarks((current) => ({ ...current, [row.id]: e.target.value }))
-                }
-              />
-              <span style={{ color: "var(--ink-3)" }}>{`/ ${question.points}`}</span>
-            </label>
+            {needsHand ? (
+              <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+                {"Marks:"}
+                <input
+                  type="number"
+                  min="0"
+                  max={question.points}
+                  className="input"
+                  style={{ width: 90 }}
+                  value={marks[row.id] ?? ""}
+                  onChange={(e) =>
+                    setMarks((current) => ({ ...current, [row.id]: e.target.value }))
+                  }
+                />
+                <span style={{ color: "var(--ink-3)" }}>{`/ ${question.points}`}</span>
+              </label>
+            ) : (
+              // Multiple-choice and true/false were marked automatically at
+              // submission, against the correct option the tutor set while
+              // building the exam — nothing here to re-mark, so this is
+              // read-only rather than an input a tutor could second-guess.
+              <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+                {"Marks:"}
+                <strong>{`${row.awarded_points ?? 0} / ${question.points}`}</strong>
+                <Badge tone={Number(row.awarded_points) >= Number(question.points) ? "success" : "danger"}>
+                  {Number(row.awarded_points) >= Number(question.points) ? "correct" : "incorrect"}
+                </Badge>
+              </div>
+            )}
           </div>
         );
       })}

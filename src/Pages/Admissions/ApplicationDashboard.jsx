@@ -12,6 +12,9 @@ import {
   markApplicationPaymentInitiated,
   resubmitApplicationCorrection,
   fetchApplicationEvents,
+  fetchMyOffer,
+  acceptOffer,
+  declineOffer,
 } from "../../lib/api";
 import {
   Page,
@@ -23,16 +26,48 @@ import {
   Empty,
   formatDate,
 } from "../../Components/UI";
+import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 
-// A section of the applicant's form. Kept as a small local component so the
-// six sections read the same and share validation/save behaviour.
-const Section = ({ title, description, value, onSave, disabled, fields }) => {
+// Humanises applications.status for this screen specifically. api.js's own
+// STATUS_LABEL/STATUS_TONE cover only the legacy staff flow's subset of the
+// enum (see ApplicationDetail.jsx) — an accounted application can sit in
+// draft/in_progress/waitlisted/deferred/under_review too, none of which are
+// in that map, and a blank status word reads as a bug to an applicant
+// watching their own record.
+const STATUS_META = {
+  draft: ["Draft", "muted"],
+  in_progress: ["In progress", "muted"],
+  ready_to_submit: ["Ready to submit", "muted"],
+  submitted: ["Submitted", "warn"],
+  screening: ["Screening", "brand"],
+  under_review: ["Under review", "brand"],
+  document_review: ["Document review", "brand"],
+  interview_required: ["Interview required", "brand"],
+  interview_completed: ["Interview completed", "brand"],
+  offered: ["Offer extended", "brand"],
+  accepted: ["Accepted", "success"],
+  enrolled: ["Enrolled", "success"],
+  declined: ["Declined", "muted"],
+  rejected: ["Not admitted", "danger"],
+  waitlisted: ["Waitlisted", "warn"],
+  deferred: ["Deferred", "warn"],
+  withdrawn: ["Withdrawn", "muted"],
+};
+
+// A section of the applicant's form. Collapses to a one-line summary once
+// it's locked (already submitted, or not yet the flagged correction target)
+// instead of staying open at full height — five long forms stacked and
+// permanently expanded was the single biggest source of scroll fatigue on
+// this page for anyone past the fill-in stage.
+const Section = ({ title, description, value, onSave, disabled, fields, defaultOpen }) => {
   const [draft, setDraft] = useState(value || {});
+  const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   useEffect(() => setDraft(value || {}), [value]);
+  useEffect(() => setOpen(defaultOpen), [defaultOpen]);
 
   const update = (name) => (event) =>
     setDraft((current) => ({
@@ -56,56 +91,80 @@ const Section = ({ title, description, value, onSave, disabled, fields }) => {
     }
   };
 
+  const filled = fields.filter((f) => String(value?.[f.name] || "").trim()).length;
+
   return (
-    <Card style={{ marginBottom: 14 }}>
-      <h3 style={{ marginTop: 0 }}>{title}</h3>
-      {description ? (
-        <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0 }}>
-          {description}
-        </p>
-      ) : null}
-      <form onSubmit={save}>
-        {fields.map((field) => (
-          <Field key={field.name} label={field.label} hint={field.hint}>
-            {field.type === "textarea" ? (
-              <textarea
-                className="textarea"
-                value={draft[field.name] || ""}
-                disabled={disabled}
-                onChange={update(field.name)}
-              />
-            ) : (
-              <input
-                className="input"
-                type={field.type || "text"}
-                value={draft[field.name] || ""}
-                disabled={disabled}
-                onChange={update(field.name)}
-              />
+    <div className="appdash-form-section">
+      <button
+        type="button"
+        className="appdash-section-head"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <h3>{title}</h3>
+        <span className={`appdash-section-caret${open ? " open" : ""}`} aria-hidden="true">
+          {"›"}
+        </span>
+      </button>
+
+      {open ? (
+        <>
+          {description ? (
+            <p style={{ color: "var(--ink-3)", fontSize: 13.5, margin: "6px 0 0" }}>
+              {description}
+            </p>
+          ) : null}
+          <form onSubmit={save} style={{ marginTop: 12 }}>
+            {fields.map((field) => (
+              <Field key={field.name} label={field.label} hint={field.hint}>
+                {field.type === "textarea" ? (
+                  <textarea
+                    className="textarea"
+                    value={draft[field.name] || ""}
+                    disabled={disabled}
+                    onChange={update(field.name)}
+                  />
+                ) : (
+                  <input
+                    className="input"
+                    type={field.type || "text"}
+                    value={draft[field.name] || ""}
+                    disabled={disabled}
+                    onChange={update(field.name)}
+                  />
+                )}
+              </Field>
+            ))}
+
+            <Notice tone="error">{error}</Notice>
+            {notice && !error ? <Notice tone="success">{notice}</Notice> : null}
+
+            {disabled ? null : (
+              <Button type="submit" disabled={saving}>
+                {saving ? "Saving..." : "Save section"}
+              </Button>
             )}
-          </Field>
-        ))}
-
-        <Notice tone="error">{error}</Notice>
-        {notice && !error ? <Notice tone="success">{notice}</Notice> : null}
-
-        <Button type="submit" disabled={disabled || saving}>
-          {saving ? "Saving..." : "Save section"}
-        </Button>
-      </form>
-    </Card>
+          </form>
+        </>
+      ) : (
+        <p className="appdash-section-summary">
+          {filled === 0
+            ? "Nothing entered yet."
+            : `${filled} of ${fields.length} fields filled.`}
+          {disabled ? " · locked" : ""}
+        </p>
+      )}
+    </div>
   );
 };
 
-const StepRow = ({ step }) => {
+const AppStep = ({ step }) => {
   const glyph =
-    step.state === "done" ? "✓" : step.state === "current" ? "◉" : "○";
+    step.state === "done" ? "✓" : step.state === "current" ? "•" : "";
   return (
-    <li className={`workflow-step workflow-${step.state}`}>
-      <span className="workflow-glyph" aria-hidden="true">
-        {glyph}
-      </span>
-      <span className="workflow-label">{step.step_label}</span>
+    <li className={`appdash-step ${step.state}`}>
+      <span className="appdash-step-glyph" aria-hidden="true">{glyph}</span>
+      <span>{step.step_label}</span>
     </li>
   );
 };
@@ -119,11 +178,16 @@ const ApplicationDashboard = () => {
   const [steps, setSteps] = useState([]);
   const [config, setConfig] = useState(null);
   const [invoice, setInvoice] = useState(null);
+  const [offer, setOffer] = useState(null);
+  const [acceptanceInvoice, setAcceptanceInvoice] = useState(null);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [declaration, setDeclaration] = useState(false);
+  const [decliningOffer, setDecliningOffer] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+  const live = useLiveApplicationUpdates(applicationId);
 
   const load = useCallback(async () => {
     if (!applicationId) return;
@@ -141,14 +205,21 @@ const ApplicationDashboard = () => {
       setApplication(app);
       setSteps(workflow);
 
-      const [cfg, inv, ev] = await Promise.all([
+      const [cfg, inv, ev, off] = await Promise.all([
         fetchAdmissionConfig({ schoolId: app.school_id, sessionId: app.session_id }),
         fetchMyApplicationInvoice(app.id).catch(() => null),
         fetchApplicationEvents(app.id).catch(() => []),
+        fetchMyOffer(app.id).catch(() => null),
       ]);
       setConfig(cfg);
       setInvoice(inv);
       setEvents(ev);
+      setOffer(off);
+      setAcceptanceInvoice(
+        off?.status === "accepted"
+          ? await fetchMyApplicationInvoice(app.id, "acceptance_fee").catch(() => null)
+          : null
+      );
     } catch (err) {
       setError(err.message || "Could not load your application.");
     } finally {
@@ -198,10 +269,14 @@ const ApplicationDashboard = () => {
     setSteps(workflow);
   };
 
+  // Once an offer is accepted, payment_state is repurposed for the
+  // acceptance fee (see the offer card below) — the application fee was
+  // already resolved to reach this point, so its own card retires.
   const feeVisible =
     config?.application_fee_enabled &&
     application &&
-    application.payment_state !== "not_required";
+    application.payment_state !== "not_required" &&
+    application.offer_state !== "accepted";
 
   const feeBadge =
     application?.payment_state === "verified" ? "success" :
@@ -212,13 +287,60 @@ const ApplicationDashboard = () => {
   const goToFee = async () => {
     if (!application) return;
     // Move the row to processing before handing off, so a reload cannot
-    // present the Pay again button while the gateway confirms.
+    // present the Pay again button while the gateway confirms. The same
+    // function and the same payment_state column are reused for the
+    // acceptance fee below — pay_application_fee_initiated only ever
+    // touches applications.payment_state, so it has no idea which fee it is.
     try {
       await markApplicationPaymentInitiated(application.id);
     } catch {
       /* not fatal — the fees page runs the same guard */
     }
     navigate(`/Fees?application=${application.id}`);
+  };
+
+  const acceptTheOffer = async () => {
+    if (!offer) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const app = await acceptOffer(offer.id);
+      setApplication(app);
+      const [workflow, off, acc] = await Promise.all([
+        fetchApplicationWorkflowSteps(app.id).catch(() => []),
+        fetchMyOffer(app.id).catch(() => null),
+        fetchMyApplicationInvoice(app.id, "acceptance_fee").catch(() => null),
+      ]);
+      setSteps(workflow);
+      setOffer(off);
+      setAcceptanceInvoice(acc);
+    } catch (err) {
+      setError(err.message || "Could not accept this offer.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const declineTheOffer = async () => {
+    if (!offer) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const app = await declineOffer({ offerId: offer.id, reason: declineReason.trim() || null });
+      setApplication(app);
+      const [workflow, off] = await Promise.all([
+        fetchApplicationWorkflowSteps(app.id).catch(() => []),
+        fetchMyOffer(app.id).catch(() => null),
+      ]);
+      setSteps(workflow);
+      setOffer(off);
+      setDecliningOffer(false);
+      setDeclineReason("");
+    } catch (err) {
+      setError(err.message || "Could not decline this offer.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const submit = async () => {
@@ -265,7 +387,11 @@ const ApplicationDashboard = () => {
     );
   }
 
-  if (error || !application) {
+  // Only a genuine load failure (nothing to show at all) replaces the whole
+  // page. An error from an action taken further down — a declined submit, a
+  // failed accept — belongs inline, next to the thing that failed, not as a
+  // reason to throw away everything the applicant can already see.
+  if (!application) {
     return (
       <div className="shell">
         <Navbar />
@@ -288,6 +414,36 @@ const ApplicationDashboard = () => {
     application.form_state === "draft";
   const needsCorrection = application.form_state === "action_required";
 
+  const [statusLabel, statusTone] = STATUS_META[application.status] || [application.status, "muted"];
+
+  const heroTone =
+    ["offered", "accepted", "enrolled"].includes(application.status) ? "good" :
+    ["rejected", "declined"].includes(application.status) ? "somber" :
+    "";
+
+  // One plain-language line telling the applicant exactly what today's
+  // situation is and what, if anything, they should do about it — the
+  // single most-asked question this whole page exists to answer.
+  const heroMessage = needsCorrection
+    ? "The school asked you to fix something — see “Action required” below."
+    : offer?.status === "issued"
+    ? "Congratulations! Review your offer below and let the school know your decision."
+    : offer?.status === "accepted" && application.payment_state !== "verified" && acceptanceInvoice
+    ? "You accepted your offer — next, settle the acceptance fee below."
+    : offer?.status === "accepted"
+    ? "You're all set. The school will be in touch about next steps."
+    : offer?.status === "declined"
+    ? "You declined this offer."
+    : application.status === "rejected"
+    ? "This application was not successful this time."
+    : feeVisible && application.payment_state !== "verified"
+    ? "Pay the application fee below to unlock the rest of your form."
+    : canSubmit
+    ? "Fill in every section below, then submit when you're ready."
+    : isReadonly
+    ? "Your application is with the school. This page updates as things move — no need to keep checking back."
+    : "Let's get your application started.";
+
   return (
     <div className="shell">
       <Navbar />
@@ -295,15 +451,34 @@ const ApplicationDashboard = () => {
         title={application.reference}
         subtitle={school ? `Application to ${school.name}` : "Application"}
       >
+        <LiveUpdateBanner count={live.count} onReload={() => { live.reset(); load(); }} />
+        <Notice tone="error">{error}</Notice>
+
+        <div className={`appdash-hero ${heroTone}`}>
+          <div>
+            <div className="appdash-hero-ref">{application.reference}</div>
+            <h2 className="appdash-hero-title">{statusLabel}</h2>
+            <p className="appdash-hero-sub">{heroMessage}</p>
+          </div>
+          <div className="appdash-hero-status">
+            <Badge tone={statusTone}>{statusLabel}</Badge>
+            {application.submitted_at ? (
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                {`Submitted ${formatDate(application.submitted_at, { withTime: false })}`}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
         {/* The workflow tracker — steps come from the database, so a session
             with no fees, no interview and no referees doesn't show them. */}
         <Card style={{ marginBottom: 16 }}>
           <h3 style={{ marginTop: 0 }}>{"Progress"}</h3>
-          <ol className="workflow-steps">
+          <ul className="appdash-steps">
             {steps.map((step) => (
-              <StepRow key={step.step_key} step={step} />
+              <AppStep key={step.step_key} step={step} />
             ))}
-          </ol>
+          </ul>
         </Card>
 
         {needsCorrection ? (
@@ -318,6 +493,86 @@ const ApplicationDashboard = () => {
             <Button onClick={resubmit} disabled={submitting}>
               {submitting ? "Resubmitting..." : "Resubmit application"}
             </Button>
+          </Card>
+        ) : null}
+
+        {offer ? (
+          <Card
+            className={`appdash-offer ${offer.status}`}
+            style={{ marginBottom: 16 }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+              <h3 style={{ margin: 0 }}>
+                {offer.status === "issued" ? "You have an offer!" : "Your offer"}
+              </h3>
+              <Badge tone={
+                offer.status === "accepted" ? "success" :
+                offer.status === "declined" ? "danger" :
+                offer.status === "expired" ? "muted" : "brand"
+              }>{offer.status}</Badge>
+            </div>
+            {offer.conditions ? <p>{offer.conditions}</p> : null}
+            {offer.expires_at ? (
+              <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>
+                {offer.status === "issued" && new Date(offer.expires_at) < new Date()
+                  ? `This offer expired ${formatDate(offer.expires_at, { withTime: false })}.`
+                  : `Valid until ${formatDate(offer.expires_at, { withTime: false })}.`}
+              </p>
+            ) : null}
+
+            {offer.status === "issued" ? (
+              decliningOffer ? (
+                <div>
+                  <Field label="Reason" hint="Optional, but it helps the school.">
+                    <textarea className="textarea" value={declineReason}
+                      onChange={(e) => setDeclineReason(e.target.value)} />
+                  </Field>
+                  <div className="btn-row">
+                    <Button variant="danger" disabled={submitting} onClick={declineTheOffer}>
+                      {submitting ? "Sending..." : "Confirm decline"}
+                    </Button>
+                    <Button variant="ghost" disabled={submitting} onClick={() => setDecliningOffer(false)}>
+                      {"Back"}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="btn-row">
+                  <Button disabled={submitting} onClick={acceptTheOffer}>
+                    {submitting ? "Accepting..." : "Accept offer"}
+                  </Button>
+                  <Button variant="secondary" disabled={submitting} onClick={() => setDecliningOffer(true)}>
+                    {"Decline"}
+                  </Button>
+                </div>
+              )
+            ) : null}
+
+            {offer.status === "declined" ? (
+              <Notice tone="muted">{"You declined this offer."}</Notice>
+            ) : null}
+
+            {offer.status === "accepted" && acceptanceInvoice ? (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+                  <strong>{"Acceptance fee"}</strong>
+                  <Badge tone={feeBadge}>{application.payment_state}</Badge>
+                </div>
+                <p style={{ margin: "6px 0" }}>{`Invoice ${acceptanceInvoice.reference}`}</p>
+                {application.payment_state === "processing" ? (
+                  <Notice tone="brand">
+                    {"We are confirming your payment with the bank. You do not need to pay again."}
+                  </Notice>
+                ) : null}
+                {application.payment_state === "verified" ? (
+                  <Notice tone="success">{"Your acceptance fee has been received."}</Notice>
+                ) : (
+                  <Button onClick={goToFee}>
+                    {application.payment_state === "processing" ? "View payment" : "Pay acceptance fee"}
+                  </Button>
+                )}
+              </div>
+            ) : null}
           </Card>
         ) : null}
 
@@ -361,87 +616,99 @@ const ApplicationDashboard = () => {
           </Notice>
         ) : null}
 
-        <Section
-          title="Personal information"
-          value={application.personal_info}
-          disabled={!editable.personal}
-          onSave={saveSection("personal")}
-          fields={[
-            { name: "first_name", label: "First name" },
-            { name: "middle_name", label: "Middle name" },
-            { name: "surname", label: "Surname" },
-            { name: "date_of_birth", label: "Date of birth", type: "date" },
-            { name: "gender", label: "Gender" },
-            { name: "nationality", label: "Nationality" },
-            { name: "state_of_origin", label: "State of origin" },
-            { name: "address", label: "Home address", type: "textarea" },
-            { name: "phone", label: "Phone" },
-            { name: "email", label: "Email", type: "email" },
-          ]}
-        />
+        <Card style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0, marginBottom: 4 }}>{"Application form"}</h3>
+          <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0, marginBottom: 4 }}>
+            {"Tap a section to open it."}
+          </p>
 
-        <Section
-          title="Education history"
-          description="Where you have studied so far, most recent first."
-          value={application.education_history}
-          disabled={!editable.education}
-          onSave={saveSection("education")}
-          fields={[
-            { name: "school_name", label: "School name" },
-            { name: "country", label: "Country" },
-            { name: "start_year", label: "Start year" },
-            { name: "end_year", label: "End year" },
-            { name: "qualification", label: "Qualification" },
-          ]}
-        />
-
-        <Section
-          title="Examination results"
-          description="Your exam results — WAEC/NECO/NABTEB/JAMB or whatever your school runs."
-          value={application.exam_results}
-          disabled={!editable.exams}
-          onSave={saveSection("exams")}
-          fields={[
-            { name: "exam_type", label: "Exam" },
-            { name: "exam_number", label: "Exam number" },
-            { name: "exam_year", label: "Exam year" },
-            { name: "subjects", label: "Subjects and grades", type: "textarea", hint: "One per line, e.g. Mathematics — B3" },
-          ]}
-        />
-
-        {config?.require_next_of_kin !== false ? (
           <Section
-            title="Next of kin"
-            value={application.next_of_kin}
-            disabled={!editable.next_of_kin}
-            onSave={saveSection("next_of_kin")}
+            title="Personal information"
+            value={application.personal_info}
+            disabled={!editable.personal}
+            defaultOpen={!!editable.personal}
+            onSave={saveSection("personal")}
             fields={[
-              { name: "name", label: "Full name" },
-              { name: "relationship", label: "Relationship" },
+              { name: "first_name", label: "First name" },
+              { name: "middle_name", label: "Middle name" },
+              { name: "surname", label: "Surname" },
+              { name: "date_of_birth", label: "Date of birth", type: "date" },
+              { name: "gender", label: "Gender" },
+              { name: "nationality", label: "Nationality" },
+              { name: "state_of_origin", label: "State of origin" },
+              { name: "address", label: "Home address", type: "textarea" },
               { name: "phone", label: "Phone" },
               { name: "email", label: "Email", type: "email" },
-              { name: "address", label: "Address", type: "textarea" },
             ]}
           />
-        ) : null}
 
-        {config?.require_referees ? (
           <Section
-            title="Referees"
-            value={application.referees}
-            disabled={!editable.referees}
-            onSave={saveSection("referees")}
+            title="Education history"
+            description="Where you have studied so far, most recent first."
+            value={application.education_history}
+            disabled={!editable.education}
+            defaultOpen={!!editable.education}
+            onSave={saveSection("education")}
             fields={[
-              { name: "referee_1_name", label: "Referee 1 — name" },
-              { name: "referee_1_email", label: "Referee 1 — email", type: "email" },
-              { name: "referee_2_name", label: "Referee 2 — name" },
-              { name: "referee_2_email", label: "Referee 2 — email", type: "email" },
+              { name: "school_name", label: "School name" },
+              { name: "country", label: "Country" },
+              { name: "start_year", label: "Start year" },
+              { name: "end_year", label: "End year" },
+              { name: "qualification", label: "Qualification" },
             ]}
           />
-        ) : null}
+
+          <Section
+            title="Examination results"
+            description="Your exam results — WAEC/NECO/NABTEB/JAMB or whatever your school runs."
+            value={application.exam_results}
+            disabled={!editable.exams}
+            defaultOpen={!!editable.exams}
+            onSave={saveSection("exams")}
+            fields={[
+              { name: "exam_type", label: "Exam" },
+              { name: "exam_number", label: "Exam number" },
+              { name: "exam_year", label: "Exam year" },
+              { name: "subjects", label: "Subjects and grades", type: "textarea", hint: "One per line, e.g. Mathematics — B3" },
+            ]}
+          />
+
+          {config?.require_next_of_kin !== false ? (
+            <Section
+              title="Next of kin"
+              value={application.next_of_kin}
+              disabled={!editable.next_of_kin}
+              defaultOpen={!!editable.next_of_kin}
+              onSave={saveSection("next_of_kin")}
+              fields={[
+                { name: "name", label: "Full name" },
+                { name: "relationship", label: "Relationship" },
+                { name: "phone", label: "Phone" },
+                { name: "email", label: "Email", type: "email" },
+                { name: "address", label: "Address", type: "textarea" },
+              ]}
+            />
+          ) : null}
+
+          {config?.require_referees ? (
+            <Section
+              title="Referees"
+              value={application.referees}
+              disabled={!editable.referees}
+              defaultOpen={!!editable.referees}
+              onSave={saveSection("referees")}
+              fields={[
+                { name: "referee_1_name", label: "Referee 1 — name" },
+                { name: "referee_1_email", label: "Referee 1 — email", type: "email" },
+                { name: "referee_2_name", label: "Referee 2 — name" },
+                { name: "referee_2_email", label: "Referee 2 — email", type: "email" },
+              ]}
+            />
+          ) : null}
+        </Card>
 
         {canSubmit ? (
-          <Card>
+          <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Submit"}</h3>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
               <input
@@ -466,18 +733,23 @@ const ApplicationDashboard = () => {
 
         {/* Timeline — every event the database recorded, in reverse
             chronological order. This is the audit trail. */}
-        <Card style={{ marginTop: 20 }}>
+        <Card>
           <h3 style={{ marginTop: 0 }}>{"Application timeline"}</h3>
           {events.length === 0 ? (
             <Empty>{"Nothing recorded yet."}</Empty>
           ) : (
-            <ul className="timeline">
-              {events.map((event) => (
+            <ul className="appdash-timeline">
+              {[...events].reverse().map((event) => (
                 <li key={event.id}>
-                  <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-                    {formatDate(event.created_at, { withTime: true })} · {event.actor_label || "System"}
+                  <span className="appdash-timeline-dot" aria-hidden="true" />
+                  <div>
+                    <div className="appdash-timeline-meta">
+                      {formatDate(event.created_at, { withTime: true })} · {event.actor_label || "System"}
+                    </div>
+                    <div className="appdash-timeline-note">
+                      {event.note || `${event.status_from || "–"} → ${event.status_to}`}
+                    </div>
                   </div>
-                  <div>{event.note || `${event.status_from || "–"} → ${event.status_to}`}</div>
                 </li>
               ))}
             </ul>

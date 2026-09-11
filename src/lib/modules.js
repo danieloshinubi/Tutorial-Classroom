@@ -62,16 +62,6 @@ export const MODULES = [
     roles: [...RUNS_THE_SCHOOL, "principal", "teacher"],
   },
   {
-    id: "results",
-    priority: 50,
-    group: "Teaching",
-    path: "/Results",
-    label: "Results",
-    // A teacher enters marks; a principal or administrator approves and
-    // releases them. Two different screens behind one module.
-    roles: [...RUNS_THE_SCHOOL, "principal", "teacher"],
-  },
-  {
     id: "bursary",
     priority: 35,
     group: "Money",

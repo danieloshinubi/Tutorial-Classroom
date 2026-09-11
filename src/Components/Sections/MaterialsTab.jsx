@@ -6,10 +6,10 @@ import {
   deleteMaterial,
   updateMaterial,
   uploadMaterialFile,
-  signedMaterialUrl,
   deleteMaterialFile,
 } from "../../lib/api";
 import { Card, Button, Field, Notice, Empty, formatDate } from "../UI";
+import { useDocumentPreview } from "../DocumentPreview";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -37,6 +37,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const preview = useDocumentPreview();
   const fileInput = useRef(null);
 
   const load = () => {
@@ -142,15 +143,9 @@ const MaterialsTab = ({ courseId, canManage }) => {
     }
   };
 
-  // The bucket is private, so a download needs a short-lived signed URL rather
-  // than a permanent public link.
-  const openFile = async (material) => {
+  const openFile = (material) => {
     setError("");
-    try {
-      window.open(await signedMaterialUrl(material.file_path), "_blank", "noopener");
-    } catch (err) {
-      setError(err.message || "Could not open that file.");
-    }
+    preview.open(material.file_path, material.file_name);
   };
 
   const handleDelete = async (material) => {
@@ -305,7 +300,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
           <div className="btn-row">
             {material.file_path ? (
               <Button variant="secondary" size="sm" onClick={() => openFile(material)}>
-                {`Download ${material.file_name || "file"}`}
+                {`View ${material.file_name || "file"}`}
               </Button>
             ) : null}
             {material.url ? (
@@ -321,6 +316,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
           </div>
         </Card>
       ))}
+      {preview.node}
     </>
   );
 };

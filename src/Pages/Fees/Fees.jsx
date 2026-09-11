@@ -7,6 +7,7 @@ import {
   fetchInvoiceItems,
   fetchPaymentsFor,
   fetchChildren,
+  fetchTerms,
   declarePayment,
   uploadPaymentProof,
   withdrawPayment,
@@ -21,10 +22,12 @@ import {
   Badge,
   Notice,
   Empty,
+  MoneyInput,
   displayName,
   formatDate,
 } from "../../Components/UI";
 import { StatRow } from "../../Components/Charts";
+import { useDocumentPreview } from "../../Components/DocumentPreview";
 
 const METHOD_LABEL = Object.fromEntries(PAYMENT_METHODS);
 
@@ -34,6 +37,17 @@ const STANDING_TONE = {
   unpaid: undefined,
   overdue: "danger",
   cancelled: undefined,
+};
+
+// A parent seeing the bare word "overdue" or "part paid" for the first time
+// has no way to know what it means for them right now. One plain sentence
+// next to the badge, every time — never just the badge on its own.
+const STANDING_EXPLAINER = {
+  paid: "Fully paid — nothing more owed on this bill.",
+  "part paid": "Some of this has been paid; the rest is still owing.",
+  unpaid: "Nothing has been paid on this bill yet.",
+  overdue: "This is past its due date and still has money owing.",
+  cancelled: "The school cancelled this bill — there is nothing to pay.",
 };
 
 // One place that decides how money reads, so a figure never appears in two
@@ -63,6 +77,7 @@ const Fees = () => {
   const [items, setItems] = useState({});
   const [payments, setPayments] = useState({});
   const [children, setChildren] = useState([]);
+  const [terms, setTerms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -75,20 +90,34 @@ const Fees = () => {
       const rows = await fetchMyInvoices();
       setInvoices(rows);
       const ids = rows.map((r) => r.invoice_id);
-      const [itemRows, payRows, kids] = await Promise.all([
+      const [itemRows, payRows, kids, termRows] = await Promise.all([
         fetchInvoiceItems(ids).catch(() => ({})),
         fetchPaymentsFor(ids).catch(() => ({})),
         fetchChildren(user.id).catch(() => []),
+        fetchTerms(schoolId).catch(() => []),
       ]);
       setItems(itemRows);
       setPayments(payRows);
       setChildren(kids);
+      setTerms(termRows);
     } catch (err) {
       setError(err.message || "Could not load your fees.");
     } finally {
       setLoading(false);
     }
   }, [schoolId, user]);
+
+  // "For Term 2, 2025/2026" is a lot more legible than a bare invoice
+  // reference — an admissions invoice (application/acceptance fee) has no
+  // term at all, so this is null for those and simply isn't shown.
+  const termLabel = useCallback(
+    (termId) => {
+      const term = terms.find((t) => t.id === termId);
+      if (!term) return null;
+      return term.sessions?.name ? `${term.name}, ${term.sessions.name}` : term.name;
+    },
+    [terms]
+  );
 
   useEffect(() => {
     load();
@@ -155,7 +184,7 @@ const Fees = () => {
 
         {totals.waiting > 0 ? (
           <Notice tone="warn">
-            {`${money(totals.waiting)} you have declared is still being checked by the school. It does not come off the balance until the bursary approves it.`}
+            {`${money(totals.waiting)} you declared as paid is still being checked by the bursary — see which bill below. It won't come off what you owe until they confirm it.`}
           </Notice>
         ) : null}
 
@@ -164,6 +193,7 @@ const Fees = () => {
             key={invoice.invoice_id}
             invoice={invoice}
             who={nameOf(invoice.student_id)}
+            term={termLabel(invoice.term_id)}
             items={items[invoice.invoice_id] || []}
             payments={payments[invoice.invoice_id] || []}
             money={money}
@@ -188,6 +218,7 @@ const Fees = () => {
 const InvoiceCard = ({
   invoice,
   who,
+  term,
   items,
   payments,
   money,
@@ -205,6 +236,7 @@ const InvoiceCard = ({
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const [payingOnline, setPayingOnline] = useState(false);
+  const preview = useDocumentPreview();
 
   // Straight to the gateway. The amount is decided server-side from the
   // outstanding balance, so there is nothing to pass here but the invoice.
@@ -326,6 +358,19 @@ const InvoiceCard = ({
           <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
             {`${invoice.reference} · ${money(invoice.paid)} paid of ${money(invoice.payable)}`}
           </div>
+          {term ? (
+            <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>{`For ${term}`}</div>
+          ) : null}
+          {items.length ? (
+            <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
+              {`Includes: ${items.map((i) => i.name).join(", ")}`}
+            </div>
+          ) : null}
+          {/* The one sentence that answers "what does this word mean for me" —
+              never leave the badge above to speak for itself. */}
+          <p style={{ margin: "8px 0 0", fontSize: 13.5, color: "var(--ink-2)" }}>
+            {STANDING_EXPLAINER[invoice.standing]}
+          </p>
         </div>
 
         <div className="btn-row">
@@ -345,6 +390,12 @@ const InvoiceCard = ({
         </div>
       </div>
 
+      {Number(invoice.awaiting_approval) > 0 ? (
+        <Notice tone="warn">
+          {`${money(invoice.awaiting_approval)} you declared on this bill is still being checked by the bursary — it comes off the balance once they confirm it, not before.`}
+        </Notice>
+      ) : null}
+
       {paying ? (
         <form onSubmit={submit} className="pay-form">
           <p style={{ color: "var(--ink-2)", fontSize: 13.5, marginTop: 0 }}>
@@ -353,14 +404,10 @@ const InvoiceCard = ({
 
           <div className="split">
             <Field label="How much">
-              <input
-                className="input"
-                type="number"
-                min="1"
-                step="0.01"
+              <MoneyInput
                 autoFocus
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={setAmount}
               />
             </Field>
             <Field label="How you paid">
@@ -489,13 +536,38 @@ const InvoiceCard = ({
                         >
                           {payment.status === "submitted" ? "being checked" : payment.status}
                         </Badge>
+                        {payment.note ? (
+                          <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>
+                            {`You said: ${payment.note}`}
+                          </div>
+                        ) : null}
+                        {/* The reason the bursary gave — its own clearly
+                            labelled line, not lost in the same small grey
+                            as everything else, especially when it's a
+                            rejection a parent needs to actually act on. */}
                         {payment.decision_note ? (
-                          <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                            {payment.decision_note}
+                          <div
+                            style={{
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              marginTop: 3,
+                              color: payment.status === "rejected" ? "var(--danger)" : "var(--ink-2)",
+                            }}
+                          >
+                            {`Why: ${payment.decision_note}`}
                           </div>
                         ) : null}
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {payment.proof_path ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => preview.open(payment.proof_path, "Your receipt")}
+                          >
+                            {"View receipt"}
+                          </Button>
+                        ) : null}
                         {payment.status === "submitted" ? (
                           <Button
                             size="sm"
@@ -514,6 +586,7 @@ const InvoiceCard = ({
           )}
         </div>
       ) : null}
+      {preview.node}
     </Card>
   );
 };
