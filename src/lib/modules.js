@@ -110,6 +110,17 @@ export const MODULES = [
     label: "School",
     roles: RUNS_THE_SCHOOL,
   },
+  {
+    id: "auditlog",
+    priority: 90,
+    group: "Admin",
+    path: "/AuditLog",
+    label: "Audit Log",
+    // Deliberately narrower than most modules — not even principal. Every
+    // recorded action, across every family and every member of staff, is a
+    // security/compliance surface for whoever actually runs the school.
+    roles: RUNS_THE_SCHOOL,
+  },
 ];
 
 const BY_ID = new Map(MODULES.map((m) => [m.id, m]));

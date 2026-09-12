@@ -2846,3 +2846,16 @@ table.data tr:last-child td { border-bottom: none; }
 .calc-shift.active { background: #3d6ea8; color: #fff; }
 .calc-modebtn { background: #2f3a4a; color: #9fd0ff; font-size: 11px; }
 .calc-equals { background: var(--brand-dark); color: #fff; font-weight: 700; }
+
+/* ==========================================================================
+   Audit log (Pages/AuditLog/AuditLog.jsx)
+   ========================================================================== */
+.code-block {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+  font-family: ui-monospace, "IBM Plex Mono", monospace;
+  max-height: 320px;
+  overflow: auto;
+}

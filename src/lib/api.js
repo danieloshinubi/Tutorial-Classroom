@@ -2789,3 +2789,46 @@ export const toggleNoticeReaction = async ({ noticeId, userId, emoji, mine }) =>
   if (error) throw error;
   return true;
 };
+
+/* -------------------------------------------------------------------------- */
+/* audit log — owner/admin only, enforced by RLS, not by anything client-side */
+/* -------------------------------------------------------------------------- */
+
+const AUDIT_PAGE_SIZE = 50;
+
+// filters: { tableName, action, actorSearch, from, to }. Every filter is
+// optional; omitting all of them just pages through everything, newest
+// first. actorSearch matches the label snapshotted at write time (a name
+// change afterwards doesn't rewrite history — this searches what was true
+// when the action happened).
+export const fetchAuditLog = async ({ schoolId, filters = {}, page = 0 } = {}) => {
+  let query = supabase
+    .from("audit_log")
+    .select("id, school_id, table_name, record_id, action, actor_id, actor_label, actor_role, old_data, new_data, changed_fields, ip_address, country, user_agent, created_at", { count: "exact" })
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: false })
+    .range(page * AUDIT_PAGE_SIZE, page * AUDIT_PAGE_SIZE + AUDIT_PAGE_SIZE - 1);
+
+  if (filters.tableName) query = query.eq("table_name", filters.tableName);
+  if (filters.action) query = query.eq("action", filters.action);
+  if (filters.actorSearch) query = query.ilike("actor_label", `%${filters.actorSearch}%`);
+  if (filters.from) query = query.gte("created_at", filters.from);
+  if (filters.to) query = query.lte("created_at", filters.to);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+  return { rows: data || [], count: count || 0, pageSize: AUDIT_PAGE_SIZE };
+};
+
+// The distinct table names actually present, for the filter dropdown — reads
+// straight off the data rather than a hard-coded list, so it's never stale
+// against whatever's really been logged.
+export const fetchAuditLogTables = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select("table_name")
+    .eq("school_id", schoolId)
+    .limit(5000);
+  if (error) throw error;
+  return [...new Set((data || []).map((r) => r.table_name))].sort();
+};

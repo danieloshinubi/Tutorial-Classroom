@@ -38,6 +38,7 @@ import Profile from "./Pages/Profile/Profile";
 import Teach from "./Pages/Teach/Teach";
 import CourseForm from "./Pages/Teach/CourseForm";
 import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
+import AuditLog from "./Pages/AuditLog/AuditLog";
 import PlatformApp from "./platform/PlatformApp";
 import { isPlatformHost } from "./lib/tenant";
 import News from "./Pages/News/News";
@@ -147,6 +148,11 @@ function App() {
             {/* School administration */}
             <Route element={<SchoolRoute module="school" />}>
               <Route path="/School" element={<SchoolAdmin />} />
+            </Route>
+
+            {/* Every recorded action, for owner/admin only */}
+            <Route element={<SchoolRoute module="auditlog" />}>
+              <Route path="/AuditLog" element={<AuditLog />} />
             </Route>
 
             {/* The platform console used to live here, at /Platform on a
