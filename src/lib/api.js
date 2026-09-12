@@ -1667,14 +1667,60 @@ export const decideApplication = async ({ id, status, note, offerExpires, condit
   return Array.isArray(data) ? data[0] : data;
 };
 
-export const enrolApplicant = async ({ id, studentId, classId }) => {
-  const { data, error } = await supabase.rpc("enrol_applicant", {
+/* -------------------------------------------------------------------------- */
+/* admissions — Phase 5: student promotion / matric registration              */
+/* -------------------------------------------------------------------------- */
+
+// Supersedes the old enrol_applicant() — see 067_student_registrations.sql.
+// Returns the new student_registrations row (including the assigned
+// registration number), not the application row.
+export const promoteApplicantToStudent = async ({ id, studentId, classId }) => {
+  const { data, error } = await supabase.rpc("promote_applicant_to_student", {
     target_application: id,
     target_student: studentId,
     target_class: classId || null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
+};
+
+export const fetchStudentRegistrationForApplication = async (applicationId) => {
+  const { data, error } = await supabase
+    .from("student_registrations")
+    .select("id, registration_number, status, registered_at, class:classes(name)")
+    .eq("application_id", applicationId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+// The school's own registry — every student ever promoted, searchable and
+// with a lifecycle (active/withdrawn/graduated/transferred) staff can move
+// through as circumstances change, not just a one-time write.
+export const fetchStudentRegistrations = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("student_registrations")
+    .select(`
+      id, registration_number, status, registered_at, notes, application_id,
+      student:profiles!student_id (id, first_name, surname, email),
+      session:sessions (name),
+      class:classes (name)
+    `)
+    .eq("school_id", schoolId)
+    .order("registered_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const updateStudentRegistration = async ({ id, status, notes }) => {
+  const { data, error } = await supabase
+    .from("student_registrations")
+    .update({ status, notes: notes ?? null, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -2025,6 +2071,19 @@ export const declineOffer = async ({ offerId, reason }) => {
   const { data, error } = await supabase.rpc("decline_offer", {
     target_offer: offerId,
     reason_in: reason || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// Staff recording a response on behalf of an applicant with no account of
+// their own (an anonymous /Apply submission) — refused by the database if
+// the applicant actually has one; they answer for themselves in that case.
+export const recordOfferResponse = async ({ offerId, response, note }) => {
+  const { data, error } = await supabase.rpc("record_offer_response", {
+    target_offer: offerId,
+    response,
+    note_in: note || null,
   });
   if (error) throw error;
   return data;

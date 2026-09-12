@@ -50,6 +50,7 @@ const AdmissionLetter = ({ application: app, className, onClose }) => {
             {`We are pleased to confirm that ${fullName} has been enrolled at ${school.name}`}
             {app.sessions ? ` for the ${app.sessions.name} academic session` : ""}
             {placement ? `, in ${placement}` : ""}
+            {app.registration_number ? `, under registration number ${app.registration_number}` : ""}
             {"."}
           </p>
         ) : (
@@ -89,6 +90,12 @@ const AdmissionLetter = ({ application: app, className, onClose }) => {
               <th>{"Reference"}</th>
               <td>{app.reference}</td>
             </tr>
+            {app.registration_number ? (
+              <tr>
+                <th>{"Registration number"}</th>
+                <td>{app.registration_number}</td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
 

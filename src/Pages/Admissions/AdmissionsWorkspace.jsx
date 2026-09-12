@@ -19,11 +19,13 @@ import {
   decideApplication,
   verifyApplicationPayment,
   verifyAcceptancePayment,
+  recordOfferResponse,
   fetchSchoolMembers,
   prepareClearanceItems,
   setClearanceStatus,
   recordOriginalVerification,
-  enrolApplicant,
+  promoteApplicantToStudent,
+  fetchStudentRegistrationForApplication,
   addSchoolUser,
   fetchClasses,
   fetchApplicantAccount,
@@ -53,6 +55,7 @@ const AdmissionsWorkspace = () => {
   const [workspace, setWorkspace] = useState(null);
   const [members, setMembers] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [registration, setRegistration] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -64,14 +67,16 @@ const AdmissionsWorkspace = () => {
     if (!applicationId) return;
     setLoading(true);
     try {
-      const [ws, mems, cls] = await Promise.all([
+      const [ws, mems, cls, reg] = await Promise.all([
         fetchApplicationWorkspace(applicationId),
         fetchSchoolMembers(schoolId).catch(() => []),
         fetchClasses(schoolId).catch(() => []),
+        fetchStudentRegistrationForApplication(applicationId).catch(() => null),
       ]);
       setWorkspace(ws);
       setMembers(mems);
       setClasses(cls);
+      setRegistration(reg);
     } catch (err) {
       setError(err.message || "Could not load the workspace.");
     } finally {
@@ -88,7 +93,7 @@ const AdmissionsWorkspace = () => {
     setError("");
     try {
       const row = await fetchApplication(applicationId);
-      setLetterApp(row);
+      setLetterApp({ ...row, registration_number: registration?.registration_number });
     } catch (err) {
       setError(err.message || "Could not open the admission letter.");
     } finally {
@@ -472,7 +477,28 @@ const AdmissionsWorkspace = () => {
             </div>
             {offer.conditions ? <p style={{ marginTop: 0 }}>{offer.conditions}</p> : null}
             {offer.status === "issued" ? (
-              <Notice tone="muted">{"Waiting on the applicant to accept or decline from their own dashboard."}</Notice>
+              app.applicant_id ? (
+                <Notice tone="muted">{"Waiting on the applicant to accept or decline from their own dashboard."}</Notice>
+              ) : (
+                <div>
+                  <Notice tone="muted">
+                    {"This application has no account of its own (it came in through the public form) — there's no dashboard for them to answer from. Record what the family told you by phone or email here instead."}
+                  </Notice>
+                  <div className="btn-row">
+                    <Button size="sm" disabled={busy}
+                      onClick={() => run(() => recordOfferResponse({ offerId: offer.id, response: "accepted" }), "record acceptance")}>
+                      {"Record acceptance"}
+                    </Button>
+                    <Button size="sm" variant="secondary" disabled={busy}
+                      onClick={() => {
+                        const note = window.prompt("Reason for declining? (optional)");
+                        if (note !== null) run(() => recordOfferResponse({ offerId: offer.id, response: "declined", note: note || undefined }), "record decline");
+                      }}>
+                      {"Record decline"}
+                    </Button>
+                  </div>
+                </div>
+              )
             ) : null}
             {offer.status === "declined" ? (
               <Notice tone="warn">
@@ -625,29 +651,45 @@ const AdmissionsWorkspace = () => {
           </Card>
         ) : null}
 
-        {/* Enrol — the last step: turns an accepted, cleared applicant into
-            an actual pupil account and (optionally) a class. Soft-gated on
-            clearance in the UI, not the database — enrol_applicant() itself
-            doesn't check clearance_state, so a school with an urgent reason
-            to enrol before every department signs off still can. */}
+        {/* Register — the last step: turns an accepted, cleared applicant
+            into a formally registered student with a permanent registration
+            number. Hard-gated on clearance at the database
+            (promote_applicant_to_student, 067) — a school with no
+            departments configured already resolved to 'cleared'
+            automatically, so this never blocks a school that never set
+            clearance up. */}
         {app.status === "accepted" ? (
           <Card style={{ marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0 }}>{"Enrol"}</h3>
-            {app.clearance_state !== "cleared" && clearanceDepartments.length > 0 ? (
+            <h3 style={{ marginTop: 0 }}>{"Register as a student"}</h3>
+            {app.clearance_state !== "cleared" ? (
               <Notice tone="warn">
-                {"Clearance is not complete yet — enrolling now skips that check. Wait for every department to clear unless there's a reason not to."}
+                {`Clearance isn't complete yet (${app.clearance_state}) — every department has to clear before this applicant can be registered.`}
               </Notice>
-            ) : null}
-            <EnrolForm
-              application={app}
-              members={members}
-              classes={classes}
-              labelFor={labelFor}
-              schoolId={schoolId}
-              disabled={busy}
-              onDone={load}
-              onError={setError}
-            />
+            ) : (
+              <EnrolForm
+                application={app}
+                members={members}
+                classes={classes}
+                labelFor={labelFor}
+                schoolId={schoolId}
+                disabled={busy}
+                onDone={load}
+                onError={setError}
+              />
+            )}
+          </Card>
+        ) : null}
+
+        {/* Registration — shown once promoted. The permanent record, not
+            just the moment it happened. */}
+        {app.status === "enrolled" && registration ? (
+          <Card style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>{"Registration"}</h3>
+            <div className="state-grid">
+              {stateBadge("Registration number", registration.registration_number, "success")}
+              {stateBadge("Class", registration.class?.name || "Not yet placed", "muted")}
+              {stateBadge("Standing", registration.status, registration.status === "active" ? "success" : "muted")}
+            </div>
           </Card>
         ) : null}
 
@@ -903,10 +945,10 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
     setBusy(true);
     onError("");
     try {
-      await enrolApplicant({ id: application.id, studentId, classId: classId || null });
+      await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null });
       onDone();
     } catch (err) {
-      onError(err.message || "Could not enrol that applicant.");
+      onError(err.message || "Could not register that applicant.");
     } finally {
       setBusy(false);
     }
@@ -923,6 +965,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
     onError("");
     try {
       let studentId = existingStudent;
+      let justIssued = null;
 
       // Creating the account here rather than sending the officer to
       // another screen: enrolling and having a login are the same moment.
@@ -941,7 +984,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
         });
         studentId = created.user_id;
         if (created.password) {
-          setIssued({ email: created.email, password: created.password });
+          justIssued = { email: created.email, password: created.password };
         }
       }
 
@@ -951,10 +994,19 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
         return;
       }
 
-      await enrolApplicant({ id: application.id, studentId, classId: classId || null });
-      onDone();
+      await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null });
+
+      // The parent hides this whole form the moment status flips to
+      // 'enrolled' (onDone() reloads it) — showing the one-time password
+      // first and deferring the reload until it's been copied, rather than
+      // having it flash and vanish underneath the reload.
+      if (justIssued) {
+        setIssued(justIssued);
+      } else {
+        onDone();
+      }
     } catch (err) {
-      onError(err.message || "Could not enrol that applicant.");
+      onError(err.message || "Could not register that applicant.");
     } finally {
       setBusy(false);
     }
@@ -979,7 +1031,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
           </select>
         </Field>
         <Button type="submit" disabled={disabled || busy}>
-          {busy ? "Enrolling..." : "Enrol this pupil"}
+          {busy ? "Registering..." : "Register this pupil"}
         </Button>
       </form>
     );
@@ -988,7 +1040,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
   if (issued) {
     return (
       <div>
-        <p style={{ fontSize: 14 }}>{"The pupil's sign-in details — shown once. They will be asked to choose their own password."}</p>
+        <p style={{ fontSize: 14 }}>{"Registered. The pupil's sign-in details — shown once. They will be asked to choose their own password."}</p>
         <div style={{ fontFamily: "monospace", fontSize: 15 }}>
           <div>{issued.email}</div>
           <div>{issued.password}</div>
@@ -1003,6 +1055,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
           >
             {"Copy"}
           </Button>
+          <Button size="sm" onClick={onDone}>{"Done"}</Button>
         </div>
       </div>
     );
@@ -1044,7 +1097,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
         </select>
       </Field>
       <Button type="submit" disabled={disabled || busy}>
-        {busy ? "Enrolling..." : "Enrol this pupil"}
+        {busy ? "Registering..." : "Register this pupil"}
       </Button>
     </form>
   );

@@ -23,6 +23,7 @@ const ACTION_TONE = { INSERT: "success", UPDATE: "brand", DELETE: "danger" };
 const TABLE_LABELS = {
   applications: "an application",
   admission_offers: "an admission offer",
+  student_registrations: "a student registration",
   clearance_departments: "a clearance department",
   clearance_checklists: "a clearance checklist item",
   original_verifications: "an original-document sighting",
