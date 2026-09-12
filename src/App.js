@@ -21,8 +21,6 @@ import Dashboard from "./Pages/Dashboard/Dashboard";
 import Courses from "./Pages/Courses/Courses";
 import Apply from "./Pages/Admissions/Apply";
 import ApplicationStatus from "./Pages/Admissions/ApplicationStatus";
-import Admissions from "./Pages/Admissions/Admissions";
-import ApplicationDetail from "./Pages/Admissions/ApplicationDetail";
 import Applications from "./Pages/Admissions/Applications";
 import ApplyStart from "./Pages/Admissions/ApplyStart";
 import ApplicationDashboard from "./Pages/Admissions/ApplicationDashboard";
@@ -40,7 +38,9 @@ import CourseForm from "./Pages/Teach/CourseForm";
 import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
 import AuditLog from "./Pages/AuditLog/AuditLog";
 import PlatformApp from "./platform/PlatformApp";
-import { isPlatformHost } from "./lib/tenant";
+import MarketingApp from "./marketing/MarketingApp";
+import TrialGate from "./Components/TrialGate";
+import { isPlatformHost, isMarketingHost } from "./lib/tenant";
 import News from "./Pages/News/News";
 import Bursary from "./Pages/Bursary/Bursary";
 import Fees from "./Pages/Fees/Fees";
@@ -57,17 +57,37 @@ const LegacyCourseRedirect = () => {
   return <Navigate to={`/Courses/${code}`} replace />;
 };
 
+// /Admissions/:id → /AdmissionsWorkspace/:id. The legacy admissions pages
+// (a barebones list + detail view with no payment, offer or clearance
+// visibility) are gone; every bookmark, nav link and the staff notification
+// submit_application() still writes to /Admissions/%s lands on the real
+// workspace instead of a dead route.
+const LegacyApplicationRedirect = () => {
+  const { applicationId } = useParams();
+  return <Navigate to={`/AdmissionsWorkspace/${applicationId}`} replace />;
+};
+
 function App() {
   // admin.schoolivio.com is not a school. It gets its own application, with no
   // SchoolProvider and no tenant to resolve, rather than a page inside
   // whichever tenant the subdomain happened to name.
   if (isPlatformHost()) return <PlatformApp />;
 
+  // schoolivio.com itself (the bare apex, or www) is the public marketing
+  // site and self-serve trial signup — also its own application, for the
+  // same reason: there is no tenant to resolve here either. /Welcome works
+  // on any host too, so this is reachable in local dev without needing a
+  // real apex domain.
+  if (isMarketingHost() || window.location.pathname.startsWith("/Welcome")) {
+    return <MarketingApp />;
+  }
+
   return (
     <Router>
       <AuthProvider>
         <SchoolProvider>
           <ConfigNotice />
+        <TrialGate>
         <Routes>
           <Route path="/" element={<Navigate to="/Dashboard" replace />} />
           <Route path="/Login" element={<Login />} />
@@ -132,9 +152,8 @@ function App() {
                 open it — a route guard hand-written separately from the
                 module registry had drifted out of sync and forgotten them. */}
             <Route element={<SchoolRoute module="admissions" />}>
-              <Route path="/Admissions" element={<Admissions />} />
-              <Route path="/Admissions/:applicationId" element={<ApplicationDetail />} />
-              {/* Phase 2 workspace — queues and per-application operations. */}
+              <Route path="/Admissions" element={<Navigate to="/AdmissionsWorkspace" replace />} />
+              <Route path="/Admissions/:applicationId" element={<LegacyApplicationRedirect />} />
               <Route path="/AdmissionsWorkspace" element={<AdmissionsQueues />} />
               <Route path="/AdmissionsWorkspace/:applicationId" element={<AdmissionsWorkspace />} />
             </Route>
@@ -164,6 +183,7 @@ function App() {
 
           <Route path="*" element={<Navigate to="/Dashboard" replace />} />
         </Routes>
+        </TrialGate>
         </SchoolProvider>
       </AuthProvider>
     </Router>

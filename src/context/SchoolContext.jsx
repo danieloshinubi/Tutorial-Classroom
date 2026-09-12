@@ -54,7 +54,7 @@ export const SchoolProvider = ({ children }) => {
     try {
       const { data: schoolRow, error: schoolError } = await supabase
         .from("schools")
-        .select("id, name, slug, logo_url, timezone, currency, plan, is_active")
+        .select("id, name, slug, logo_url, timezone, currency, plan, trial_ends_at, is_active")
         .eq("slug", slug)
         .maybeSingle();
 
@@ -119,6 +119,16 @@ export const SchoolProvider = ({ children }) => {
     if (!authLoading) load();
   }, [authLoading, load]);
 
+  // A school stays fully usable while plan === 'trial' and trial_ends_at is
+  // in the future (or unset — a school the platform console created
+  // directly, never a trial). Once it lapses, App.js's TrialGate blocks the
+  // routed app rather than letting every RLS-guarded write fail one at a time.
+  const trialExpired = Boolean(
+    school?.plan === "trial" &&
+      school?.trial_ends_at &&
+      new Date(school.trial_ends_at) < new Date()
+  );
+
   const role = membership?.role || null;
 
   // Every active role this person holds AT THIS SCHOOL. Usually one, but a
@@ -155,6 +165,7 @@ export const SchoolProvider = ({ children }) => {
       // so granting school powers here would be exactly the mixing-up that
       // separating the console was meant to end.
       isPlatformAdmin,
+      trialExpired,
       // Convenience predicates so pages don't repeat role arrays.
       isAdmin: roles.some((r) => r === "owner" || r === "admin"),
       isPrincipal: roles.includes("principal"),
@@ -168,7 +179,7 @@ export const SchoolProvider = ({ children }) => {
       error,
       reload: load,
     }),
-    [slug, school, levels, membership, memberships, role, roles, isPlatformAdmin, loading, authLoading, error, load]
+    [slug, school, levels, membership, memberships, role, roles, isPlatformAdmin, trialExpired, loading, authLoading, error, load]
   );
 
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>;

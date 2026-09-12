@@ -63,3 +63,17 @@ export const platformUrl = () => {
       : parts.slice(-2).join(".");
   return `${protocol}//admin.${base}${port ? `:${port}` : ""}`;
 };
+
+// The bare apex — schoolivio.com itself (or www.schoolivio.com), never a
+// tenant subdomain. This is the public marketing site and self-serve trial
+// signup, not a school. Deliberately does NOT match bare "localhost" — local
+// dev's existing fallback to REACT_APP_DEFAULT_SCHOOL (see resolveSlug
+// above) stays untouched, so every existing dev workflow keeps working.
+// Visit /Welcome on any host to preview the marketing site locally instead.
+export const isMarketingHost = (hostname = window.location.hostname) => {
+  const host = hostname.toLowerCase().split(":")[0];
+  const parts = host.split(".");
+  if (parts.length === 2 && parts[1] !== "localhost") return true; // schoolivio.com
+  if (parts[0] === "www" && parts.length > 2) return true; // www.schoolivio.com
+  return false;
+};

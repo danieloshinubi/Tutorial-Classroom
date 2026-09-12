@@ -82,7 +82,7 @@ export const MODULES = [
     id: "admissions",
     priority: 40,
     group: "School",
-    path: "/Admissions",
+    path: "/AdmissionsWorkspace",
     label: "Admissions",
     roles: [...RUNS_THE_SCHOOL, "principal", "admissions"],
   },

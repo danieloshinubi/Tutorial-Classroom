@@ -6,6 +6,7 @@ import LevelsPanel from "./LevelsPanel";
 import GuardiansPanel from "./GuardiansPanel";
 import AcademicPanel from "./AcademicPanel";
 import ClassesPanel from "./ClassesPanel";
+import AdmissionsSettingsPanel from "./AdmissionsSettingsPanel";
 import {
   fetchSchoolMembers,
   updateMemberRole,
@@ -549,6 +550,7 @@ const SchoolAdmin = () => {
               { id: "academic", label: "Calendar" },
               { id: "classes", label: "Classes & subjects" },
               { id: "levels", label: "Classes & departments" },
+              { id: "admissions", label: "Admissions settings" },
               { id: "guardians", label: "Parents & children" },
               { id: "settings", label: "School settings" },
             ]}
@@ -562,6 +564,7 @@ const SchoolAdmin = () => {
         {tab === "academic" ? <AcademicPanel /> : null}
         {tab === "classes" ? <ClassesPanel /> : null}
         {tab === "levels" ? <LevelsPanel /> : null}
+        {tab === "admissions" ? <AdmissionsSettingsPanel /> : null}
         {tab === "guardians" ? <GuardiansPanel /> : null}
         {tab === "settings" ? <SettingsPanel /> : null}
       </Page>

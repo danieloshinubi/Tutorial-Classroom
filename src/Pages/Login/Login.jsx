@@ -9,16 +9,22 @@ import { useAuth } from "../../context/AuthContext";
 import { Field, Button, Notice } from "../../Components/UI";
 
 const Login = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [visible, setVisible] = useState(false);
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-
   const { signIn, session } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const redirectTo = location.state?.from?.pathname || "/Dashboard";
+
+  // A trial signup happens on a different origin (schoolivio.com) than this
+  // school's own subdomain, so the session it created can't follow across —
+  // browser storage is scoped per-origin. Rather than a silent, confusing
+  // bounce to a blank login screen, the handoff carries the email (never the
+  // password) and a one-time welcome flag.
+  const params = new URLSearchParams(location.search);
+  const [email, setEmail] = useState(params.get("email") || "");
+  const [password, setPassword] = useState("");
+  const [visible, setVisible] = useState(false);
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Someone already signed in should not sit on the login screen.
   useEffect(() => {
@@ -63,6 +69,11 @@ const Login = () => {
       }
     >
       <form onSubmit={handleSubmit}>
+        {params.get("welcome") === "1" ? (
+          <Notice tone="success">
+            {"Your school's workspace is ready — sign in with the password you just chose to get started."}
+          </Notice>
+        ) : null}
         <Field label="Email">
           <input
             required

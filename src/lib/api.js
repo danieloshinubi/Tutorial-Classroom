@@ -1725,6 +1725,93 @@ export const fetchDocumentRequirements = async ({
   );
 };
 
+/* admissions settings (school admin) — the configurable-protocols surface.
+   Every table here already carries a full-CRUD RLS policy for
+   owner/admin/principal/admissions (040_admissions_engine.sql); these are
+   the write paths nothing in the UI has ever called until now. */
+
+// The actual stored row for one (school, session) — distinct from
+// fetchAdmissionConfig's effective_admission_config(), which always returns
+// something (merged with defaults) even when nothing has been configured
+// yet. The settings editor needs to know which one is true.
+export const fetchAdmissionConfigRow = async ({ schoolId, sessionId }) => {
+  let query = supabase
+    .from("admission_config")
+    .select("*")
+    .eq("school_id", schoolId);
+  query = sessionId ? query.eq("session_id", sessionId) : query.is("session_id", null);
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+// A plain .upsert() can't be trusted here: the unique(school_id, session_id)
+// constraint never fires for two NULL session_ids (standard SQL — NULL is
+// never equal to NULL), so the school-wide default row could silently
+// duplicate. Check-then-write instead.
+export const saveAdmissionConfig = async ({ schoolId, sessionId, ...fields }) => {
+  const existing = await fetchAdmissionConfigRow({ schoolId, sessionId });
+  const row = { ...fields, school_id: schoolId, session_id: sessionId || null };
+  if (existing) {
+    const { data, error } = await supabase
+      .from("admission_config")
+      .update(row)
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    return data;
+  }
+  const { data, error } = await supabase
+    .from("admission_config")
+    .insert(row)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const createAdmissionProgramme = async ({ schoolId, sessionId, ...fields }) => {
+  const { data, error } = await supabase
+    .from("admission_programmes")
+    .insert({ school_id: schoolId, session_id: sessionId, ...fields })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const updateAdmissionProgramme = async ({ id, ...fields }) => {
+  const { data, error } = await supabase
+    .from("admission_programmes")
+    .update(fields)
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteAdmissionProgramme = async (id) => {
+  const { error } = await supabase.from("admission_programmes").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const upsertDocumentRequirement = async (row) => {
+  const { data, error } = await supabase
+    .from("document_requirements")
+    .upsert(row)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteDocumentRequirement = async (id) => {
+  const { error } = await supabase.from("document_requirements").delete().eq("id", id);
+  if (error) throw error;
+};
+
 // The applicant's own account for this school. One row per (school, user).
 export const createApplicantAccount = async ({
   schoolId,
@@ -1746,6 +1833,20 @@ export const createApplicantAccount = async ({
     date_of_birth_in: dateOfBirth || null,
     nationality_in: nationality || null,
   });
+  if (error) throw error;
+  return data;
+};
+
+// Staff-facing: look up an applicant's account by id — RLS (can_do_admissions)
+// is what makes this safe for someone other than the applicant themselves.
+// Used to enrol an accounted applicant straight into their existing login
+// rather than colliding with it by trying to create a second one.
+export const fetchApplicantAccount = async (id) => {
+  const { data, error } = await supabase
+    .from("applicant_accounts")
+    .select("id, user_id, email, first_name, surname")
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw error;
   return data;
 };
@@ -1959,6 +2060,49 @@ export const fetchApplicationWorkspace = async (applicationId) => {
   return data;
 };
 
+/* clearance & original-document verification (staff, Phase 4) */
+
+export const prepareClearanceItems = async (applicationId) => {
+  const { data, error } = await supabase.rpc(
+    "create_application_clearance_items",
+    { target_application: applicationId }
+  );
+  if (error) throw error;
+  return data || [];
+};
+
+export const setClearanceStatus = async ({ checklistId, status, note }) => {
+  const { data, error } = await supabase.rpc("set_clearance_status", {
+    target_checklist: checklistId,
+    new_status: status,
+    note_in: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const recordOriginalVerification = async ({ applicationId, documentKind, remarks }) => {
+  const { data, error } = await supabase.rpc("record_original_verification", {
+    target_application: applicationId,
+    document_kind_in: documentKind,
+    remarks_in: remarks || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// The applicant's own read of their clearance progress — RLS
+// (is_applicant_for) is what makes this safe, same precedent as
+// fetchMyOffer reading admission_offers directly.
+export const fetchMyClearance = async (applicationId) => {
+  const { data, error } = await supabase
+    .from("clearance_checklists")
+    .select("id, status, decided_at, decision_note, department:clearance_departments(name, position)")
+    .eq("application_id", applicationId);
+  if (error) throw error;
+  return (data || []).sort((a, b) => (a.department?.position || 0) - (b.department?.position || 0));
+};
+
 /* screening */
 
 export const fetchScreeningRequirements = async ({ schoolId, sessionId }) => {
@@ -1989,6 +2133,70 @@ export const deleteScreeningRequirement = async (id) => {
     .delete()
     .eq("id", id);
   if (error) throw error;
+};
+
+/* clearance departments (admin config, Phase 4) */
+
+export const fetchClearanceDepartments = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("clearance_departments")
+    .select("id, school_id, name, position, is_active, created_at")
+    .eq("school_id", schoolId)
+    .order("position");
+  if (error) throw error;
+  return data || [];
+};
+
+export const createClearanceDepartment = async ({ schoolId, name, position }) => {
+  const { data, error } = await supabase
+    .from("clearance_departments")
+    .insert({ school_id: schoolId, name, position })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const renameClearanceDepartment = async ({ id, name }) => {
+  const { data, error } = await supabase
+    .from("clearance_departments")
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const setClearanceDepartmentActive = async ({ id, isActive }) => {
+  const { data, error } = await supabase
+    .from("clearance_departments")
+    .update({ is_active: isActive, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteClearanceDepartment = async (id) => {
+  const { error } = await supabase
+    .from("clearance_departments")
+    .delete()
+    .eq("id", id);
+  if (error) throw error;
+};
+
+// How many applications already carry a checklist item against this
+// department — shown before delete, same "this isn't empty" warning
+// LevelsPanel gives before deleting a class level.
+export const countClearanceChecklistItems = async (departmentId) => {
+  const { count, error } = await supabase
+    .from("clearance_checklists")
+    .select("id", { count: "exact", head: true })
+    .eq("department_id", departmentId);
+  if (error) throw error;
+  return count || 0;
 };
 
 export const prepareScreeningItems = async (applicationId) => {

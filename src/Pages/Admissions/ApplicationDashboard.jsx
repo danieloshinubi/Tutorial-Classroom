@@ -15,6 +15,7 @@ import {
   fetchMyOffer,
   acceptOffer,
   declineOffer,
+  fetchMyClearance,
 } from "../../lib/api";
 import {
   Page,
@@ -29,11 +30,10 @@ import {
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 
 // Humanises applications.status for this screen specifically. api.js's own
-// STATUS_LABEL/STATUS_TONE cover only the legacy staff flow's subset of the
-// enum (see ApplicationDetail.jsx) — an accounted application can sit in
-// draft/in_progress/waitlisted/deferred/under_review too, none of which are
-// in that map, and a blank status word reads as a bug to an applicant
-// watching their own record.
+// STATUS_LABEL/STATUS_TONE cover only a subset of the enum — an accounted
+// application can sit in draft/in_progress/waitlisted/deferred/under_review
+// too, none of which are in that map, and a blank status word reads as a bug
+// to an applicant watching their own record.
 const STATUS_META = {
   draft: ["Draft", "muted"],
   in_progress: ["In progress", "muted"],
@@ -180,6 +180,7 @@ const ApplicationDashboard = () => {
   const [invoice, setInvoice] = useState(null);
   const [offer, setOffer] = useState(null);
   const [acceptanceInvoice, setAcceptanceInvoice] = useState(null);
+  const [clearance, setClearance] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -219,6 +220,11 @@ const ApplicationDashboard = () => {
         off?.status === "accepted"
           ? await fetchMyApplicationInvoice(app.id, "acceptance_fee").catch(() => null)
           : null
+      );
+      setClearance(
+        off?.status === "accepted"
+          ? await fetchMyClearance(app.id).catch(() => [])
+          : []
       );
     } catch (err) {
       setError(err.message || "Could not load your application.");
@@ -306,14 +312,16 @@ const ApplicationDashboard = () => {
     try {
       const app = await acceptOffer(offer.id);
       setApplication(app);
-      const [workflow, off, acc] = await Promise.all([
+      const [workflow, off, acc, clr] = await Promise.all([
         fetchApplicationWorkflowSteps(app.id).catch(() => []),
         fetchMyOffer(app.id).catch(() => null),
         fetchMyApplicationInvoice(app.id, "acceptance_fee").catch(() => null),
+        fetchMyClearance(app.id).catch(() => []),
       ]);
       setSteps(workflow);
       setOffer(off);
       setAcceptanceInvoice(acc);
+      setClearance(clr);
     } catch (err) {
       setError(err.message || "Could not accept this offer.");
     } finally {
@@ -573,6 +581,33 @@ const ApplicationDashboard = () => {
                 )}
               </div>
             ) : null}
+          </Card>
+        ) : null}
+
+        {offer?.status === "accepted" && clearance.length > 0 ? (
+          <Card style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>{"Clearance"}</h3>
+            <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0 }}>
+              {"Departments the school checks before you register. This updates as each one signs off — no action is needed from you here."}
+            </p>
+            <ul className="doc-list">
+              {clearance.map((item) => (
+                <li key={item.id} className="doc-row">
+                  <div>
+                    <strong>{item.department?.name || "Department"}</strong>
+                    {item.decision_note && item.status === "rejected" ? (
+                      <div className="doc-note">{item.decision_note}</div>
+                    ) : null}
+                  </div>
+                  <Badge tone={
+                    item.status === "cleared" ? "success" :
+                    item.status === "rejected" ? "danger" :
+                    item.status === "waived" ? "muted" :
+                    item.status === "in_progress" ? "brand" : "warn"
+                  }>{item.status === "pending" ? "not started" : item.status}</Badge>
+                </li>
+              ))}
+            </ul>
           </Card>
         ) : null}
 

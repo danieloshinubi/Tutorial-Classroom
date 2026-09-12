@@ -5,6 +5,7 @@ import { useSchool } from "../../context/SchoolContext";
 import { useAuth } from "../../context/AuthContext";
 import {
   fetchApplicationWorkspace,
+  fetchApplication,
   prepareScreeningItems,
   setScreeningItemStatus,
   verifyDocument,
@@ -19,6 +20,13 @@ import {
   verifyApplicationPayment,
   verifyAcceptancePayment,
   fetchSchoolMembers,
+  prepareClearanceItems,
+  setClearanceStatus,
+  recordOriginalVerification,
+  enrolApplicant,
+  addSchoolUser,
+  fetchClasses,
+  fetchApplicantAccount,
 } from "../../lib/api";
 import {
   Page,
@@ -31,6 +39,7 @@ import {
   formatDate,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+import AdmissionLetter from "./AdmissionLetter";
 
 // Phase 2 staff workspace. Reads application_workspace() in one call and
 // exposes each domain (screening, documents, review, interview, decision)
@@ -38,26 +47,31 @@ import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/Li
 // for that domain; the client never touches state columns directly.
 const AdmissionsWorkspace = () => {
   const { applicationId } = useParams();
-  const { schoolId, role, isAdmin, isPrincipal } = useSchool();
+  const { schoolId, role, isAdmin, isPrincipal, labelFor } = useSchool();
   const { user } = useAuth();
 
   const [workspace, setWorkspace] = useState(null);
   const [members, setMembers] = useState([]);
+  const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [letterApp, setLetterApp] = useState(null);
+  const [letterLoading, setLetterLoading] = useState(false);
   const live = useLiveApplicationUpdates(applicationId);
 
   const load = useCallback(async () => {
     if (!applicationId) return;
     setLoading(true);
     try {
-      const [ws, mems] = await Promise.all([
+      const [ws, mems, cls] = await Promise.all([
         fetchApplicationWorkspace(applicationId),
         fetchSchoolMembers(schoolId).catch(() => []),
+        fetchClasses(schoolId).catch(() => []),
       ]);
       setWorkspace(ws);
       setMembers(mems);
+      setClasses(cls);
     } catch (err) {
       setError(err.message || "Could not load the workspace.");
     } finally {
@@ -68,6 +82,19 @@ const AdmissionsWorkspace = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  const openLetter = async () => {
+    setLetterLoading(true);
+    setError("");
+    try {
+      const row = await fetchApplication(applicationId);
+      setLetterApp(row);
+    } catch (err) {
+      setError(err.message || "Could not open the admission letter.");
+    } finally {
+      setLetterLoading(false);
+    }
+  };
 
   const run = async (fn, label) => {
     setBusy(true);
@@ -107,6 +134,16 @@ const AdmissionsWorkspace = () => {
     );
   }
 
+  if (letterApp) {
+    return (
+      <AdmissionLetter
+        application={letterApp}
+        className={classes.find((c) => c.id === letterApp.class_id)?.name}
+        onClose={() => setLetterApp(null)}
+      />
+    );
+  }
+
   const app = workspace?.application;
   const screening = workspace?.screening || [];
   const documents = workspace?.documents || [];
@@ -117,6 +154,9 @@ const AdmissionsWorkspace = () => {
   const offer = workspace?.offer || null;
   const applicationInvoice = workspace?.application_invoice || null;
   const acceptanceInvoice = workspace?.acceptance_invoice || null;
+  const clearanceDepartments = workspace?.clearance_departments || [];
+  const clearance = workspace?.clearance || [];
+  const originalVerifications = workspace?.original_verifications || [];
 
   const canFinalise = isAdmin || isPrincipal || role === "owner";
   const activeReview = reviews.find((r) => !r.completed_at);
@@ -135,6 +175,13 @@ const AdmissionsWorkspace = () => {
       <Page
         title={`${app.reference} — ${app.first_name} ${app.surname}`}
         subtitle="Admissions workspace"
+        action={
+          ["offered", "accepted", "enrolled"].includes(app.status) ? (
+            <Button variant="secondary" disabled={letterLoading} onClick={openLetter}>
+              {letterLoading ? "Opening..." : "Admission letter"}
+            </Button>
+          ) : null
+        }
       >
         <LiveUpdateBanner count={live.count} onReload={() => { live.reset(); load(); }} />
         <Notice tone="error">{error}</Notice>
@@ -470,6 +517,140 @@ const AdmissionsWorkspace = () => {
           </Card>
         ) : null}
 
+        {/* Clearance — opens once the offer is accepted (and the acceptance
+            fee, if the school charges one, is verified). Before that point
+            it has nothing to show, same as the acceptance-fee panel above. */}
+        {app.offer_state === "accepted" ? (
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0 }}>{"Clearance"}</h3>
+              <Badge tone={
+                app.clearance_state === "cleared" ? "success" :
+                app.clearance_state === "rejected" ? "danger" :
+                app.clearance_state === "not_started" ? "muted" : "warn"
+              }>{app.clearance_state}</Badge>
+            </div>
+
+            {clearanceDepartments.length === 0 && app.clearance_state === "cleared" ? (
+              <Notice tone="muted">
+                {"No clearance departments were configured, so this passed automatically."}
+              </Notice>
+            ) : clearanceDepartments.length === 0 ? (
+              <>
+                <Notice tone="muted">
+                  {"No clearance departments are configured for this school — this will pass automatically. Add departments under School administration → Clearance departments first if you want a real checklist here."}
+                </Notice>
+                <Button size="sm" disabled={busy}
+                  onClick={() => run(() => prepareClearanceItems(app.id), "resolve clearance")}>
+                  {"Resolve clearance"}
+                </Button>
+              </>
+            ) : clearance.length === 0 ? (
+              <>
+                <Empty>{"Clearance has not been opened for this application yet."}</Empty>
+                <Button size="sm" disabled={busy}
+                  onClick={() => run(() => prepareClearanceItems(app.id), "open clearance")}>
+                  {"Open clearance checklist"}
+                </Button>
+              </>
+            ) : (
+              <ul className="screen-list">
+                {clearance.map((item) => (
+                  <li key={item.id} className="screen-row">
+                    <div>
+                      <strong>{item.department_name}</strong>
+                      {item.decision_note ? <div className="doc-note">{item.decision_note}</div> : null}
+                    </div>
+                    <div className="doc-actions">
+                      <Badge tone={
+                        item.status === "cleared" ? "success" :
+                        item.status === "rejected" ? "danger" :
+                        item.status === "waived" ? "muted" :
+                        item.status === "in_progress" ? "brand" : "warn"
+                      }>{item.status}</Badge>
+                      <Button size="sm" variant="secondary" disabled={busy}
+                        onClick={() => run(() => setClearanceStatus({ checklistId: item.id, status: "in_progress" }), "start")}>
+                        {"In progress"}
+                      </Button>
+                      <Button size="sm" variant="secondary" disabled={busy}
+                        onClick={() => run(() => setClearanceStatus({ checklistId: item.id, status: "cleared" }), "clear")}>
+                        {"Clear"}
+                      </Button>
+                      <Button size="sm" variant="secondary" disabled={busy}
+                        onClick={() => {
+                          const note = window.prompt("Why is this being rejected?");
+                          if (note) run(() => setClearanceStatus({ checklistId: item.id, status: "rejected", note }), "reject");
+                        }}>
+                        {"Reject"}
+                      </Button>
+                      {(isAdmin || isPrincipal) ? (
+                        <Button size="sm" variant="ghost" disabled={busy}
+                          onClick={() => {
+                            const note = window.prompt("Waiver reason?");
+                            if (note) run(() => setClearanceStatus({ checklistId: item.id, status: "waived", note }), "waive");
+                          }}>
+                          {"Waive"}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div style={{ borderTop: "1px solid var(--line)", marginTop: 14, paddingTop: 14 }}>
+              <h4 style={{ marginTop: 0, marginBottom: 6 }}>{"Original documents seen in person"}</h4>
+              <OriginalVerificationForm applicationId={app.id} disabled={busy}
+                onDone={load} onError={setError} />
+              {originalVerifications.length === 0 ? (
+                <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 8 }}>
+                  {"Nothing recorded yet."}
+                </p>
+              ) : (
+                <ul className="doc-list" style={{ marginTop: 8 }}>
+                  {originalVerifications.map((v) => (
+                    <li key={v.id} className="doc-row">
+                      <div>
+                        <strong>{v.document_kind}</strong>
+                        {v.remarks ? <div className="doc-note">{v.remarks}</div> : null}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
+                        {formatDate(v.seen_at, { withTime: true })}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </Card>
+        ) : null}
+
+        {/* Enrol — the last step: turns an accepted, cleared applicant into
+            an actual pupil account and (optionally) a class. Soft-gated on
+            clearance in the UI, not the database — enrol_applicant() itself
+            doesn't check clearance_state, so a school with an urgent reason
+            to enrol before every department signs off still can. */}
+        {app.status === "accepted" ? (
+          <Card style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>{"Enrol"}</h3>
+            {app.clearance_state !== "cleared" && clearanceDepartments.length > 0 ? (
+              <Notice tone="warn">
+                {"Clearance is not complete yet — enrolling now skips that check. Wait for every department to clear unless there's a reason not to."}
+              </Notice>
+            ) : null}
+            <EnrolForm
+              application={app}
+              members={members}
+              classes={classes}
+              labelFor={labelFor}
+              schoolId={schoolId}
+              disabled={busy}
+              onDone={load}
+              onError={setError}
+            />
+          </Card>
+        ) : null}
+
         {/* Timeline */}
         <Card>
           <h3 style={{ marginTop: 0 }}>{"Application timeline"}</h3>
@@ -655,6 +836,216 @@ const InterviewForm = ({ applicationId, members, disabled, onDone, onError }) =>
         </select>
       </Field>
       <Button type="submit" disabled={disabled}>{"Schedule interview"}</Button>
+    </form>
+  );
+};
+
+const OriginalVerificationForm = ({ applicationId, disabled, onDone, onError }) => {
+  const [documentKind, setDocumentKind] = useState("");
+  const [remarks, setRemarks] = useState("");
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!documentKind.trim()) return onError("Say which document was seen.");
+    try {
+      await recordOriginalVerification({
+        applicationId, documentKind: documentKind.trim(), remarks: remarks.trim() || null,
+      });
+      setDocumentKind(""); setRemarks("");
+      onDone();
+    } catch (err) {
+      onError(err.message || "Could not record that.");
+    }
+  };
+  return (
+    <form onSubmit={submit} className="btn-row" style={{ flexWrap: "wrap", alignItems: "flex-end" }}>
+      <Field label="Document" hint="e.g. WAEC certificate, birth certificate">
+        <input className="input" style={{ maxWidth: 220 }} value={documentKind}
+          onChange={(e) => setDocumentKind(e.target.value)} />
+      </Field>
+      <Field label="Remarks (optional)">
+        <input className="input" style={{ maxWidth: 260 }} value={remarks}
+          onChange={(e) => setRemarks(e.target.value)} />
+      </Field>
+      <Button type="submit" size="sm" disabled={disabled}>{"Record sighting"}</Button>
+    </form>
+  );
+};
+
+const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled, onDone, onError }) => {
+  // An accounted applicant already has a real login — the one they applied
+  // with. Enrolling them should promote that same account, not collide with
+  // it by trying to create a second one under the same email (which is
+  // exactly what addSchoolUser below would do). An anonymous /Apply
+  // submission has no applicant_id at all, so it still needs the
+  // create/reuse choice further down.
+  const [ownAccount, setOwnAccount] = useState(undefined); // undefined = still loading
+  useEffect(() => {
+    let active = true;
+    if (!application.applicant_id) {
+      setOwnAccount(null);
+      return;
+    }
+    fetchApplicantAccount(application.applicant_id)
+      .then((row) => { if (active) setOwnAccount(row); })
+      .catch(() => { if (active) setOwnAccount(null); });
+    return () => { active = false; };
+  }, [application.applicant_id]);
+
+  const students = members.filter((m) => m.role === "student");
+  const [mode, setMode] = useState("create");
+  const [existingStudent, setExistingStudent] = useState("");
+  const [classId, setClassId] = useState(application.class_id || "");
+  const [studentEmail, setStudentEmail] = useState(application.guardian_email || "");
+  const [busy, setBusy] = useState(false);
+  const [issued, setIssued] = useState(null);
+
+  const enrolAs = async (studentId) => {
+    setBusy(true);
+    onError("");
+    try {
+      await enrolApplicant({ id: application.id, studentId, classId: classId || null });
+      onDone();
+    } catch (err) {
+      onError(err.message || "Could not enrol that applicant.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitOwnAccount = (e) => {
+    e.preventDefault();
+    enrolAs(ownAccount.user_id);
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true);
+    onError("");
+    try {
+      let studentId = existingStudent;
+
+      // Creating the account here rather than sending the officer to
+      // another screen: enrolling and having a login are the same moment.
+      if (mode === "create") {
+        if (!studentEmail.trim()) {
+          onError("An email address is needed for the pupil's account.");
+          setBusy(false);
+          return;
+        }
+        const created = await addSchoolUser({
+          schoolId,
+          email: studentEmail,
+          firstName: application.first_name,
+          surname: application.surname,
+          role: "student",
+        });
+        studentId = created.user_id;
+        if (created.password) {
+          setIssued({ email: created.email, password: created.password });
+        }
+      }
+
+      if (!studentId) {
+        onError("Choose an existing pupil, or create a new account.");
+        setBusy(false);
+        return;
+      }
+
+      await enrolApplicant({ id: application.id, studentId, classId: classId || null });
+      onDone();
+    } catch (err) {
+      onError(err.message || "Could not enrol that applicant.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (ownAccount === undefined) {
+    return <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>{"Loading..."}</p>;
+  }
+
+  if (ownAccount) {
+    return (
+      <form onSubmit={submitOwnAccount}>
+        <p style={{ fontSize: 13.5, color: "var(--ink-3)", marginTop: 0 }}>
+          {`This applicant already signed in as ${ownAccount.email} to apply — enrolling adds that same account as a pupil here, no new login needed.`}
+        </p>
+        <Field label="Class" hint={classes.length ? "Optional — you can place them later." : "No classes yet."}>
+          <select className="select" value={classId} onChange={(e) => setClassId(e.target.value)}>
+            <option value="">{"Decide later"}</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>{`${c.name} — ${labelFor(c.level_year)}`}</option>
+            ))}
+          </select>
+        </Field>
+        <Button type="submit" disabled={disabled || busy}>
+          {busy ? "Enrolling..." : "Enrol this pupil"}
+        </Button>
+      </form>
+    );
+  }
+
+  if (issued) {
+    return (
+      <div>
+        <p style={{ fontSize: 14 }}>{"The pupil's sign-in details — shown once. They will be asked to choose their own password."}</p>
+        <div style={{ fontFamily: "monospace", fontSize: 15 }}>
+          <div>{issued.email}</div>
+          <div>{issued.password}</div>
+        </div>
+        <div className="btn-row" style={{ marginTop: 12 }}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              navigator.clipboard?.writeText(`${issued.email}  ${issued.password}`).catch(() => {})
+            }
+          >
+            {"Copy"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <p style={{ fontSize: 13.5, color: "var(--ink-3)", marginTop: 0 }}>
+        {"This creates the pupil's place: a school account and, if you pick one, a class."}
+      </p>
+      <Field label="Account">
+        <select className="select" value={mode} onChange={(e) => setMode(e.target.value)}>
+          <option value="create">{"Create a new pupil account"}</option>
+          <option value="existing">{"Use an existing pupil account"}</option>
+        </select>
+      </Field>
+      {mode === "create" ? (
+        <Field label="Email for the pupil" hint="Defaults to whatever's on the application. Change it if the pupil has their own.">
+          <input type="email" className="input" value={studentEmail}
+            onChange={(e) => setStudentEmail(e.target.value)} />
+        </Field>
+      ) : (
+        <Field label="Pupil">
+          <select className="select" value={existingStudent}
+            onChange={(e) => setExistingStudent(e.target.value)}>
+            <option value="">{"Choose"}</option>
+            {students.map((m) => (
+              <option key={m.user_id} value={m.user_id}>{`${m.email}`}</option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <Field label="Class" hint={classes.length ? "Optional — you can place them later." : "No classes yet."}>
+        <select className="select" value={classId} onChange={(e) => setClassId(e.target.value)}>
+          <option value="">{"Decide later"}</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>{`${c.name} — ${labelFor(c.level_year)}`}</option>
+          ))}
+        </select>
+      </Field>
+      <Button type="submit" disabled={disabled || busy}>
+        {busy ? "Enrolling..." : "Enrol this pupil"}
+      </Button>
     </form>
   );
 };
