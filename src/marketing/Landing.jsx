@@ -200,6 +200,99 @@ const CAPABILITIES = [
   },
 ];
 
+// Placeholder figures — swap these for the school's real numbers whenever
+// they're settled; the point of building this section now is the layout
+// and the copy pattern, not these specific naira amounts.
+const PLANS = [
+  {
+    key: "starter",
+    name: "Starter",
+    tagline: "For a single school finding its feet online.",
+    price: "₦25,000",
+    period: "/month",
+    note: "Billed monthly · up to 200 students",
+    features: [
+      "Admissions, from application to enrolment",
+      "Fees — invoices, online and manual payment",
+      "Report cards and result sheets",
+      "Up to 3 staff accounts",
+    ],
+    cta: { label: "Start free trial", to: "/Start-Trial" },
+  },
+  {
+    key: "growth",
+    name: "Growth",
+    tagline: "For a school running its whole year on one platform.",
+    price: "₦65,000",
+    period: "/month",
+    note: "Billed monthly · up to 800 students",
+    features: [
+      "Everything in Starter",
+      "Exams — auto-graded, with proctoring",
+      "Configurable clearance departments",
+      "Full audit trail across every role",
+      "Unlimited staff accounts",
+    ],
+    cta: { label: "Start free trial", to: "/Start-Trial" },
+    badge: "Most popular",
+    highlighted: true,
+  },
+  {
+    key: "enterprise",
+    name: "Enterprise",
+    tagline: "For a group of schools, or one that has outgrown a plan.",
+    price: "Custom",
+    period: "",
+    note: "Volume pricing across multiple schools",
+    features: [
+      "Everything in Growth",
+      "Unlimited students",
+      "Dedicated onboarding",
+      "Priority support",
+    ],
+    cta: { label: "Book a demo", href: "mailto:hello@schoolivio.com" },
+  },
+];
+
+const Pricing = () => (
+  <section className="mkt-section" id="pricing">
+    <div className="mkt-wrap">
+      <div className="mkt-eyebrow">{"PRICING"}</div>
+      <h2 className="mkt-h2">{"Simple pricing that grows with your school"}</h2>
+      <p className="mkt-lede">
+        {"Every plan includes the full platform — admissions, fees, exams, results and the audit trail behind them. Pricing scales with how many students you run it for, not which features you're allowed to use."}
+      </p>
+      <div className="mkt-pricing-grid">
+        {PLANS.map((p) => (
+          <div className={`mkt-pricing-card${p.highlighted ? " highlighted" : ""}`} key={p.key}>
+            {p.badge ? <span className="mkt-pricing-badge">{p.badge}</span> : null}
+            <div className="mkt-pricing-name">{p.name}</div>
+            <p className="mkt-pricing-tagline">{p.tagline}</p>
+            <div className="mkt-pricing-price">
+              {p.price}
+              {p.period ? <span>{p.period}</span> : null}
+            </div>
+            <p className="mkt-pricing-note">{p.note}</p>
+            <ul className="mkt-pricing-features">
+              {p.features.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+            {p.cta.to ? (
+              <Link to={p.cta.to} className={`mkt-btn ${p.highlighted ? "mkt-btn-primary" : "mkt-btn-ghost-light"} mkt-btn-block`}>
+                {p.cta.label}
+              </Link>
+            ) : (
+              <a href={p.cta.href} className={`mkt-btn ${p.highlighted ? "mkt-btn-primary" : "mkt-btn-ghost-light"} mkt-btn-block`}>
+                {p.cta.label}
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="mkt-pricing-fine">{"Illustrative pricing — tell us about your school and we'll confirm what's right for you."}</p>
+    </div>
+  </section>
+);
+
 const CONFIG_TOGGLES = [
   ["Charge an application fee", true],
   ["Require an interview", false],
@@ -224,44 +317,73 @@ const Nav = () => {
   };
 
   return (
-    <header className="mkt-nav">
-      <div className="mkt-nav-row">
+    <div className="mkt-nav-wrap">
+      <header className="mkt-nav">
         <Link to="/" className="mkt-nav-logo">
-          <Mark size={26} />
+          <Mark size={22} />
           {"Schoolivio"}
         </Link>
+
         <nav className="mkt-nav-links">
-          <a href="#product">{"Product"}</a>
+          <div className="mkt-nav-dd">
+            <button type="button" className="mkt-nav-dd-trigger">
+              {"Product"}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="mkt-nav-dd-chevron">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            <div className="mkt-nav-dd-panel">
+              <div className="mkt-nav-dd-card">
+                <a href="#product" className="mkt-nav-dd-item">
+                  <span className="mkt-nav-dd-icon a">{"🗂️"}</span>
+                  <span>
+                    <span className="mkt-nav-dd-title">{"Features"}</span>
+                    <span className="mkt-nav-dd-desc">{"Everyday tools your school uses"}</span>
+                  </span>
+                </a>
+                <a href="#capabilities" className="mkt-nav-dd-item">
+                  <span className="mkt-nav-dd-icon b">{"🏫"}</span>
+                  <span>
+                    <span className="mkt-nav-dd-title">{"Capabilities"}</span>
+                    <span className="mkt-nav-dd-desc">{"What makes the platform different"}</span>
+                  </span>
+                </a>
+              </div>
+            </div>
+          </div>
           <a href="#configure">{"Configure it your way"}</a>
           <a href="#pricing">{"Pricing"}</a>
         </nav>
+
         <span className="mkt-nav-spacer" />
+
         <span className="mkt-nav-actions">
           {loginOpen ? (
-            <form onSubmit={goToLogin} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <form onSubmit={goToLogin} className="mkt-nav-slug-form">
               <input
                 autoFocus
                 placeholder="your-school"
                 value={slug}
                 onChange={(e) => setSlug(e.target.value)}
-                style={{
-                  padding: "8px 10px", borderRadius: 8, border: "1px solid rgba(255,255,255,.25)",
-                  background: "rgba(255,255,255,.08)", color: "#fff", fontSize: 13.5, width: 140,
-                }}
+                className="mkt-nav-slug-input"
               />
-              <span style={{ color: "rgba(255,255,255,.5)", fontSize: 12.5 }}>{".schoolivio.com"}</span>
-              <button type="submit" className="mkt-btn mkt-btn-ghost-dark mkt-btn-sm">{"Go"}</button>
+              <span className="mkt-nav-slug-suffix">{".schoolivio.com"}</span>
+              <button type="submit" className="mkt-btn mkt-btn-ghost-light mkt-btn-sm">{"Go"}</button>
             </form>
           ) : (
-            <a href="#login" className="mkt-btn mkt-btn-ghost-dark mkt-btn-sm"
+            <a href="#login" className="mkt-nav-textlink"
               onClick={(e) => { e.preventDefault(); setLoginOpen(true); }}>
               {"Log in"}
+              <svg viewBox="0 0 100 14" preserveAspectRatio="none" aria-hidden="true" className="mkt-nav-underline">
+                <path d="M2 9 C 20 3, 35 12, 50 7 C 65 2, 80 11, 98 5" fill="none" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
             </a>
           )}
-          <Link to="/Start-Trial" className="mkt-btn mkt-btn-primary mkt-btn-sm">{"Start free trial"}</Link>
+          <Link to="/Start-Trial" className="mkt-nav-cta">{"Start free trial"}</Link>
         </span>
-      </div>
-    </header>
+      </header>
+    </div>
   );
 };
 
@@ -397,7 +519,7 @@ const Capabilities = () => {
   const cap = CAPABILITIES[active];
 
   return (
-    <section className="mkt-band">
+    <section className="mkt-band" id="capabilities">
       <div className="mkt-wrap">
         <div className="mkt-eyebrow">{"CAPABILITIES"}</div>
         <h2 className="mkt-h2">{"Built for the way schools actually run"}</h2>
@@ -436,7 +558,14 @@ const Capabilities = () => {
   );
 };
 
-const ConfigureSection = () => (
+const ConfigureSection = () => {
+  // Just a mockup, not a real settings form — clicking a toggle here never
+  // saves anything anywhere. It exists so the switches feel real to poke at
+  // rather than looking like a screenshot glued into the page.
+  const [toggles, setToggles] = useState(() => Object.fromEntries(CONFIG_TOGGLES));
+  const flip = (label) => setToggles((current) => ({ ...current, [label]: !current[label] }));
+
+  return (
   <section className="mkt-section" id="configure">
     <div className="mkt-wrap">
       <div className="mkt-eyebrow">{"NO CODE, NO DEVELOPER"}</div>
@@ -450,20 +579,31 @@ const ConfigureSection = () => (
             {"Admissions settings"}
           </div>
           <div style={{ padding: "6px 20px 16px" }}>
-            {CONFIG_TOGGLES.map(([label, on]) => (
+            {CONFIG_TOGGLES.map(([label]) => {
+              const on = toggles[label];
+              return (
               <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: "1px solid #f2eefc", fontSize: 13.5 }}>
                 <span>{label}</span>
-                <span style={{
-                  width: 34, height: 19, borderRadius: 999, position: "relative", flex: "none",
-                  background: on ? "#7c4fe0" : "#e4dffc",
-                }}>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={on}
+                  aria-label={label}
+                  onClick={() => flip(label)}
+                  style={{
+                    width: 34, height: 19, borderRadius: 999, position: "relative", flex: "none",
+                    background: on ? "#7c4fe0" : "#e4dffc", border: "none", padding: 0, cursor: "pointer",
+                    transition: "background .15s",
+                  }}
+                >
                   <span style={{
                     position: "absolute", top: 2, width: 15, height: 15, borderRadius: "50%", background: "#fff",
                     left: on ? 17 : 2, transition: "left .15s",
                   }} />
-                </span>
+                </button>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
         <div>
@@ -477,10 +617,11 @@ const ConfigureSection = () => (
       </div>
     </div>
   </section>
-);
+  );
+};
 
 const FinalCta = () => (
-  <section className="mkt-final" id="pricing">
+  <section className="mkt-final">
     <div className="mkt-wrap">
       <div className="mkt-eyebrow" style={{ color: "var(--mkt-brand-2)" }}>{"READY WHEN YOU ARE"}</div>
       <h2>{"Give your school a calmer place to run its year"}</h2>
@@ -498,16 +639,31 @@ const FinalCta = () => (
 
 const Footer = () => (
   <footer className="mkt-footer">
-    <div className="mkt-wrap">
-      <div className="mkt-footer-row">
+    <div className="mkt-wrap mkt-footer-top">
+      <div className="mkt-footer-brand">
         <span className="mkt-footer-logo"><Mark size={22} />{"Schoolivio"}</span>
-        <nav className="mkt-footer-links">
-          <a href="#product">{"Product"}</a>
-          <a href="#configure">{"Configure"}</a>
-          <a href="mailto:hello@schoolivio.com">{"Contact"}</a>
-        </nav>
+        <p className="mkt-footer-tagline">
+          {"Admissions, fees, exams and results — one calm workspace for the whole school year."}
+        </p>
       </div>
-      <div className="mkt-footer-fine">{`© ${new Date().getFullYear()} Schoolivio. All rights reserved.`}</div>
+      <div className="mkt-footer-cols">
+        <div className="mkt-footer-col">
+          <p className="mkt-footer-col-label">{"Product"}</p>
+          <a href="#product">{"Features"}</a>
+          <a href="#capabilities">{"Capabilities"}</a>
+          <a href="#configure">{"Configure it your way"}</a>
+          <a href="#pricing">{"Pricing"}</a>
+        </div>
+        <div className="mkt-footer-col">
+          <p className="mkt-footer-col-label">{"Company"}</p>
+          <a href="mailto:hello@schoolivio.com">{"Contact"}</a>
+          <Link to="/Start-Trial">{"Start free trial"}</Link>
+        </div>
+      </div>
+    </div>
+    <div className="mkt-wrap mkt-footer-bottom">
+      <span>{`© ${new Date().getFullYear()} Schoolivio. All rights reserved.`}</span>
+      <span>{"Built for schools that want one calm place to run their year."}</span>
     </div>
   </footer>
 );
@@ -519,6 +675,7 @@ const Landing = () => (
     <FeatureGrid />
     <Capabilities />
     <ConfigureSection />
+    <Pricing />
     <FinalCta />
     <Footer />
   </div>

@@ -29,23 +29,102 @@
 
 .mkt-wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
 
-/* ---------------------------------------------------------------- nav --- */
+/* ---------------------------------------------------------------- nav ---
+   A floating pill, not an edge-to-edge bar — the same shape and hover-
+   dropdown language topiadesk.com uses for its own header, rebuilt in
+   Schoolivio's own purple rather than their orange. Stays white/blurred
+   even over the dark hero on purpose: that's what makes it read as a
+   floating object rather than part of the hero itself. */
+/* Fixed, not sticky — sticky still reserves its own box in normal flow,
+   which pushes the hero down and leaves the page's own (light) background
+   showing in the gaps around the pill instead of the hero's dark gradient
+   continuing underneath it. Fixed removes it from flow entirely, so the
+   hero can start at the true top of the page and the pill genuinely floats
+   over it; .mkt-hero's top padding is widened to compensate for the space
+   this no longer reserves. */
+.mkt-nav-wrap {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+  padding: 14px 16px 0;
+}
 .mkt-nav {
-  position: sticky; top: 0; z-index: 40;
-  background: rgba(14, 11, 26, 0.72);
+  display: flex; align-items: center;
+  max-width: 920px; height: 62px; margin: 0 auto;
+  padding: 0 10px 0 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.97);
+  border: 1px solid rgba(15, 12, 30, 0.08);
+  box-shadow: 0 14px 36px -10px rgba(10, 6, 26, 0.3), 0 2px 10px rgba(10, 6, 26, 0.06);
   backdrop-filter: blur(14px);
-  border-bottom: 1px solid var(--mkt-line);
+  -webkit-backdrop-filter: blur(14px);
 }
-.mkt-nav-row {
-  display: flex; align-items: center; gap: 28px;
-  padding: 16px 28px; max-width: 1160px; margin: 0 auto;
+.mkt-nav-logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 16.5px; color: #16122a; letter-spacing: -0.01em; flex: none; }
+
+.mkt-nav-links { display: flex; align-items: center; gap: 26px; margin-left: 32px; }
+@media (max-width: 680px) { .mkt-nav-links { display: none; } }
+.mkt-nav-links > a { color: rgba(22, 18, 42, 0.62); font-size: 13.5px; font-weight: 550; transition: color .15s; }
+.mkt-nav-links > a:hover { color: #16122a; }
+
+.mkt-nav-dd { position: relative; }
+.mkt-nav-dd-trigger {
+  display: flex; align-items: center; gap: 5px; border: none; background: none; font-family: inherit;
+  color: rgba(22, 18, 42, 0.62); font-size: 13.5px; font-weight: 550; cursor: pointer; padding: 0;
+  transition: color .15s;
 }
-.mkt-nav-logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; color: #fff; }
-.mkt-nav-links { display: flex; gap: 24px; margin-left: 12px; }
-.mkt-nav-links a { color: var(--mkt-ink-dim); font-size: 14.5px; font-weight: 500; transition: color .15s; }
-.mkt-nav-links a:hover { color: #fff; }
+.mkt-nav-dd:hover .mkt-nav-dd-trigger { color: #16122a; }
+.mkt-nav-dd-chevron { transition: transform .2s ease; }
+.mkt-nav-dd:hover .mkt-nav-dd-chevron { transform: rotate(180deg); }
+
+.mkt-nav-dd-panel {
+  position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  z-index: 50; padding-top: 14px; width: 280px;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .18s ease;
+}
+.mkt-nav-dd:hover .mkt-nav-dd-panel { opacity: 1; visibility: visible; pointer-events: auto; }
+.mkt-nav-dd-card {
+  background: #fff; border: 1px solid rgba(15,12,30,.07); border-radius: 18px; padding: 8px;
+  box-shadow: 0 20px 50px -10px rgba(10,6,26,.22);
+}
+.mkt-nav-dd-item { display: flex; align-items: flex-start; gap: 11px; border-radius: 12px; padding: 10px 11px; transition: background .15s; }
+.mkt-nav-dd-item:hover { background: var(--mkt-card); }
+.mkt-nav-dd-icon {
+  flex: none; width: 32px; height: 32px; border-radius: 10px; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.mkt-nav-dd-icon.a { background: #f0e9ff; }
+.mkt-nav-dd-icon.b { background: #e3f1ff; }
+.mkt-nav-dd-title { display: block; font-size: 13px; font-weight: 600; color: #16122a; }
+.mkt-nav-dd-desc { display: block; font-size: 11px; color: rgba(22,18,42,.45); margin-top: 1px; }
+
 .mkt-nav-spacer { flex: 1; }
-.mkt-nav-actions { display: flex; align-items: center; gap: 14px; }
+.mkt-nav-actions { display: flex; align-items: center; gap: 16px; flex: none; }
+
+/* "Log in" — a text link with a hand-drawn underline that only appears on
+   hover, the same playful signature topiadesk uses for "Book a demo". */
+.mkt-nav-textlink { position: relative; font-size: 13px; font-weight: 600; color: rgba(22,18,42,.75); transition: color .15s; }
+.mkt-nav-textlink:hover { color: #16122a; }
+.mkt-nav-underline {
+  position: absolute; left: 0; bottom: -6px; width: 100%; height: 7px;
+  opacity: 0; transition: opacity .25s ease; pointer-events: none;
+}
+.mkt-nav-underline path { stroke: var(--mkt-brand); }
+.mkt-nav-textlink:hover .mkt-nav-underline { opacity: 1; }
+@media (max-width: 460px) { .mkt-nav-textlink { display: none; } }
+
+.mkt-nav-cta {
+  border-radius: 999px; background: var(--mkt-brand); color: #fff; font-size: 13px; font-weight: 600;
+  padding: 10px 20px; box-shadow: 0 8px 20px -6px rgba(124,79,224,.55);
+  transition: background .15s, box-shadow .15s; white-space: nowrap;
+}
+.mkt-nav-cta:hover { background: var(--mkt-brand-dark); box-shadow: 0 10px 26px -6px rgba(124,79,224,.7); }
+
+.mkt-nav-slug-form { display: flex; align-items: center; gap: 6px; }
+.mkt-nav-slug-input {
+  padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(15,12,30,.14);
+  background: rgba(15,12,30,.04); color: #16122a; font-size: 13.5px; width: 130px; font-family: inherit;
+}
+.mkt-nav-slug-input:focus { outline: none; border-color: var(--mkt-brand); }
+.mkt-nav-slug-suffix { color: rgba(22,18,42,.45); font-size: 12px; white-space: nowrap; }
 
 /* ------------------------------------------------------------ buttons --- */
 .mkt-btn {
@@ -69,7 +148,9 @@
   position: relative;
   background: radial-gradient(80% 60% at 50% 0%, var(--mkt-navy-2) 0%, var(--mkt-navy-1) 55%, var(--mkt-navy-0) 100%);
   color: var(--mkt-ink);
-  padding: 96px 0 160px;
+  /* 96px of intended breathing room + ~76px the now-fixed nav no longer
+     reserves in flow (14px top padding + 62px pill height). */
+  padding: 172px 0 160px;
   text-align: center;
 }
 .mkt-chip {
@@ -111,11 +192,16 @@
 .mkt-mock-side-item:hover { background: #ece7f8; }
 .mkt-mock-side-item.on { background: var(--mkt-brand); color: #fff; }
 .mkt-mock-side-item.on:hover { background: var(--mkt-brand); }
-.mkt-mock-main { padding: 20px 22px; animation: mkt-fade-in .35s ease both; }
-@keyframes mkt-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* No entrance animation here on purpose — an earlier version faded this in
+   via `animation: ... both`, which starts an element at its "from" keyframe
+   (opacity: 0) and holds it there until the animation actually finishes.
+   In practice that resting state proved reachable-but-stuck: real testing
+   found this panel and .mkt-cap-panel below both parked at opacity: 0
+   indefinitely — real content, genuinely in the DOM, permanently invisible.
+   Rather than chase why the animation wasn't completing, the fix is to
+   never make "content exists" depend on "an animation finished": start
+   visible, always. */
+.mkt-mock-main { padding: 20px 22px; }
 .mkt-mock-title { font-weight: 700; font-size: 15px; margin-bottom: 14px; }
 .mkt-mock-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .mkt-mock-stat { background: #f7f5fc; border-radius: 12px; padding: 12px 14px; }
@@ -127,11 +213,30 @@
 .mkt-mock-badge.y { background: #fff3d9; color: #92620a; }
 .mkt-mock-badge.p { background: #f0e9ff; color: #6d3fc4; }
 
+/* The 168px fixed sidebar has no room to share a 375px viewport with the
+   main column — rows and badges were clipping on the right edge. Below
+   640px the module rail becomes a horizontal scroll strip above the
+   content instead of a fixed-width column beside it. */
+@media (max-width: 640px) {
+  .mkt-mock-body { grid-template-columns: 1fr; }
+  .mkt-mock-side {
+    display: flex; gap: 6px; overflow-x: auto; border-right: none;
+    border-bottom: 1px solid #ece7f8; padding: 12px 12px 10px;
+  }
+  .mkt-mock-side-item { width: auto; white-space: nowrap; margin-bottom: 0; flex: none; }
+  .mkt-mock-stats { grid-template-columns: repeat(2, 1fr); }
+  .mkt-mock-row { flex-wrap: wrap; gap: 6px; }
+}
+
 .mkt-float-chip {
   position: absolute; background: #fff; border-radius: 14px; padding: 12px 16px;
   box-shadow: 0 20px 45px -12px rgba(0,0,0,.35); font-size: 12.5px; z-index: 2;
 }
-.mkt-float-chip b { display: block; font-size: 20px; }
+/* Explicit dark color, not inherited — .mkt-float-chip sits on the dark
+   .mkt-hero, whose own text color is white; without overriding it here, this
+   bold value renders white text on this chip's own white card background,
+   invisible even though the text is genuinely there. */
+.mkt-float-chip b { display: block; font-size: 20px; color: #16122a; }
 .mkt-float-chip span { color: #8a839c; font-size: 11.5px; }
 .mkt-float-1 { top: -18px; left: -28px; }
 .mkt-float-2 { bottom: -22px; right: -22px; }
@@ -199,7 +304,7 @@
 
 .mkt-cap-panel {
   background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1);
-  border-radius: 20px; padding: 32px 34px; animation: mkt-fade-in .35s ease both;
+  border-radius: 20px; padding: 32px 34px;
 }
 .mkt-cap-panel-icon {
   width: 46px; height: 46px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
@@ -221,6 +326,34 @@
 .mkt-feature-list li { display: flex; gap: 10px; align-items: flex-start; color: rgba(255,255,255,.82); font-size: 14.5px; }
 .mkt-feature-list li::before { content: "✓"; color: var(--mkt-brand-2); font-weight: 700; margin-top: 1px; }
 
+/* ------------------------------------------------------------- pricing --- */
+.mkt-pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; align-items: stretch; }
+@media (max-width: 900px) { .mkt-pricing-grid { grid-template-columns: 1fr; max-width: 420px; margin: 0 auto; } }
+
+.mkt-pricing-card {
+  position: relative; background: #fff; border: 1px solid var(--mkt-line-soft); border-radius: 22px;
+  padding: 30px 26px; display: flex; flex-direction: column;
+  transition: transform .18s, box-shadow .18s;
+}
+.mkt-pricing-card:hover { transform: translateY(-3px); box-shadow: 0 18px 40px -18px rgba(76, 42, 148, .25); }
+.mkt-pricing-card.highlighted { border-color: var(--mkt-brand); box-shadow: 0 20px 50px -18px rgba(124, 79, 224, .35); }
+
+.mkt-pricing-badge {
+  position: absolute; top: -13px; left: 26px;
+  background: var(--mkt-brand); color: #fff; font-size: 11px; font-weight: 700;
+  padding: 5px 14px; border-radius: 999px; letter-spacing: .02em;
+}
+.mkt-pricing-name { font-weight: 700; font-size: 17px; }
+.mkt-pricing-tagline { color: #625b78; font-size: 13px; line-height: 1.5; margin: 6px 0 20px; }
+.mkt-pricing-price { font-size: 32px; font-weight: 700; letter-spacing: -0.01em; }
+.mkt-pricing-price span { font-size: 14px; font-weight: 500; color: #948da8; margin-left: 3px; }
+.mkt-pricing-note { font-size: 12px; color: #948da8; margin: 4px 0 22px; }
+.mkt-pricing-features { list-style: none; margin: 0 0 26px; padding: 0; display: grid; gap: 10px; flex: 1; }
+.mkt-pricing-features li { display: flex; gap: 9px; align-items: flex-start; font-size: 13.5px; color: #3a3450; line-height: 1.5; }
+.mkt-pricing-features li::before { content: "✓"; color: var(--mkt-brand); font-weight: 700; flex: none; }
+.mkt-pricing-fine { text-align: center; color: #948da8; font-size: 12.5px; margin: 32px 0 0; }
+.mkt-btn-block { width: 100%; }
+
 /* --------------------------------------------------------------- final --- */
 .mkt-final {
   background: radial-gradient(70% 100% at 50% 100%, #2a2050 0%, var(--mkt-navy-0) 60%);
@@ -229,13 +362,26 @@
 .mkt-final h2 { font-size: clamp(28px, 4.6vw, 48px); font-weight: 650; max-width: 720px; margin: 0 auto 18px; letter-spacing: -0.01em; }
 .mkt-final p { color: rgba(255,255,255,.62); max-width: 520px; margin: 0 auto 34px; font-size: 16px; }
 
-/* -------------------------------------------------------------- footer --- */
-.mkt-footer { background: var(--mkt-navy-0); color: rgba(255,255,255,.5); padding: 40px 0; border-top: 1px solid var(--mkt-line); }
-.mkt-footer-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-.mkt-footer-logo { display: flex; align-items: center; gap: 8px; color: #fff; font-weight: 700; }
-.mkt-footer-links { display: flex; gap: 20px; font-size: 13.5px; }
-.mkt-footer-links a:hover { color: #fff; }
-.mkt-footer-fine { font-size: 12.5px; margin-top: 18px; color: rgba(255,255,255,.35); }
+/* -------------------------------------------------------------- footer ---
+   Light and cream, not another dark band — the deliberate contrast against
+   the dark final-CTA section above it is what makes the page feel like it
+   has actually ended, the same beat topiadesk's own light footer plays
+   after its dark sections. Every link here goes somewhere real on this
+   one-page site; no invented Privacy/Terms/Careers pages that don't exist. */
+.mkt-footer { background: var(--mkt-cream); color: #16122a; border-top: 1px solid var(--mkt-line-soft); }
+.mkt-footer-top { display: flex; justify-content: space-between; gap: 48px; flex-wrap: wrap; padding: 56px 28px 40px; }
+.mkt-footer-brand { max-width: 300px; }
+.mkt-footer-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 16px; color: #16122a; }
+.mkt-footer-tagline { margin: 14px 0 0; font-size: 12.5px; line-height: 1.6; color: rgba(22,18,42,.5); }
+.mkt-footer-cols { display: flex; gap: 56px; flex-wrap: wrap; }
+.mkt-footer-col { display: flex; flex-direction: column; gap: 10px; }
+.mkt-footer-col-label { margin: 0 0 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: rgba(22,18,42,.4); }
+.mkt-footer-col a { font-size: 12.5px; font-weight: 550; color: rgba(22,18,42,.6); transition: color .15s; }
+.mkt-footer-col a:hover { color: #16122a; }
+.mkt-footer-bottom {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  border-top: 1px solid var(--mkt-line-soft); padding: 20px 28px; font-size: 11px; color: rgba(22,18,42,.4);
+}
 
 /* ------------------------------------------------------------ start-trial --- */
 .mkt-auth-shell { min-height: 100vh; background: var(--mkt-navy-0); display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
