@@ -21,6 +21,7 @@ const ACTION_TONE = { INSERT: "success", UPDATE: "brand", DELETE: "danger" };
 // rather than "payments UPDATE". Anything not listed falls back to a
 // prettified version of the table name rather than showing nothing.
 const TABLE_LABELS = {
+  account_security: "an account security action",
   applications: "an application",
   admission_offers: "an admission offer",
   student_registrations: "a student registration",

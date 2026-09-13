@@ -1,6 +1,92 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Mark } from "../Components/Logo";
+
+// The hero's little "app window" — clickable modules on the left, content on
+// the right that swaps on click and also advances on its own every few
+// seconds, the way a product demo would if someone were narrating it.
+const MODULES = [
+  {
+    key: "dashboard",
+    label: "Dashboard",
+    title: "Good morning, Jane-Nath College",
+    stats: [
+      { value: "612", label: "Students enrolled" },
+      { value: "38", label: "Staff on the roster" },
+      { value: "5", label: "Notices this week" },
+      { value: "3", label: "Approvals waiting" },
+    ],
+    rows: [
+      { text: "Term 2 report cards — approval pending", tone: "y", badge: "Review" },
+      { text: "New staff invite accepted — B. Oni", tone: "g", badge: "Done" },
+      { text: "Library clearance backlog — 2 pupils", tone: "p", badge: "Attention" },
+    ],
+  },
+  {
+    key: "admissions",
+    label: "Admissions",
+    title: "Admissions workspace",
+    stats: [
+      { value: "18", label: "Awaiting decision" },
+      { value: "6", label: "Clearance in progress" },
+      { value: "92%", label: "Fees reconciled" },
+      { value: "4", label: "New today" },
+    ],
+    rows: [
+      { text: "JAN/2026/0041 — offer accepted", tone: "g", badge: "Cleared" },
+      { text: "JAN/2026/0039 — awaiting acceptance fee", tone: "y", badge: "Pending" },
+      { text: "JAN/2026/0037 — screening complete", tone: "p", badge: "In review" },
+    ],
+  },
+  {
+    key: "bursary",
+    label: "Bursary",
+    title: "Fees this term",
+    stats: [
+      { value: "₦15.3M", label: "Invoiced" },
+      { value: "₦11.0M", label: "Collected" },
+      { value: "71.9%", label: "Collection rate" },
+      { value: "9", label: "Invoices overdue" },
+    ],
+    rows: [
+      { text: "JNC/INV/0182 — payment confirmed", tone: "g", badge: "Paid" },
+      { text: "JNC/INV/0179 — reminder sent", tone: "y", badge: "Due soon" },
+      { text: "JNC/INV/0175 — 14 days overdue", tone: "p", badge: "Overdue" },
+    ],
+  },
+  {
+    key: "reports",
+    label: "Reports",
+    title: "Result sheets — Third term",
+    stats: [
+      { value: "9", label: "Classes reported" },
+      { value: "2", label: "Awaiting approval" },
+      { value: "76%", label: "Average pass rate" },
+      { value: "412", label: "Report cards issued" },
+    ],
+    rows: [
+      { text: "JSS 2 — result sheet approved", tone: "g", badge: "Released" },
+      { text: "SS 1 — awaiting principal sign-off", tone: "y", badge: "Pending" },
+      { text: "JSS 3 — grading in progress", tone: "p", badge: "In review" },
+    ],
+  },
+  {
+    key: "school",
+    label: "School",
+    title: "School administration",
+    stats: [
+      { value: "12", label: "Classes configured" },
+      { value: "3", label: "Clearance departments" },
+      { value: "8", label: "Admin & staff roles" },
+      { value: "1", label: "Active session" },
+    ],
+    rows: [
+      { text: "New clearance department — Hostel", tone: "g", badge: "Added" },
+      { text: "Admissions officer invited — J. Daniyo", tone: "y", badge: "Pending" },
+      { text: "Academic calendar updated for 2026/2027", tone: "p", badge: "Saved" },
+    ],
+  },
+];
 
 const FEATURES = [
   {
@@ -35,9 +121,83 @@ const FEATURES = [
   },
 ];
 
-const TAGS = [
-  "Multi-tenant", "Role-based access", "Real-time notifications", "Document verification",
-  "Clearance workflow", "Audit trail", "Online + manual payments", "Auto-grading", "Configurable protocols",
+// The capabilities band's clickable module rail — one at a time, click or
+// auto-advance swaps the panel beside it. Same interaction as the hero mock,
+// applied to what makes the platform itself different rather than the
+// day-to-day workspace.
+const CAPABILITIES = [
+  {
+    key: "multitenant",
+    icon: "🏫",
+    label: "Multi-tenant",
+    title: "One platform, every school its own",
+    body: "Onboard unlimited schools on a single, secure platform — every tenant fully isolated by row-level security, right down to who can read a single invoice. Add a new school in minutes, manage every tenant's plan and access from one console.",
+    checks: ["Per-tenant data isolation", "Central administration", "Each school its own subdomain"],
+  },
+  {
+    key: "roles",
+    icon: "🔐",
+    label: "Role-based access",
+    title: "Everyone sees exactly their own job",
+    body: "Owners, principals, bursars, admissions officers, teachers, parents and students each get their own view — nothing more. Access is enforced at the database layer, not just hidden in the interface.",
+    checks: ["Eight built-in roles", "Enforced by row-level security", "One person can hold more than one"],
+  },
+  {
+    key: "notifications",
+    icon: "🔔",
+    label: "Real-time notifications",
+    title: "Nobody has to go looking for news",
+    body: "An offer, a status change, a new invoice, a graded result — the right person is notified the moment it happens, in-app, without refreshing or digging through menus.",
+    checks: ["Delivered the instant it happens", "Scoped to the right person", "Read state tracked"],
+  },
+  {
+    key: "documents",
+    icon: "📄",
+    label: "Document verification",
+    title: "Original documents, checked once, trusted after",
+    body: "Staff record exactly which original documents they've physically sighted — WAEC certificates, birth certificates, whatever your school requires — with who checked it and when.",
+    checks: ["Timestamped sighting log", "Remarks per document", "Nothing lost in a filing cabinet"],
+  },
+  {
+    key: "clearance",
+    icon: "✅",
+    label: "Clearance workflow",
+    title: "Nobody enrols until every department signs off",
+    body: "Name your own clearance departments — Bursary, Library, Hostel, whatever your school runs — and an applicant can't be registered as a student until every one of them has cleared.",
+    checks: ["Departments you define", "Enforced in the database", "Skips automatically if none are set"],
+  },
+  {
+    key: "audit",
+    icon: "🔍",
+    label: "Audit trail",
+    title: "Every action, accounted for",
+    body: "Who did what, when, and from where — a full audit trail across admissions, bursary, teaching and every role in between, visible to the people who need to answer for it.",
+    checks: ["Every change logged automatically", "Actor, time and detail attached", "On from day one"],
+  },
+  {
+    key: "payments",
+    icon: "💳",
+    label: "Online + manual payments",
+    title: "However your parents actually pay",
+    body: "Take payments through an online gateway, or record cash and bank transfers manually — either way, an invoice's status updates the moment it's settled, with nothing left ambiguous.",
+    checks: ["Gateway, manual or automatic", "Line-item invoices", "Acceptance fees and tuition alike"],
+  },
+  {
+    key: "grading",
+    icon: "🖩",
+    label: "Auto-grading",
+    title: "Objective questions grade themselves",
+    body: "MCQ and short-answer questions are graded the moment an exam is submitted — with image-based questions and a real scientific calculator for the subjects that need one.",
+    checks: ["Instant objective scoring", "Proctoring events logged", "Teachers focus on what needs a human"],
+  },
+  {
+    key: "protocols",
+    icon: "⚙️",
+    label: "Configurable protocols",
+    title: "Your school's rules, not a fixed template",
+    body: "Every protocol — fees, required documents, screening steps, clearance departments, programmes — is set from School administration by your own staff. No code, no developer, no ticket to file.",
+    checks: ["Set once, enforced automatically", "Every school can differ", "Change it yourselves, any time"],
+  },
 ];
 
 const CONFIG_TOGGLES = [
@@ -105,59 +265,93 @@ const Nav = () => {
   );
 };
 
-const Hero = () => (
-  <section className="mkt-hero">
-    <div className="mkt-wrap">
-      <span className="mkt-chip"><span className="mkt-chip-dot" />{"School operations, simplified"}</span>
-      <h1>{"Run your entire school year in one calm workspace"}</h1>
-      <p className="mkt-hero-sub">
-        {"Admissions, fees, exams and results in one place — built for how your school actually runs, not the other way round."}
-      </p>
-      <div className="mkt-hero-cta">
-        <Link to="/Start-Trial" className="mkt-btn mkt-btn-primary">{"Start free trial →"}</Link>
-        <a href="mailto:hello@schoolivio.com" className="mkt-btn mkt-btn-ghost-dark">{"Book a demo"}</a>
-      </div>
-      <p className="mkt-hero-trust">{"15-day free trial · No credit card required · Configure it your way from day one"}</p>
+const AUTO_ADVANCE_MS = 4500;
 
-      <div className="mkt-mock-wrap">
-        <div className="mkt-float-chip mkt-float-1">
-          <b>3 min</b>
-          <span>Average time to issue an offer</span>
+const Hero = () => {
+  const [active, setActive] = useState(0);
+  const timerRef = useRef(null);
+
+  const restart = () => {
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setActive((i) => (i + 1) % MODULES.length);
+    }, AUTO_ADVANCE_MS);
+  };
+
+  useEffect(() => {
+    restart();
+    return () => clearInterval(timerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const select = (i) => {
+    setActive(i);
+    restart();
+  };
+
+  const mod = MODULES[active];
+
+  return (
+    <section className="mkt-hero">
+      <div className="mkt-wrap">
+        <span className="mkt-chip"><span className="mkt-chip-dot" />{"School operations, simplified"}</span>
+        <h1>{"Run your entire school year in one calm workspace"}</h1>
+        <p className="mkt-hero-sub">
+          {"Admissions, fees, exams and results in one place — built for how your school actually runs, not the other way round."}
+        </p>
+        <div className="mkt-hero-cta">
+          <Link to="/Start-Trial" className="mkt-btn mkt-btn-primary">{"Start free trial →"}</Link>
+          <a href="mailto:hello@schoolivio.com" className="mkt-btn mkt-btn-ghost-dark">{"Book a demo"}</a>
         </div>
-        <div className="mkt-float-chip mkt-float-2">
-          <b>100%</b>
-          <span>Actions logged to the audit trail</span>
-        </div>
-        <div className="mkt-mock">
-          <div className="mkt-mock-bar">
-            <span className="mkt-mock-dot" /><span className="mkt-mock-dot" /><span className="mkt-mock-dot" />
+        <p className="mkt-hero-trust">{"15-day free trial · No credit card required · Configure it your way from day one"}</p>
+
+        <div className="mkt-mock-wrap">
+          <div className="mkt-float-chip mkt-float-1">
+            <b>3 min</b>
+            <span>Average time to issue an offer</span>
           </div>
-          <div className="mkt-mock-body">
-            <div className="mkt-mock-side">
-              <div className="mkt-mock-side-item on">{"Dashboard"}</div>
-              <div className="mkt-mock-side-item">{"Admissions"}</div>
-              <div className="mkt-mock-side-item">{"Bursary"}</div>
-              <div className="mkt-mock-side-item">{"Reports"}</div>
-              <div className="mkt-mock-side-item">{"School"}</div>
+          <div className="mkt-float-chip mkt-float-2">
+            <b>100%</b>
+            <span>Actions logged to the audit trail</span>
+          </div>
+          <div className="mkt-mock">
+            <div className="mkt-mock-bar">
+              <span className="mkt-mock-dot" /><span className="mkt-mock-dot" /><span className="mkt-mock-dot" />
             </div>
-            <div className="mkt-mock-main">
-              <div className="mkt-mock-title">{"Admissions workspace"}</div>
-              <div className="mkt-mock-stats">
-                <div className="mkt-mock-stat"><b>18</b><span>{"Awaiting decision"}</span></div>
-                <div className="mkt-mock-stat"><b>6</b><span>{"Clearance in progress"}</span></div>
-                <div className="mkt-mock-stat"><b>92%</b><span>{"Fees reconciled"}</span></div>
-                <div className="mkt-mock-stat"><b>4</b><span>{"New today"}</span></div>
+            <div className="mkt-mock-body">
+              <div className="mkt-mock-side">
+                {MODULES.map((m, i) => (
+                  <button
+                    key={m.key}
+                    type="button"
+                    className={`mkt-mock-side-item${i === active ? " on" : ""}`}
+                    onClick={() => select(i)}
+                  >
+                    {m.label}
+                  </button>
+                ))}
               </div>
-              <div className="mkt-mock-row"><span>{"JAN/2026/0041 — offer accepted"}</span><span className="mkt-mock-badge g">{"Cleared"}</span></div>
-              <div className="mkt-mock-row"><span>{"JAN/2026/0039 — awaiting acceptance fee"}</span><span className="mkt-mock-badge y">{"Pending"}</span></div>
-              <div className="mkt-mock-row"><span>{"JAN/2026/0037 — screening complete"}</span><span className="mkt-mock-badge p">{"In review"}</span></div>
+              <div className="mkt-mock-main" key={mod.key}>
+                <div className="mkt-mock-title">{mod.title}</div>
+                <div className="mkt-mock-stats">
+                  {mod.stats.map((s) => (
+                    <div className="mkt-mock-stat" key={s.label}><b>{s.value}</b><span>{s.label}</span></div>
+                  ))}
+                </div>
+                {mod.rows.map((r) => (
+                  <div className="mkt-mock-row" key={r.text}>
+                    <span>{r.text}</span>
+                    <span className={`mkt-mock-badge ${r.tone}`}>{r.badge}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const FeatureGrid = () => (
   <section className="mkt-section" id="product">
@@ -178,47 +372,69 @@ const FeatureGrid = () => (
   </section>
 );
 
-const Capabilities = () => (
-  <section className="mkt-band">
-    <div className="mkt-wrap">
-      <div className="mkt-eyebrow">{"CAPABILITIES"}</div>
-      <h2 className="mkt-h2">{"Built for the way schools actually run"}</h2>
-      <p className="mkt-lede">{"The platform advantages that make Schoolivio different — explore what's built in."}</p>
-      <div className="mkt-tagcloud">
-        {TAGS.map((t) => <span className="mkt-tag" key={t}>{t}</span>)}
-      </div>
+const Capabilities = () => {
+  const [active, setActive] = useState(0);
+  const timerRef = useRef(null);
 
-      <div className="mkt-feature-split">
-        <div>
-          <h3 style={{ fontSize: 22, marginBottom: 10 }}>{"One platform, every school its own"}</h3>
-          <p style={{ color: "rgba(255,255,255,.62)", fontSize: 15, lineHeight: 1.6, maxWidth: 480 }}>
-            {"Onboard unlimited schools on a single, secure platform — every tenant fully isolated by row-level security, right down to who can read a single invoice. Add a new school in minutes, manage every tenant's plan and access from one console, without standing up new infrastructure or mixing up one school's records with another's."}
-          </p>
-          <ul className="mkt-feature-list">
-            <li>{"Per-tenant data isolation, enforced in the database itself"}</li>
-            <li>{"Each school's own subdomain, branding and academic calendar"}</li>
-            <li>{"One console for platform operations, separate from every school"}</li>
-          </ul>
-        </div>
-        <div className="mkt-omni-stats" style={{ display: "block" }}>
-          <div className="mkt-settings-mock">
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.5)", marginBottom: 10 }}>{"jane-nath.schoolivio.com"}</div>
-            <div className="mkt-toggle-row"><span>{"Bursary sees admission payments"}</span><span className="mkt-switch on" /></div>
-            <div className="mkt-toggle-row"><span>{"Clearance: Library department"}</span><span className="mkt-switch on" /></div>
-            <div className="mkt-toggle-row"><span>{"Require interview before offer"}</span><span className="mkt-switch off" /></div>
-            <div className="mkt-toggle-row"><span>{"Audit log — full detail"}</span><span className="mkt-switch on" /></div>
+  const restart = () => {
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setActive((i) => (i + 1) % CAPABILITIES.length);
+    }, AUTO_ADVANCE_MS + 500);
+  };
+
+  useEffect(() => {
+    restart();
+    return () => clearInterval(timerRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const select = (i) => {
+    setActive(i);
+    restart();
+  };
+
+  const cap = CAPABILITIES[active];
+
+  return (
+    <section className="mkt-band">
+      <div className="mkt-wrap">
+        <div className="mkt-eyebrow">{"CAPABILITIES"}</div>
+        <h2 className="mkt-h2">{"Built for the way schools actually run"}</h2>
+        <p className="mkt-lede">{"The platform advantages that make Schoolivio different — explore what's built in."}</p>
+
+        <div className="mkt-cap-layout">
+          <div className="mkt-cap-list">
+            {CAPABILITIES.map((c, i) => (
+              <button
+                key={c.key}
+                type="button"
+                className={`mkt-cap-item${i === active ? " active" : ""}`}
+                onClick={() => select(i)}
+              >
+                <span className="mkt-cap-dot" />
+                <span className="mkt-cap-icon">{c.icon}</span>
+                {c.label}
+              </button>
+            ))}
           </div>
-          <div className="mkt-settings-mock" style={{ marginTop: 14 }}>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.5)", marginBottom: 10 }}>{"a-different-school.schoolivio.com"}</div>
-            <div className="mkt-toggle-row"><span>{"Bursary sees admission payments"}</span><span className="mkt-switch off" /></div>
-            <div className="mkt-toggle-row"><span>{"Clearance: Hostel department"}</span><span className="mkt-switch on" /></div>
-            <div className="mkt-toggle-row"><span>{"Require interview before offer"}</span><span className="mkt-switch on" /></div>
+          <div className="mkt-cap-panel" key={cap.key}>
+            <div className="mkt-cap-panel-icon">{cap.icon}</div>
+            <h3>{cap.title}</h3>
+            <p>{cap.body}</p>
+            <div className="mkt-cap-checks">
+              {cap.checks.map((c) => <span className="mkt-cap-check" key={c}>{c}</span>)}
+            </div>
+            <div className="mkt-hero-cta" style={{ justifyContent: "flex-start", marginTop: 24 }}>
+              <Link to="/Start-Trial" className="mkt-btn mkt-btn-primary">{"Start free trial"}</Link>
+              <a href="mailto:hello@schoolivio.com" className="mkt-btn mkt-btn-ghost-dark">{"Request a demo"}</a>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const ConfigureSection = () => (
   <section className="mkt-section" id="configure">

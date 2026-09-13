@@ -237,6 +237,10 @@ const Apply = () => {
               ? `Complete this form to apply to ${school.name}. You do not need an account — you will be given a reference to track it with.`
               : "Complete this form to apply. You do not need an account."}
           </p>
+          <p className="apply-lede" style={{ marginTop: -14, fontSize: 14 }}>
+            {"Prefer to pay fees online and get updates without checking back? "}
+            <Link to="/Apply/Account">{"Create an account instead"}</Link>
+          </p>
           <ul className="apply-outline">
             {SECTIONS.map((s) => (
               <li key={s.num}>

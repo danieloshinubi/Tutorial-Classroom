@@ -15,7 +15,14 @@ import {
   removeMember,
   addSchoolUser,
   updateSchool,
+  updateProfile,
+  resetMemberPassword,
+  uploadSchoolLogo,
+  removeSchoolLogo,
+  uploadAvatar,
+  removeAvatar,
 } from "../../lib/api";
+import { ImageUpload } from "../../Components/ImageUpload";
 import {
   Page,
   Card,
@@ -74,6 +81,10 @@ const PeoplePanel = () => {
     role: "student",
   });
   const [inviting, setInviting] = useState(false);
+
+  const [editing, setEditing] = useState(null);
+  const [editForm, setEditForm] = useState({ first_name: "", surname: "", username: "", bio: "", avatar_url: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
   // Shown once, right after creation — this is the only time the password exists
   // anywhere the administrator can see it.
   const [issued, setIssued] = useState(null);
@@ -195,6 +206,61 @@ const PeoplePanel = () => {
     }
   };
 
+  const startEdit = (row) => {
+    setError("");
+    setNotice("");
+    setEditing(row);
+    setEditForm({
+      first_name: row.profiles.first_name || "",
+      surname: row.profiles.surname || "",
+      username: row.profiles.username || "",
+      bio: row.profiles.bio || "",
+      avatar_url: row.profiles.avatar_url || "",
+    });
+  };
+
+  const saveEdit = async (event) => {
+    event.preventDefault();
+    setSavingEdit(true);
+    setError("");
+    try {
+      await updateProfile(editing.profiles.id, editForm);
+      setNotice(`${displayName(editForm)}'s details have been updated.`);
+      setEditing(null);
+      load();
+    } catch (err) {
+      setError(err.message || "Could not save those changes.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleResetPassword = async (row) => {
+    if (
+      !window.confirm(
+        `Reset ${displayName(row.profiles)}'s password? Their current password stops working immediately, and they will need to choose a new one the next time they sign in.`
+      )
+    ) {
+      return;
+    }
+    setBusyId(row.id);
+    setError("");
+    setNotice("");
+    try {
+      const result = await resetMemberPassword({ schoolId, userId: row.profiles.id });
+      setIssued({
+        kind: "reset",
+        name: displayName(row.profiles),
+        email: result.email || row.profiles.email,
+        password: result.password,
+      });
+    } catch (err) {
+      setError(err.message || "Could not reset that password.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   return (
     <>
       {/* Searching a roster of two hundred means scrolling; the box you
@@ -289,6 +355,66 @@ const PeoplePanel = () => {
         </Card>
       ) : null}
 
+      {editing ? (
+        <Card style={{ marginBottom: 18, maxWidth: 640 }}>
+          <h3 style={{ marginTop: 0 }}>{`Edit ${displayName(editing.profiles)}`}</h3>
+          <form onSubmit={saveEdit}>
+            <Field label="Photo">
+              <ImageUpload
+                value={editForm.avatar_url}
+                onUpload={async (file) => {
+                  const url = await uploadAvatar({ userId: editing.profiles.id, file });
+                  setEditForm((c) => ({ ...c, avatar_url: url }));
+                }}
+                onRemove={async () => {
+                  await removeAvatar(editForm.avatar_url);
+                  setEditForm((c) => ({ ...c, avatar_url: "" }));
+                }}
+              />
+            </Field>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))" }}>
+              <Field label="First name">
+                <input
+                  className="input"
+                  value={editForm.first_name}
+                  onChange={(e) => setEditForm((c) => ({ ...c, first_name: e.target.value }))}
+                />
+              </Field>
+              <Field label="Surname">
+                <input
+                  className="input"
+                  value={editForm.surname}
+                  onChange={(e) => setEditForm((c) => ({ ...c, surname: e.target.value }))}
+                />
+              </Field>
+            </div>
+            <Field label="Username">
+              <input
+                className="input"
+                value={editForm.username}
+                onChange={(e) => setEditForm((c) => ({ ...c, username: e.target.value }))}
+              />
+            </Field>
+            <Field label="Bio">
+              <textarea
+                className="input"
+                rows={3}
+                value={editForm.bio}
+                onChange={(e) => setEditForm((c) => ({ ...c, bio: e.target.value }))}
+              />
+            </Field>
+            <div className="btn-row">
+              <Button type="submit" disabled={savingEdit}>
+                {savingEdit ? "Saving..." : "Save changes"}
+              </Button>
+              <Button type="button" variant="secondary" onClick={() => setEditing(null)}>
+                {"Cancel"}
+              </Button>
+            </div>
+          </form>
+        </Card>
+      ) : null}
+
       <Notice tone="error">{error}</Notice>
       <Notice tone="success">{notice}</Notice>
 
@@ -301,9 +427,13 @@ const PeoplePanel = () => {
             borderColor: "transparent",
           }}
         >
-          <h3 style={{ marginTop: 0 }}>{`${issued.name} can now sign in`}</h3>
+          <h3 style={{ marginTop: 0 }}>
+            {issued.kind === "reset" ? `${issued.name}'s password has been reset` : `${issued.name} can now sign in`}
+          </h3>
           <p style={{ fontSize: 14, marginTop: 0 }}>
-            {issued.emailed === false
+            {issued.kind === "reset"
+              ? "Their old password stopped working the moment this was issued. Give them this new one — they will be asked to choose their own the next time they sign in."
+              : issued.emailed === false
               ? "The invitation email could not be sent — most likely the hourly limit. Give them these details instead; they will choose their own password when they sign in."
               : "Give them these details. They will be asked to choose their own password the first time they sign in."}
           </p>
@@ -337,7 +467,9 @@ const PeoplePanel = () => {
           </div>
 
           <p style={{ fontSize: 13, color: "var(--ink-2)", marginBottom: 0, marginTop: 14 }}>
-            {"This password is shown once and is not stored anywhere you can read it again. If it is lost, remove the person and add them back."}
+            {issued.kind === "reset"
+              ? "This password is shown once and is not stored anywhere you can read it again. If it is lost, reset it again."
+              : "This password is shown once and is not stored anywhere you can read it again. If it is lost, remove the person and add them back."}
           </p>
 
           <div style={{ marginTop: 14 }}>
@@ -416,7 +548,23 @@ const PeoplePanel = () => {
                         {formatDate(row.created_at, { withTime: false })}
                       </td>
                       <td>
-                        <span className="btn-row">
+                        <span className="btn-row" style={{ flexWrap: "wrap" }}>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={busyId === row.id}
+                            onClick={() => startEdit(row)}
+                          >
+                            {"Edit"}
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            disabled={isSelf || busyId === row.id}
+                            onClick={() => handleResetPassword(row)}
+                          >
+                            {"Reset password"}
+                          </Button>
                           <Button
                             variant="secondary"
                             size="sm"
@@ -519,8 +667,19 @@ const SettingsPanel = () => {
         <Field label="Address">
           <textarea className="textarea" style={{ minHeight: 80 }} value={form.address} onChange={update("address")} />
         </Field>
-        <Field label="Logo URL" hint="Shown in the navigation bar and on report cards.">
-          <input className="input" value={form.logo_url} onChange={update("logo_url")} placeholder="https://..." />
+        <Field label="Logo" hint="Shown in the navigation bar and on report cards.">
+          <ImageUpload
+            value={form.logo_url}
+            shape="square"
+            onUpload={async (file) => {
+              const url = await uploadSchoolLogo({ schoolId: school.id, file });
+              setForm((current) => ({ ...current, logo_url: url }));
+            }}
+            onRemove={async () => {
+              await removeSchoolLogo(form.logo_url);
+              setForm((current) => ({ ...current, logo_url: "" }));
+            }}
+          />
         </Field>
 
         <Notice tone="error">{error}</Notice>

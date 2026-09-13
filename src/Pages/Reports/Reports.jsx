@@ -93,6 +93,7 @@ const Reports = () => {
                 color: "var(--ink-3)",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
               }}
             >
               {email}

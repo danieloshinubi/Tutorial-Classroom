@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import Navbar from "../../Components/Navbar/Navbar";
+import { ApplicantShell } from "../../Components/ApplicantShell";
 import { useAuth } from "../../context/AuthContext";
-import { useSchool } from "../../context/SchoolContext";
+import { supabase } from "../../lib/supabaseClient";
+import { resolveSlug } from "../../lib/tenant";
 import {
-  fetchSessions,
+  fetchPublicAdmissionSessions,
   fetchAdmissionProgrammes,
   fetchAdmissionConfig,
   fetchMyApplicantAccount,
@@ -22,11 +23,21 @@ import {
 // The accounted flow's entry point. Signed-in applicant chooses a session
 // and a programme; the server generates the application (and the fee
 // invoice if the config asks for it).
+//
+// Deliberately does not use useSchool()/SchoolContext — that resolves the
+// school through classroom.schools' own SELECT policy, which is
+// membership-gated, and an applicant is never a school_members row. This
+// page resolves the school and its open sessions the same non-member-safe
+// way the anonymous /Apply form already does (public_school(),
+// public_admission_sessions()), so it works for an applicant with zero
+// tenant access, which is the only kind of applicant there is.
 const ApplyStart = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { school, schoolId } = useSchool();
+  const { user, profile } = useAuth();
+  const slug = resolveSlug();
 
+  const [school, setSchool] = useState(null);
+  const schoolId = school?.id || null;
   const [sessions, setSessions] = useState([]);
   const [programmes, setProgrammes] = useState([]);
   const [account, setAccount] = useState(null);
@@ -47,14 +58,22 @@ const ApplyStart = () => {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    supabase
+      .rpc("public_school", { target_slug: slug })
+      .then(({ data }) => {
+        if (data?.length) setSchool(data[0]);
+      })
+      .catch(() => {});
+  }, [slug]);
+
+  useEffect(() => {
     if (!schoolId) return;
     (async () => {
       try {
-        const [sess, acct] = await Promise.all([
-          fetchSessions(schoolId),
+        const [open, acct] = await Promise.all([
+          fetchPublicAdmissionSessions(schoolId),
           fetchMyApplicantAccount(schoolId).catch(() => null),
         ]);
-        const open = sess.filter((s) => s.applications_open);
         setSessions(open);
         setAccount(acct);
         if (acct) {
@@ -67,6 +86,13 @@ const ApplyStart = () => {
             date_of_birth: acct.date_of_birth || "",
             nationality: acct.nationality || "",
           }));
+        } else if (profile) {
+          // Already gave us their name at signup — no reason to ask twice.
+          setForm((current) => ({
+            ...current,
+            first_name: profile.first_name || "",
+            surname: profile.surname || "",
+          }));
         }
         if (open.length === 1) {
           setForm((c) => ({ ...c, session_id: open[0].id }));
@@ -77,6 +103,11 @@ const ApplyStart = () => {
         setLoading(false);
       }
     })();
+    // profile is only read to seed the form once, the first time this
+    // effect runs for a given school — re-running it every time the auth
+    // context's profile object identity changes would stomp on whatever
+    // the applicant has since typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [schoolId]);
 
   const loadForSession = useCallback(async (sessionId) => {
@@ -142,8 +173,8 @@ const ApplyStart = () => {
   const noSessionsOpen = !loading && sessions.length === 0;
 
   return (
-    <div className="shell">
-      <Navbar />
+    <>
+      <ApplicantShell school={school} />
       <Page
         title="Start an application"
         subtitle={school ? school.name : ""}
@@ -234,7 +265,7 @@ const ApplyStart = () => {
           </Card>
         ) : null}
       </Page>
-    </div>
+    </>
   );
 };
 

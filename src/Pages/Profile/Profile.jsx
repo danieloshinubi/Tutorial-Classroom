@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
-import { updateProfile } from "../../lib/api";
+import { updateProfile, uploadAvatar, removeAvatar } from "../../lib/api";
 import {
   Page,
   Card,
@@ -11,6 +11,7 @@ import {
   Badge,
   Notice,
 } from "../../Components/UI";
+import { ImageUpload } from "../../Components/ImageUpload";
 
 const Profile = () => {
   const { profile, user, refreshProfile } = useAuth();
@@ -102,12 +103,17 @@ const Profile = () => {
                 onChange={update("username")}
               />
             </Field>
-            <Field label="Avatar image URL">
-              <input
-                className="input"
+            <Field label="Photo">
+              <ImageUpload
                 value={form.avatar_url}
-                onChange={update("avatar_url")}
-                placeholder="https://..."
+                onUpload={async (file) => {
+                  const url = await uploadAvatar({ userId: user.id, file });
+                  setForm((current) => ({ ...current, avatar_url: url }));
+                }}
+                onRemove={async () => {
+                  await removeAvatar(form.avatar_url);
+                  setForm((current) => ({ ...current, avatar_url: "" }));
+                }}
               />
             </Field>
             <Field label="Bio" hint="Shown on the tutors page.">

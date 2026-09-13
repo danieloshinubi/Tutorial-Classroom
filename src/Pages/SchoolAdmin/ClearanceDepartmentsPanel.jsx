@@ -126,24 +126,25 @@ const ClearanceDepartmentsPanel = () => {
       <Notice tone="error">{error}</Notice>
       <Notice tone="success">{notice}</Notice>
 
-      <div className="panel-top">
-        <Card style={{ maxWidth: 480 }}>
-          <h3 style={{ marginTop: 0 }}>{"Add a clearance department"}</h3>
-          <form onSubmit={handleAdd}>
-            <Field label="Name">
-              <input
-                className="input"
-                value={name}
-                placeholder="Bursary"
-                onChange={(e) => setName(e.target.value)}
-              />
-            </Field>
-            <Button type="submit" disabled={busy}>
-              {busy ? "Working..." : "Add department"}
-            </Button>
-          </form>
-        </Card>
-      </div>
+      {/* This panel only ever renders nested inside AdmissionsSettingsPanel's
+          own sticky .panel-top (the session picker) — giving this card a
+          second .panel-top would stick both at the same offset and collide. */}
+      <Card style={{ maxWidth: 480, marginBottom: 22 }}>
+        <h3 style={{ marginTop: 0 }}>{"Add a clearance department"}</h3>
+        <form onSubmit={handleAdd}>
+          <Field label="Name">
+            <input
+              className="input"
+              value={name}
+              placeholder="Bursary"
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+          <Button type="submit" disabled={busy}>
+            {busy ? "Working..." : "Add department"}
+          </Button>
+        </form>
+      </Card>
 
       {loading ? <Empty>{"Loading..."}</Empty> : null}
       {!loading && rows.length === 0 ? (

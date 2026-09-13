@@ -20,6 +20,7 @@ import SetPassword from "./Pages/ForgotPassword/SetPassword";
 import Dashboard from "./Pages/Dashboard/Dashboard";
 import Courses from "./Pages/Courses/Courses";
 import Apply from "./Pages/Admissions/Apply";
+import ApplyAccount from "./Pages/Admissions/ApplyAccount";
 import ApplicationStatus from "./Pages/Admissions/ApplicationStatus";
 import Applications from "./Pages/Admissions/Applications";
 import ApplyStart from "./Pages/Admissions/ApplyStart";
@@ -99,6 +100,10 @@ function App() {
           {/* Admissions is open to the public — an applicant has no account. */}
           <Route path="/Apply" element={<Apply />} />
           <Route path="/Apply/Status" element={<ApplicationStatus />} />
+          {/* The accounted flow's real front door — signs up, then hands
+              off to /Apply/Start. Deliberately its own page rather than the
+              general /Signup, which has no way to land back here. */}
+          <Route path="/Apply/Account" element={<ApplyAccount />} />
 
           {/* Signed in — any role */}
           <Route element={<ProtectedRoute />}>

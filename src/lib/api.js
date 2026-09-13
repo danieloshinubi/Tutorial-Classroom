@@ -866,6 +866,62 @@ export const deleteMaterialFile = async (path) => {
   if (error) throw error;
 };
 
+/* -------------------------------------------------------------------------- */
+/* logos & avatars                                                            */
+/* -------------------------------------------------------------------------- */
+
+// A public bucket, unlike course-materials — a school logo and a profile
+// avatar are meant to be visible wherever they're already rendered (nav bar,
+// report cards, tutor listings), so the upload returns a directly-usable
+// public URL rather than a path needing a signed URL at render time.
+const PUBLIC_MEDIA_BUCKET = "public-media";
+
+const publicMediaUrl = (path) => supabase.storage.from(PUBLIC_MEDIA_BUCKET).getPublicUrl(path).data.publicUrl;
+
+// The storage policy only cares about the path, not the DB row — extracting
+// it back out of a stored public URL is how "remove" finds what to delete.
+const pathFromPublicUrl = (url) => {
+  if (!url) return null;
+  const marker = `/storage/v1/object/public/${PUBLIC_MEDIA_BUCKET}/`;
+  const at = url.indexOf(marker);
+  return at === -1 ? null : url.slice(at + marker.length);
+};
+
+// Path convention logos/<school_id>/<random>-<name> — the storage policy
+// (073) reads segment [2] to check classroom.is_school_admin.
+export const uploadSchoolLogo = async ({ schoolId, file }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `logos/${schoolId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(PUBLIC_MEDIA_BUCKET)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return publicMediaUrl(path);
+};
+
+export const removeSchoolLogo = async (logoUrl) => {
+  const path = pathFromPublicUrl(logoUrl);
+  if (path) await supabase.storage.from(PUBLIC_MEDIA_BUCKET).remove([path]).catch(() => {});
+};
+
+// Path convention avatars/<user_id>/<random>-<name> — the storage policy
+// (073) allows the person themselves, or an admin of any school they
+// belong to (the same reach the People panel's "Edit" already has).
+export const uploadAvatar = async ({ userId, file }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `avatars/${userId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(PUBLIC_MEDIA_BUCKET)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return publicMediaUrl(path);
+};
+
+export const removeAvatar = async (avatarUrl) => {
+  const path = pathFromPublicUrl(avatarUrl);
+  if (path) await supabase.storage.from(PUBLIC_MEDIA_BUCKET).remove([path]).catch(() => {});
+};
+
 // One helper for both materials and assignments; the path prefix decides how
 // downstream code treats it, and how the storage policy names it in logs.
 export const uploadCourseFile = async ({ courseId, file, prefix = "" }) => {
@@ -973,6 +1029,35 @@ export const setMemberActive = async ({ memberId, isActive }) => {
 export const removeMember = async (memberId) => {
   const { error } = await supabase.from("school_members").delete().eq("id", memberId);
   if (error) throw error;
+};
+
+// Resets someone else's password — not possible from the browser on its own,
+// since Supabase only lets a person change their OWN password. The
+// admin-reset-password Edge Function checks classroom.can_manage_member_account
+// itself before doing anything privileged; this just calls it the same way
+// startOnlinePayment calls pay-init.
+export const resetMemberPassword = async ({ schoolId, userId }) => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("admin-reset-password", {
+    body: { schoolId, targetUserId: userId },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not reset that password.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
 };
 
 // Adds someone to this school and creates their login.
@@ -1234,6 +1319,15 @@ export const fetchSessions = async (schoolId) => {
     .order("name", { ascending: false });
   if (error) throw error;
   return data;
+};
+
+// classroom.sessions' own SELECT policy is membership-gated — no use to an
+// applicant, who is deliberately never a school_members row. This RPC is
+// the non-member-safe read the accounted admissions flow uses instead.
+export const fetchPublicAdmissionSessions = async (schoolId) => {
+  const { data, error } = await supabase.rpc("public_admission_sessions", { target_school: schoolId });
+  if (error) throw error;
+  return data || [];
 };
 
 export const createSession = async ({ schoolId, name, startsOn, endsOn }) => {

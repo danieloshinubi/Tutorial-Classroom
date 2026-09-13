@@ -201,6 +201,55 @@ a { color: var(--brand); }
   border-bottom: 1px solid var(--line);
 }
 .topbar-spacer { flex: 1; }
+
+/* The accounted-applicant flow's own header — deliberately not .topbar/.side,
+   since an applicant has no school_members row and nothing in that sidebar
+   is theirs. */
+.applicant-shell {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.applicant-shell-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 14px 24px;
+}
+.applicant-shell-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.applicant-shell-brand img { width: 26px; height: 26px; border-radius: 6px; object-fit: cover; }
+.applicant-shell-nav { display: flex; gap: 18px; }
+.applicant-shell-nav a { color: var(--ink-2); font-weight: 500; font-size: 14.5px; }
+.applicant-shell-nav a:hover { color: var(--ink); }
+.applicant-shell-spacer { flex: 1; }
+.applicant-shell-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+.applicant-shell-signout {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.applicant-shell-signout:hover { background: var(--bg); }
 .topbar-burger {
   display: none;
   border: 1px solid var(--line);
@@ -1124,14 +1173,21 @@ table.data tr:last-child td { border-bottom: none; }
 /* Stat tiles */
 .stat-row {
   display: grid; gap: 14px;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   margin-bottom: 22px;
 }
 .stat {
   background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--r-lg); padding: 16px 18px;
+  min-width: 0;
 }
-.stat-value { font-size: 28px; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+/* Large NGN amounts with thousands separators can be wider than a narrow
+   tile — shrink to fit rather than silently overflowing into the next tile. */
+.stat-value {
+  font-size: clamp(19px, 2.3vw, 28px);
+  font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
 .stat-label { font-size: 13px; color: var(--ink-3); margin-top: 4px; }
 .stat-note { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
 

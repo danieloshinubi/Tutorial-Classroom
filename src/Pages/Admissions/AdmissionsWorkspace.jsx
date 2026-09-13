@@ -543,9 +543,11 @@ const AdmissionsWorkspace = () => {
           </Card>
         ) : null}
 
-        {/* Clearance — opens once the offer is accepted (and the acceptance
-            fee, if the school charges one, is verified). Before that point
-            it has nothing to show, same as the acceptance-fee panel above. */}
+        {/* Clearance — opens once the offer is accepted and the acceptance
+            fee, if the school charges one, is verified. The database has
+            always refused to open it earlier than that
+            (create_application_clearance_items); this now says so up
+            front instead of only surfacing it as an error after a click. */}
         {app.offer_state === "accepted" ? (
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -560,6 +562,10 @@ const AdmissionsWorkspace = () => {
             {clearanceDepartments.length === 0 && app.clearance_state === "cleared" ? (
               <Notice tone="muted">
                 {"No clearance departments were configured, so this passed automatically."}
+              </Notice>
+            ) : config.acceptance_fee_enabled && app.payment_state !== "verified" && clearance.length === 0 ? (
+              <Notice tone="warn">
+                {"Waiting on the acceptance fee — clearance opens automatically once it's verified."}
               </Notice>
             ) : clearanceDepartments.length === 0 ? (
               <>

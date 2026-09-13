@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import Navbar from "../../Components/Navbar/Navbar";
-import { useSchool } from "../../context/SchoolContext";
+import { ApplicantShell } from "../../Components/ApplicantShell";
+import { supabase } from "../../lib/supabaseClient";
+import { resolveSlug } from "../../lib/tenant";
 import {
   fetchMyApplications,
   fetchApplicationWorkflowSteps,
@@ -172,7 +173,19 @@ const AppStep = ({ step }) => {
 const ApplicationDashboard = () => {
   const { applicationId } = useParams();
   const navigate = useNavigate();
-  const { school } = useSchool();
+
+  // Not useSchool() — that resolves the school through a membership-gated
+  // policy, and an applicant is never a school_members row. This is the
+  // same non-member-safe lookup the anonymous /Apply form already uses.
+  const [school, setSchool] = useState(null);
+  useEffect(() => {
+    supabase
+      .rpc("public_school", { target_slug: resolveSlug() })
+      .then(({ data }) => {
+        if (data?.length) setSchool(data[0]);
+      })
+      .catch(() => {});
+  }, []);
 
   const [application, setApplication] = useState(null);
   const [steps, setSteps] = useState([]);
@@ -290,6 +303,12 @@ const ApplicationDashboard = () => {
     application?.payment_state === "rejected" ? "danger" :
     "warn";
 
+  // The form genuinely locks now (075_application_section_fee_gate.sql
+  // added the same check to save_application_section) — this just makes
+  // the UI match what the database already enforces, rather than showing
+  // an editable section that would fail on save.
+  const feeLocked = feeVisible && application?.payment_state !== "verified";
+
   const goToFee = async () => {
     if (!application) return;
     // Move the row to processing before handing off, so a reload cannot
@@ -386,12 +405,12 @@ const ApplicationDashboard = () => {
 
   if (loading) {
     return (
-      <div className="shell">
-        <Navbar />
+      <>
+        <ApplicantShell school={school} />
         <Page>
           <Empty>{"Loading your application..."}</Empty>
         </Page>
-      </div>
+      </>
     );
   }
 
@@ -401,15 +420,15 @@ const ApplicationDashboard = () => {
   // reason to throw away everything the applicant can already see.
   if (!application) {
     return (
-      <div className="shell">
-        <Navbar />
+      <>
+        <ApplicantShell school={school} />
         <Page title="Application">
           <Notice tone="error">{error}</Notice>
           <Link to="/Applications">
             <Button variant="secondary">{"Back to my applications"}</Button>
           </Link>
         </Page>
-      </div>
+      </>
     );
   }
 
@@ -453,8 +472,8 @@ const ApplicationDashboard = () => {
     : "Let's get your application started.";
 
   return (
-    <div className="shell">
-      <Navbar />
+    <>
+      <ApplicantShell school={school} />
       <Page
         title={application.reference}
         subtitle={school ? `Application to ${school.name}` : "Application"}
@@ -660,8 +679,8 @@ const ApplicationDashboard = () => {
           <Section
             title="Personal information"
             value={application.personal_info}
-            disabled={!editable.personal}
-            defaultOpen={!!editable.personal}
+            disabled={!editable.personal || feeLocked}
+            defaultOpen={!!editable.personal && !feeLocked}
             onSave={saveSection("personal")}
             fields={[
               { name: "first_name", label: "First name" },
@@ -681,8 +700,8 @@ const ApplicationDashboard = () => {
             title="Education history"
             description="Where you have studied so far, most recent first."
             value={application.education_history}
-            disabled={!editable.education}
-            defaultOpen={!!editable.education}
+            disabled={!editable.education || feeLocked}
+            defaultOpen={!!editable.education && !feeLocked}
             onSave={saveSection("education")}
             fields={[
               { name: "school_name", label: "School name" },
@@ -697,8 +716,8 @@ const ApplicationDashboard = () => {
             title="Examination results"
             description="Your exam results — WAEC/NECO/NABTEB/JAMB or whatever your school runs."
             value={application.exam_results}
-            disabled={!editable.exams}
-            defaultOpen={!!editable.exams}
+            disabled={!editable.exams || feeLocked}
+            defaultOpen={!!editable.exams && !feeLocked}
             onSave={saveSection("exams")}
             fields={[
               { name: "exam_type", label: "Exam" },
@@ -712,8 +731,8 @@ const ApplicationDashboard = () => {
             <Section
               title="Next of kin"
               value={application.next_of_kin}
-              disabled={!editable.next_of_kin}
-              defaultOpen={!!editable.next_of_kin}
+              disabled={!editable.next_of_kin || feeLocked}
+              defaultOpen={!!editable.next_of_kin && !feeLocked}
               onSave={saveSection("next_of_kin")}
               fields={[
                 { name: "name", label: "Full name" },
@@ -729,8 +748,8 @@ const ApplicationDashboard = () => {
             <Section
               title="Referees"
               value={application.referees}
-              disabled={!editable.referees}
-              defaultOpen={!!editable.referees}
+              disabled={!editable.referees || feeLocked}
+              defaultOpen={!!editable.referees && !feeLocked}
               onSave={saveSection("referees")}
               fields={[
                 { name: "referee_1_name", label: "Referee 1 — name" },
@@ -745,19 +764,23 @@ const ApplicationDashboard = () => {
         {canSubmit ? (
           <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Submit"}</h3>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-              <input
-                type="checkbox"
-                checked={declaration}
-                onChange={(e) => setDeclaration(e.target.checked)}
-              />
-              <span>
-                {"I confirm that the information above is accurate and complete. I understand that providing false information may result in cancellation of my admission."}
-              </span>
-            </label>
+            {feeLocked ? (
+              <Notice tone="warn">{"Pay the application fee above before you can submit."}</Notice>
+            ) : (
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={declaration}
+                  onChange={(e) => setDeclaration(e.target.checked)}
+                />
+                <span>
+                  {"I confirm that the information above is accurate and complete. I understand that providing false information may result in cancellation of my admission."}
+                </span>
+              </label>
+            )}
             <div style={{ marginTop: 12 }}>
               <Button
-                disabled={!declaration || submitting}
+                disabled={!declaration || submitting || feeLocked}
                 onClick={submit}
               >
                 {submitting ? "Submitting..." : "Submit application"}
@@ -791,7 +814,7 @@ const ApplicationDashboard = () => {
           )}
         </Card>
       </Page>
-    </div>
+    </>
   );
 };
 

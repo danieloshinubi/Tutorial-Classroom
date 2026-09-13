@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import Navbar from "../../Components/Navbar/Navbar";
-import { useSchool } from "../../context/SchoolContext";
+import { ApplicantShell } from "../../Components/ApplicantShell";
+import { supabase } from "../../lib/supabaseClient";
+import { resolveSlug } from "../../lib/tenant";
 import {
   fetchMyApplications,
   fetchMyApplicantAccount,
@@ -19,9 +20,13 @@ import {
 
 // One row per application the signed-in applicant holds against this
 // school. The list is deliberately separate from the tenant's normal
-// dashboard, because an applicant is not yet a member.
+// dashboard, because an applicant is not yet a member — and, following that
+// through properly, it resolves the school itself the non-member-safe way
+// (public_school()) rather than through useSchool(), which depends on
+// membership the applicant will never have.
 const Applications = () => {
-  const { school, schoolId } = useSchool();
+  const [school, setSchool] = useState(null);
+  const schoolId = school?.id || null;
   const [account, setAccount] = useState(null);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,9 +53,18 @@ const Applications = () => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    supabase
+      .rpc("public_school", { target_slug: resolveSlug() })
+      .then(({ data }) => {
+        if (data?.length) setSchool(data[0]);
+      })
+      .catch(() => {});
+  }, []);
+
   return (
-    <div className="shell">
-      <Navbar />
+    <>
+      <ApplicantShell school={school} />
       <Page
         title="My applications"
         subtitle={school ? `Applications to ${school.name}` : "Applications"}
@@ -110,7 +124,7 @@ const Applications = () => {
           ))}
         </Grid>
       </Page>
-    </div>
+    </>
   );
 };
 
