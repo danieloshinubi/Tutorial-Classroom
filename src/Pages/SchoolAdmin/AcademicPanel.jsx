@@ -9,7 +9,7 @@ import {
   deleteTerm,
   setCurrentTerm,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Notice, Empty, formatDate } from "../../Components/UI";
+import { Card, Field, Button, Badge, Notice, Empty, formatDate, Select, DatePicker } from "../../Components/UI";
 
 // A school runs sessions made of terms. Fees, results and attendance are all
 // reported per term, so nothing downstream can be built until this exists.
@@ -268,20 +268,10 @@ const AcademicPanel = () => {
                 />
               </Field>
               <Field label="Starts">
-                <input
-                  type="date"
-                  className="input"
-                  value={session.startsOn}
-                  onChange={(e) => setSession((c) => ({ ...c, startsOn: e.target.value }))}
-                />
+                <DatePicker value={session.startsOn} onChange={(v) => setSession((c) => ({ ...c, startsOn: v }))} />
               </Field>
               <Field label="Ends">
-                <input
-                  type="date"
-                  className="input"
-                  value={session.endsOn}
-                  onChange={(e) => setSession((c) => ({ ...c, endsOn: e.target.value }))}
-                />
+                <DatePicker value={session.endsOn} onChange={(v) => setSession((c) => ({ ...c, endsOn: v }))} />
               </Field>
               <Button type="submit" disabled={busy}>{"Add session"}</Button>
             </form>
@@ -296,15 +286,12 @@ const AcademicPanel = () => {
             ) : (
               <form onSubmit={addTerm}>
                 <Field label="Session">
-                  <select
+                  <Select
                     className="select"
                     value={term.sessionId}
-                    onChange={(e) => setTerm((c) => ({ ...c, sessionId: e.target.value }))}
-                  >
-                    {sessions.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setTerm((c) => ({ ...c, sessionId: v }))}
+                    options={sessions.map((s) => ({ value: s.id, label: s.name }))}
+                  />
                 </Field>
                 <Field label="Name" hint="First Term, Second Term, Third Term.">
                   <input
@@ -315,20 +302,10 @@ const AcademicPanel = () => {
                   />
                 </Field>
                 <Field label="Starts">
-                  <input
-                    type="date"
-                    className="input"
-                    value={term.startsOn}
-                    onChange={(e) => setTerm((c) => ({ ...c, startsOn: e.target.value }))}
-                  />
+                  <DatePicker value={term.startsOn} onChange={(v) => setTerm((c) => ({ ...c, startsOn: v }))} />
                 </Field>
                 <Field label="Ends">
-                  <input
-                    type="date"
-                    className="input"
-                    value={term.endsOn}
-                    onChange={(e) => setTerm((c) => ({ ...c, endsOn: e.target.value }))}
-                  />
+                  <DatePicker value={term.endsOn} onChange={(v) => setTerm((c) => ({ ...c, endsOn: v }))} />
                 </Field>
                 <Button type="submit" disabled={busy}>{"Add term"}</Button>
               </form>

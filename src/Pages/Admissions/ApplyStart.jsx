@@ -18,6 +18,8 @@ import {
   Field,
   Button,
   Notice,
+  Select,
+  DatePicker,
 } from "../../Components/UI";
 
 // The accounted flow's entry point. Signed-in applicant chooses a session
@@ -194,34 +196,31 @@ const ApplyStart = () => {
           <Card style={{ maxWidth: 640 }}>
             <form onSubmit={start}>
               <Field label="Admission session">
-                <select
+                <Select
                   className="select"
                   value={form.session_id}
-                  onChange={update("session_id")}
-                >
-                  <option value="">{"Choose a session"}</option>
-                  {sessions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setForm((current) => ({ ...current, session_id: v }))}
+                  options={[
+                    { value: "", label: "Choose a session" },
+                    ...sessions.map((s) => ({ value: s.id, label: s.name })),
+                  ]}
+                />
               </Field>
 
               {form.session_id && programmes.length > 0 ? (
                 <Field label="Programme">
-                  <select
+                  <Select
                     className="select"
                     value={form.programme_id}
-                    onChange={update("programme_id")}
-                  >
-                    <option value="">{"Choose a programme"}</option>
-                    {programmes.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {p.department ? `— ${p.department}` : ""}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => setForm((current) => ({ ...current, programme_id: v }))}
+                    options={[
+                      { value: "", label: "Choose a programme" },
+                      ...programmes.map((p) => ({
+                        value: p.id,
+                        label: `${p.name} ${p.department ? `— ${p.department}` : ""}`,
+                      })),
+                    ]}
+                  />
                 </Field>
               ) : null}
 
@@ -251,7 +250,7 @@ const ApplyStart = () => {
                     <input className="input" type="tel" value={form.phone} onChange={update("phone")} />
                   </Field>
                   <Field label="Date of birth">
-                    <input className="input" type="date" value={form.date_of_birth} onChange={update("date_of_birth")} />
+                    <DatePicker value={form.date_of_birth} onChange={(v) => setForm((current) => ({ ...current, date_of_birth: v }))} />
                   </Field>
                 </>
               ) : null}

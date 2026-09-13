@@ -7,7 +7,7 @@ import {
   uploadPublicApplicationDocument,
   removePublicApplicationDocument,
 } from "../../lib/api";
-import { Field, Button, Notice } from "../../Components/UI";
+import { Field, Button, Notice, Select, DatePicker } from "../../Components/UI";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -269,14 +269,19 @@ const Apply = () => {
                 <input required className="input" value={form.surname} onChange={update("surname")} />
               </Field>
               <Field label="Date of birth">
-                <input type="date" className="input" value={form.dateOfBirth} onChange={update("dateOfBirth")} />
+                <DatePicker value={form.dateOfBirth} onChange={(v) => setForm((current) => ({ ...current, dateOfBirth: v }))} />
               </Field>
               <Field label="Gender">
-                <select className="select" value={form.gender} onChange={update("gender")}>
-                  <option value="">{"Prefer not to say"}</option>
-                  <option value="Female">{"Female"}</option>
-                  <option value="Male">{"Male"}</option>
-                </select>
+                <Select
+                  className="select"
+                  value={form.gender}
+                  onChange={(v) => setForm((current) => ({ ...current, gender: v }))}
+                  options={[
+                    { value: "", label: "Prefer not to say" },
+                    { value: "Female", label: "Female" },
+                    { value: "Male", label: "Male" },
+                  ]}
+                />
               </Field>
               <Field label="Applying for class" hint="The class level, if you know it.">
                 <input
@@ -303,11 +308,10 @@ const Apply = () => {
                 <input required className="input" value={form.guardianName} onChange={update("guardianName")} />
               </Field>
               <Field label="Relationship">
-                <select
+                <Select
                   className="select"
                   value={relationIsOther ? "Other" : form.guardianRelation}
-                  onChange={(e) => {
-                    const v = e.target.value;
+                  onChange={(v) => {
                     if (v === "Other") {
                       setRelationIsOther(true);
                       setForm((c) => ({ ...c, guardianRelation: "" }));
@@ -316,12 +320,11 @@ const Apply = () => {
                       setForm((c) => ({ ...c, guardianRelation: v }));
                     }
                   }}
-                >
-                  <option value="">{"Choose"}</option>
-                  {GUARDIAN_RELATIONS.map((r) => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "Choose" },
+                    ...GUARDIAN_RELATIONS.map((r) => ({ value: r, label: r })),
+                  ]}
+                />
                 {relationIsOther ? (
                   <input
                     className="input"
@@ -363,15 +366,12 @@ const Apply = () => {
                     ) : a.status === "error" ? (
                       <span className="apply-attach-status error">{a.error}</span>
                     ) : (
-                      <select
+                      <Select
                         className="select apply-attach-kind"
                         value={a.kind}
-                        onChange={(e) => setAttachmentKind(a.key, e.target.value)}
-                      >
-                        {DOC_KINDS.map(([value, label]) => (
-                          <option key={value} value={value}>{label}</option>
-                        ))}
-                      </select>
+                        onChange={(v) => setAttachmentKind(a.key, v)}
+                        options={DOC_KINDS.map(([value, label]) => ({ value, label }))}
+                      />
                     )}
                     <button
                       type="button"

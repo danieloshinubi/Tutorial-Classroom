@@ -35,6 +35,8 @@ import {
   Empty,
   Tabs,
   MoneyInput,
+  Select,
+  DatePicker,
   displayName,
   formatDate,
 } from "../../Components/UI";
@@ -289,42 +291,31 @@ const Structures = ({
                 />
               </Field>
               <Field label="Term">
-                <select
+                <Select
                   className="select"
                   value={termId}
-                  onChange={(e) => setTermId(e.target.value)}
-                >
-                  <option value="">{"Choose a term"}</option>
-                  {terms.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setTermId}
+                  options={[
+                    { value: "", label: "Choose a term" },
+                    ...terms.map((t) => ({ value: t.id, label: t.name })),
+                  ]}
+                />
               </Field>
             </div>
             <div className="split">
               <Field label="Class" hint="Leave blank to charge every class the same.">
-                <select
+                <Select
                   className="select"
                   value={classId}
-                  onChange={(e) => setClassId(e.target.value)}
-                >
-                  <option value="">{"Every class"}</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setClassId}
+                  options={[
+                    { value: "", label: "Every class" },
+                    ...classes.map((c) => ({ value: c.id, label: c.name })),
+                  ]}
+                />
               </Field>
               <Field label="Due by">
-                <input
-                  className="input"
-                  type="date"
-                  value={dueOn}
-                  onChange={(e) => setDueOn(e.target.value)}
-                />
+                <DatePicker value={dueOn} onChange={setDueOn} />
               </Field>
             </div>
             <Button type="submit" disabled={busy}>
@@ -680,18 +671,13 @@ const InvoiceRow = ({ invoice, who, money, onChange, onError }) => {
                 value={amount}
                 onChange={setAmount}
               />
-              <select
+              <Select
                 className="select"
                 style={{ maxWidth: 160 }}
                 value={method}
-                onChange={(e) => setMethod(e.target.value)}
-              >
-                {PAYMENT_METHODS.map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </select>
+                onChange={setMethod}
+                options={PAYMENT_METHODS.map(([v, l]) => ({ value: v, label: l }))}
+              />
               <input
                 className="input"
                 style={{ maxWidth: 180 }}
@@ -883,19 +869,16 @@ const Bursary = () => {
         subtitle={school ? `Fees at ${school.name}` : "Fees"}
         action={
           terms.length ? (
-            <select
+            <Select
               className="select"
-              value={termId}
-              onChange={(e) => setTermId(e.target.value)}
               aria-label="Term"
-            >
-              <option value="">{"Every term"}</option>
-              {terms.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+              value={termId}
+              onChange={setTermId}
+              options={[
+                { value: "", label: "Every term" },
+                ...terms.map((t) => ({ value: t.id, label: t.name })),
+              ]}
+            />
           ) : null
         }
         toolbar={

@@ -16,7 +16,7 @@ import {
   uploadExamQuestionImage,
   removeExamQuestionImage,
 } from "../../lib/api";
-import { Page, Card, Field, Button, Badge, Notice } from "../../Components/UI";
+import { Page, Card, Field, Button, Badge, Notice, Select, DateTimePicker } from "../../Components/UI";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 
 const blankQuestion = (kind = "multiple_choice") => ({
@@ -417,15 +417,16 @@ const ExamBuilder = () => {
             />
           </Field>
           <Field label="Kind" hint="Which list this shows up in on the course page.">
-            <select
+            <Select
               className="select"
               style={{ width: "auto" }}
               value={exam.kind}
-              onChange={setExamField("kind")}
-            >
-              <option value="exam">{"Exam"}</option>
-              <option value="midterm">{"Mid-exam"}</option>
-            </select>
+              onChange={(v) => setExam((current) => ({ ...current, kind: v }))}
+              options={[
+                { value: "exam", label: "Exam" },
+                { value: "midterm", label: "Mid-exam" },
+              ]}
+            />
           </Field>
           <Field label="Instructions">
             <textarea
@@ -457,11 +458,9 @@ const ExamBuilder = () => {
               label="Closes at"
               hint={closesHint}
             >
-              <input
-                type="datetime-local"
-                className="input"
+              <DateTimePicker
                 value={exam.closes_at}
-                onChange={setExamField("closes_at")}
+                onChange={(v) => setExam((current) => ({ ...current, closes_at: v }))}
               />
             </Field>
           </div>
@@ -539,16 +538,17 @@ const ExamBuilder = () => {
             <div className="q-head">
               <span className="q-num">{`Question ${qi + 1}`}</span>
               <div className="btn-row">
-                <select
+                <Select
                   className="select"
                   style={{ width: "auto" }}
                   value={question.kind}
-                  onChange={(e) => changeKind(qi, e.target.value)}
-                >
-                  <option value="multiple_choice">{"Multiple choice"}</option>
-                  <option value="true_false">{"True / false"}</option>
-                  <option value="short_answer">{"Short answer"}</option>
-                </select>
+                  onChange={(v) => changeKind(qi, v)}
+                  options={[
+                    { value: "multiple_choice", label: "Multiple choice" },
+                    { value: "true_false", label: "True / false" },
+                    { value: "short_answer", label: "Short answer" },
+                  ]}
+                />
                 <Button
                   variant="ghost"
                   size="sm"

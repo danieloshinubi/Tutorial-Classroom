@@ -38,6 +38,10 @@ import Teach from "./Pages/Teach/Teach";
 import CourseForm from "./Pages/Teach/CourseForm";
 import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
 import AuditLog from "./Pages/AuditLog/AuditLog";
+import TicketsList from "./Pages/Tickets/TicketsList";
+import TicketDetail from "./Pages/Tickets/TicketDetail";
+import MyTickets from "./Pages/Support/MyTickets";
+import MyTicketDetail from "./Pages/Support/MyTicketDetail";
 import PlatformApp from "./platform/PlatformApp";
 import MarketingApp from "./marketing/MarketingApp";
 import TrialGate from "./Components/TrialGate";
@@ -115,6 +119,11 @@ function App() {
                 parent, and an invoice is only visible to its own family. */}
             <Route path="/News" element={<News />} />
             <Route path="/Fees" element={<Fees />} />
+            {/* Raise your own request and follow it — every signed-in role,
+                same reach as News/Fees. RLS scopes it to the caller's own
+                tickets; the staff-side queue at /Tickets is separate. */}
+            <Route path="/Support" element={<MyTickets />} />
+            <Route path="/Support/:ticketId" element={<MyTicketDetail />} />
             {/* Where the gateway returns a family. It reports the outcome and
                 credits nothing — the signed webhook does that. */}
             <Route path="/Fees/Paid" element={<PaymentReturn />} />
@@ -177,6 +186,13 @@ function App() {
             {/* Every recorded action, for owner/admin only */}
             <Route element={<SchoolRoute module="auditlog" />}>
               <Route path="/AuditLog" element={<AuditLog />} />
+            </Route>
+
+            {/* Staff's own operational support queue — every school-running
+                role except teacher, who has no reason to be here. */}
+            <Route element={<SchoolRoute module="tickets" />}>
+              <Route path="/Tickets" element={<TicketsList />} />
+              <Route path="/Tickets/:ticketId" element={<TicketDetail />} />
             </Route>
 
             {/* The platform console used to live here, at /Platform on a

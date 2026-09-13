@@ -40,6 +40,29 @@
   --shadow-3: 0 12px 32px rgb(16 24 40 / 0.12);
 
   --nav-h: 64px;
+
+  /* Every dropdown in the app (the Select component in Components/UI.jsx,
+     and anything built the same way later) reads its look from these, and
+     only these — change a dropdown's radius, row padding, hover tone or
+     selected-accent color here and every dropdown everywhere picks it up,
+     with no page or component file to go hunt down. They default to the
+     app's own tokens above rather than new values, so the two stay in sync
+     unless deliberately split apart later. */
+  --dd-radius: var(--r);
+  --dd-shadow: var(--shadow-3);
+  --dd-surface: var(--surface);
+  --dd-border: var(--line);
+  --dd-max-height: min(280px, 60vh);
+  --dd-row-pad-y: 8px;
+  --dd-row-pad-x: 14px;
+  --dd-row-gap: 10px;
+  --dd-ink: var(--ink-2);
+  --dd-hover-bg: var(--bg);
+  --dd-hover-ink: var(--ink);
+  --dd-hover-accent: var(--ink-3);
+  --dd-selected-ink: var(--brand-dark);
+  --dd-selected-accent: var(--brand);
+  --dd-focus-ring: var(--brand-soft);
 }
 
 * { box-sizing: border-box; }
@@ -359,6 +382,15 @@ a { color: var(--brand); }
   padding: 0 0 72px;
 }
 
+/* A dense, multi-column view (Tickets' list-with-filters, the 3-pane
+   detail) wastes the extra room a capped reading width leaves on a wide
+   screen — the same reason a full email client spans the window instead
+   of centering in a narrow column. No pixel cap at all, unlike .page —
+   it should keep filling the window on any screen, ultrawide included. */
+.page.page-wide {
+  width: calc(100% - 40px);
+}
+
 /* Title, action and toolbar stay; the body below them scrolls. */
 .page-top {
   position: sticky;
@@ -636,6 +668,247 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 }
 .textarea { min-height: 110px; resize: vertical; }
 
+/* ==========================================================================
+   Select — a custom-built listbox standing in for <select>
+
+   A native <select>'s closed control takes CSS fine; its open option list
+   almost entirely ignores it (system grey highlight, square corners, the
+   OS's own font) — that's the actual gap between this app's designed
+   surfaces and a plain browser dropdown. The trigger below reuses whatever
+   box class a call site already passes (.select, .tix-select full, ...) so
+   its border/padding/radius/focus ring stay exactly what they were; only
+   the popup panel is new. That panel deliberately mirrors the account
+   menu's language — a flush list, hairline dividers between rows, a left
+   inset accent on hover/focus, brand for the selected row — so every
+   dropdown surface in the app now reads as one family.
+   ========================================================================== */
+/* No explicit width here on purpose: a plain block box sizes to its
+   container (matching a "full" trigger stacked in a form field), while a
+   flex-row sibling (the toolbar filter, the per-row status select) sizes
+   to its own content instead of stretching — exactly how the native
+   <select> it replaces behaved in each of those same two contexts. */
+.uiselect { position: relative; }
+.uiselect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.uiselect-trigger:disabled { opacity: .6; cursor: not-allowed; }
+.uiselect-trigger:focus-visible,
+.uiselect-trigger[aria-expanded="true"] {
+  border-color: var(--dd-selected-accent);
+  box-shadow: 0 0 0 3px var(--dd-focus-ring);
+}
+.uiselect-trigger-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uiselect-caret { flex: none; color: var(--ink-3); transition: transform .15s ease; }
+.uiselect-caret.up { transform: rotate(180deg); }
+
+.uiselect-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 70;
+  min-width: 100%;
+  max-height: var(--dd-max-height);
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--dd-surface);
+  border: 1px solid var(--dd-border);
+  border-radius: var(--dd-radius);
+  box-shadow: var(--dd-shadow);
+}
+.uiselect-empty { padding: 10px var(--dd-row-pad-x); font-size: 13px; color: var(--ink-3); }
+.uiselect-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--dd-row-gap);
+  padding: var(--dd-row-pad-y) var(--dd-row-pad-x);
+  font-size: 14px;
+  color: var(--dd-ink);
+  cursor: pointer;
+  box-shadow: inset 3px 0 0 transparent;
+}
+.uiselect-option + .uiselect-option { border-top: 1px solid var(--dd-border); }
+.uiselect-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uiselect-option-check { flex: none; color: var(--dd-selected-accent); opacity: 0; }
+.uiselect-option:hover,
+.uiselect-option.active {
+  background: var(--dd-hover-bg);
+  color: var(--dd-hover-ink);
+  box-shadow: inset 3px 0 0 var(--dd-hover-accent);
+}
+.uiselect-option[aria-selected="true"] {
+  color: var(--dd-selected-ink);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--dd-selected-accent);
+}
+.uiselect-option[aria-selected="true"] .uiselect-option-check { opacity: 1; }
+
+/* ==========================================================================
+   DatePicker — a custom-built calendar standing in for <input type="date">
+
+   Exactly the same problem as the Select above: a native date input's
+   calendar popup is drawn by the OS, not this app, and CSS can't touch it.
+   The panel reads the same --dd-* dropdown tokens Select uses (radius,
+   shadow, border, hover tone, selected accent) — a date field and a Select
+   sitting side by side in the same form should read as one family of
+   control, not two that happen to coexist.
+   ========================================================================== */
+.uidate { position: relative; }
+.uidate-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+}
+.uidate-trigger:disabled { opacity: .6; cursor: not-allowed; }
+.uidate-trigger:focus-visible,
+.uidate-trigger[aria-expanded="true"] {
+  border-color: var(--dd-selected-accent);
+  box-shadow: 0 0 0 3px var(--dd-focus-ring);
+}
+.uidate-trigger-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uidate-icon { flex: none; color: var(--ink-3); }
+
+.uidate-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 70;
+  width: 280px;
+  padding: 12px;
+  background: var(--dd-surface);
+  border: 1px solid var(--dd-border);
+  border-radius: var(--dd-radius);
+  box-shadow: var(--dd-shadow);
+}
+.uidate-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.uidate-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.uidate-nav-btn:hover,
+.uidate-nav-btn:focus-visible { background: var(--dd-hover-bg); color: var(--dd-hover-ink); outline: none; }
+.uidate-nav-label { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+
+.uidate-weekdays, .uidate-grid { display: grid; grid-template-columns: repeat(7, 1fr); }
+.uidate-weekdays span {
+  text-align: center;
+  padding-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.uidate-grid { gap: 2px; }
+.uidate-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r-sm);
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.uidate-day.outside { color: var(--ink-3); opacity: .55; }
+.uidate-day:hover { background: var(--dd-hover-bg); }
+.uidate-day:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dd-focus-ring); }
+.uidate-day.today { box-shadow: inset 0 0 0 1px var(--dd-selected-accent); font-weight: 600; }
+.uidate-day.selected { background: var(--dd-selected-accent); color: #fff; font-weight: 600; }
+.uidate-day.selected.today { box-shadow: none; }
+
+.uidate-time {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dd-border);
+}
+.uidate-time-label { font-size: 12.5px; color: var(--ink-3); }
+.uidate-time-inputs { display: flex; align-items: center; gap: 4px; }
+.uidate-time-sep { color: var(--ink-3); font-weight: 600; }
+.uidate-time-num {
+  width: 44px;
+  padding: 5px 4px;
+  text-align: center;
+  font: inherit;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--dd-border);
+  border-radius: var(--r-sm);
+  outline: none;
+  /* Plain number spinners still ignore CSS the same way a native date
+     picker does — but a two-digit hour/minute box is such a small, well-
+     understood control that a full custom stepper isn't worth building;
+     unlike the day grid or the month picker, there's no real design gap
+     here worth closing. */
+}
+.uidate-time-num:focus { border-color: var(--dd-selected-accent); box-shadow: 0 0 0 3px var(--dd-focus-ring); }
+
+.uidate-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dd-border);
+}
+.uidate-footer-spacer { flex: 1 1 auto; }
+.uidate-link {
+  border: none;
+  background: none;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dd-selected-accent);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+}
+.uidate-link:hover { background: var(--dd-hover-bg); }
+.uidate-link.muted { color: var(--ink-3); }
+
 /* ----------------------------------------------------------------- pieces */
 .badge {
   display: inline-block;
@@ -727,6 +1000,12 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-author { font-weight: 600; font-size: 13.5px; }
 .chat-time { font-size: 11.5px; color: var(--ink-3); }
 .chat-body { margin: 3px 0 0; font-size: 14.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.chat-body-html { white-space: normal; font-size: 15px; }
+.chat-body-html img { max-width: 100%; max-height: 400px; object-fit: contain; vertical-align: middle; }
+.chat-body-html p { margin: 0 0 .6em; }
+.chat-body-html p:last-child { margin-bottom: 0; }
+.chat-body-html ul, .chat-body-html ol { margin: 0 0 .6em; padding-left: 1.4em; }
+.chat-body-html a { color: var(--brand); text-decoration: underline; }
 
 /* The composer is a block, not a single line: Enter makes a new line and only
    the button publishes, so the box has to be big enough to write in. */
@@ -1453,6 +1732,18 @@ table.data tr:last-child td { border-bottom: none; }
    The header carries up to nine modules for a proprietor, so the person's
    name, role and sign-out no longer fit beside them. They live behind the
    avatar instead — which also gives them room to be read properly.
+
+   Structured as a typeset column, not a stack of buttons: a real headline
+   for the name, small-caps captions for email/role, and a flush, hairline-
+   ruled list below. Hierarchy comes from type and rules only — no card, no
+   chip, no pill anywhere except Log out's permanent tint.
+
+   `.account-item` and `.account-heading` keep their original bare rules
+   below — GlobalSearch, EmojiInput and MoreMenu all reuse those two classes
+   for their own rows. Everything that changes THIS menu's look is written
+   as `.account-menu .account-item` / `.account-menu .account-heading`, so it
+   only wins in here (via specificity) without touching what those other
+   three components depend on.
    ========================================================================== */
 .account { position: relative; flex: 0 0 auto; }
 .account-trigger {
@@ -1466,8 +1757,14 @@ table.data tr:last-child td { border-bottom: none; }
   cursor: pointer;
   color: var(--ink-2);
 }
-.account-trigger:hover { background: var(--bg); border-color: var(--line); }
+.account-trigger:hover,
 .account-trigger[aria-expanded="true"] { background: var(--bg); border-color: var(--line); }
+.account-trigger:focus-visible {
+  outline: none;
+  background: var(--bg);
+  border-color: var(--line);
+  box-shadow: 0 0 0 3px var(--brand-soft);
+}
 .account-caret { transition: transform .15s ease; }
 .account-caret.up { transform: rotate(180deg); }
 
@@ -1476,16 +1773,30 @@ table.data tr:last-child td { border-bottom: none; }
   top: calc(100% + 8px);
   right: 0;
   z-index: 60;
-  width: 270px;
+  width: 288px;
+  max-height: min(80vh, 520px);
+  overflow-y: auto;
+  overflow-x: hidden;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  box-shadow: 0 14px 40px rgba(15, 23, 42, .16);
-  overflow: hidden;
+  box-shadow: var(--shadow-3);
 }
-.account-who { padding: 14px 16px 12px; border-bottom: 1px solid var(--line); }
-.account-name { font-weight: 650; font-size: 14.5px; }
+
+/* ---- Identity: a headline and two captions, nothing boxed ---- */
+.account-who { padding: 18px 20px 16px; border-bottom: 1px solid var(--line); }
+.account-name {
+  font-size: 16.5px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .account-email {
+  margin-top: 3px;
   font-size: 12.5px;
   color: var(--ink-3);
   overflow: hidden;
@@ -1493,15 +1804,18 @@ table.data tr:last-child td { border-bottom: none; }
   white-space: nowrap;
 }
 .account-role {
-  margin-top: 6px;
-  font-size: 11px;
+  margin-top: 8px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: var(--brand);
+  letter-spacing: .02em;
+  text-transform: none;
+  font-variant-caps: all-small-caps;
+  color: var(--ink-3);
 }
-.account-items { padding: 6px; display: flex; flex-direction: column; }
-.account-section { border-top: 1px solid var(--line); }
+
+/* ---- The list: flush, edge-to-edge; rows divide with rules, not gaps ---- */
+.account-items { padding: 4px 0; display: flex; flex-direction: column; }
+.account-section { border-top: 1px solid var(--line); padding-top: 4px; }
 .account-heading {
   padding: 6px 10px 4px;
   font-size: 11px;
@@ -1510,6 +1824,16 @@ table.data tr:last-child td { border-bottom: none; }
   text-transform: uppercase;
   color: var(--ink-3);
 }
+.account-menu .account-heading {
+  padding: 10px 20px 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-transform: none;
+  font-variant-caps: all-small-caps;
+  color: var(--ink-3);
+}
+
 .account-item {
   display: flex;
   align-items: center;
@@ -1528,8 +1852,77 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .account-item:hover { background: var(--bg); }
 .account-item svg { color: var(--ink-3); flex: 0 0 auto; }
+
+.account-menu .account-item {
+  gap: 12px;
+  padding: 11px 20px;
+  border-radius: 0;
+  font-size: 14.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  box-shadow: inset 3px 0 0 transparent;
+  transition: color .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+.account-menu .account-item + .account-item { border-top: 1px solid var(--line); }
+.account-menu .account-item span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-menu .account-item svg { opacity: .6; transition: opacity .12s ease; }
+.account-menu .account-item:hover,
+.account-menu .account-item:focus-visible {
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--ink-3);
+}
+.account-menu .account-item:hover svg,
+.account-menu .account-item:focus-visible svg { opacity: 1; }
+.account-menu .account-item:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+/* "You are here" — a marginal note, not a filled pill. The bare
+   `.account-item.current` rule further down (theme.css, the header
+   section) belongs to MoreMenu and stays exactly as-is; this override
+   only ever applies inside `.account-menu`. */
+.account-menu .account-item.current,
+.account-menu .account-item.current:hover,
+.account-menu .account-item.current:focus-visible {
+  background: none;
+  color: var(--brand-dark);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+.account-menu .account-item.current svg { opacity: 1; color: var(--brand); }
+
+/* Log out: the only row with a permanent tint, so it carries real weight
+   at rest instead of only becoming "a red thing" on hover — still a flush
+   full-width row, not a floating chip or pill. */
 .account-item.danger { color: var(--danger, #b42318); }
 .account-item.danger svg { color: currentColor; }
+.account-menu .account-item.danger {
+  color: var(--danger);
+  font-weight: 600;
+  background: var(--danger-soft);
+  box-shadow: inset 3px 0 0 transparent;
+}
+.account-menu .account-item.danger svg { opacity: .85; }
+.account-menu .account-item.danger:hover,
+.account-menu .account-item.danger:focus-visible {
+  background: color-mix(in srgb, var(--danger-soft) 80%, var(--danger) 20%);
+  color: var(--danger);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+.account-menu .account-item.danger:hover svg,
+.account-menu .account-item.danger:focus-visible svg { opacity: 1; }
+.account-menu .account-item.danger:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: -2px;
+}
 
 
 /* An event on the noticeboard carries a when and a where. */
@@ -2914,4 +3307,274 @@ table.data tr:last-child td { border-bottom: none; }
   font-family: ui-monospace, "IBM Plex Mono", monospace;
   max-height: 320px;
   overflow: auto;
+}
+
+/* ==========================================================================
+   Tickets (Pages/Tickets) — the helpdesk reference set the layout (list,
+   3-pane detail, priority pills, properties rail); the colour comes from
+   this app's own tokens instead, so it reads as one more panel of
+   Schoolivio rather than a pasted-in screenshot. Local --tix-* variables
+   still exist so the rest of this section stays untouched below — they
+   just point at the shared tokens now instead of a fixed dark palette.
+   ========================================================================== */
+.tix-shell {
+  --tix-bg: var(--surface);
+  --tix-surface: var(--surface);
+  --tix-surface-2: var(--bg);
+  --tix-line: var(--line);
+  --tix-ink: var(--ink);
+  --tix-ink-2: var(--ink-2);
+  --tix-ink-3: var(--ink-3);
+  --tix-brand: var(--brand);
+  --tix-urgent: var(--danger);
+  --tix-high: var(--warn-ink);
+  --tix-medium: var(--brand);
+  --tix-low: var(--success);
+  --tix-new: var(--c2);
+  background: var(--tix-bg);
+  color: var(--tix-ink);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  border: 1px solid var(--tix-line);
+  box-shadow: var(--shadow-1);
+}
+.tix-shell, .tix-shell * { box-sizing: border-box; }
+
+.tix-toolbar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  padding: 16px 20px; border-bottom: 1px solid var(--tix-line);
+}
+.tix-toolbar-title { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.tix-count {
+  background: var(--tix-surface-2); color: var(--tix-ink-2); font-size: 12.5px; font-weight: 600;
+  padding: 2px 9px; border-radius: 999px;
+}
+.tix-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+
+.tix-body { display: flex; }
+.tix-list { flex: 1; min-width: 0; }
+.tix-filters {
+  width: 260px; flex: none; border-left: 1px solid var(--tix-line); padding: 16px 18px;
+  max-height: 640px; overflow-y: auto;
+}
+.tix-filters-head { font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+.tix-filters-hint { font-size: 12px; color: var(--tix-ink-3); margin: 0 0 10px; }
+.tix-hr { border: none; border-top: 1px solid var(--tix-line); margin: 16px 0; }
+.tix-grouplist { list-style: none; margin: 8px 0 0; padding: 0; font-size: 13px; color: var(--tix-ink-2); }
+.tix-grouplist li { padding: 5px 0; border-bottom: 1px solid var(--tix-line); }
+
+.tix-field { margin-bottom: 14px; }
+.tix-field label { display: block; font-size: 12px; color: var(--tix-ink-3); margin-bottom: 5px; }
+
+.tix-row {
+  display: flex; align-items: flex-start; gap: 12px; padding: 14px 20px;
+  border-bottom: 1px solid var(--tix-line);
+}
+.tix-row:hover { background: var(--tix-surface-2); }
+.tix-row-check { padding-top: 4px; }
+.tix-row-check input { accent-color: var(--tix-brand); }
+
+.tix-avatar {
+  width: 34px; height: 34px; border-radius: 50%; flex: none;
+  background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 12.5px; font-weight: 700;
+}
+.tix-avatar.sm { width: 26px; height: 26px; font-size: 11px; }
+
+.tix-row-main { flex: 1; min-width: 0; }
+.tix-badge {
+  display: inline-block; font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .03em; padding: 2px 8px; border-radius: 5px; margin-bottom: 6px;
+}
+.tix-badge.new { background: color-mix(in srgb, var(--tix-new) 22%, transparent); color: var(--tix-new); }
+.tix-badge.note-tag { background: color-mix(in srgb, var(--tix-high) 22%, transparent); color: var(--tix-high); margin: 0 0 0 8px; text-transform: none; letter-spacing: 0; }
+.tix-badge.failed { background: color-mix(in srgb, var(--tix-urgent) 18%, transparent); color: var(--tix-urgent); margin: 0 0 0 8px; text-transform: none; letter-spacing: 0; }
+.tix-row-subject {
+  display: block; color: var(--tix-ink); font-size: 14.5px; font-weight: 600; text-decoration: none;
+}
+.tix-row-subject:hover { text-decoration: underline; }
+.tix-row-number { color: var(--tix-ink-3); font-weight: 500; }
+.tix-row-meta { font-size: 12.5px; color: var(--tix-ink-3); margin-top: 4px; }
+.tix-dot { margin: 0 6px; }
+
+.tix-row-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 130px; }
+.tix-priority { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
+.tix-priority-dot { width: 8px; height: 8px; border-radius: 2px; }
+.tix-priority.urgent .tix-priority-dot, .tix-priority.urgent { color: var(--tix-urgent); }
+.tix-priority.urgent .tix-priority-dot { background: var(--tix-urgent); }
+.tix-priority.high .tix-priority-dot, .tix-priority.high { color: var(--tix-high); }
+.tix-priority.high .tix-priority-dot { background: var(--tix-high); }
+.tix-priority.medium .tix-priority-dot, .tix-priority.medium { color: var(--tix-medium); }
+.tix-priority.medium .tix-priority-dot { background: var(--tix-medium); }
+.tix-priority.low .tix-priority-dot, .tix-priority.low { color: var(--tix-low); }
+.tix-priority.low .tix-priority-dot { background: var(--tix-low); }
+.tix-row-group { font-size: 12px; color: var(--tix-ink-3); }
+
+.tix-status-select, .tix-select, .tix-input, .tix-textarea {
+  background: var(--tix-surface-2); border: 1px solid var(--tix-line); color: var(--tix-ink);
+  border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+}
+.tix-status-select:focus, .tix-select:focus, .tix-input:focus, .tix-textarea:focus {
+  outline: none; border-color: var(--tix-brand);
+}
+.tix-select.full, .tix-input.full { width: 100%; }
+.tix-input-lg { font-size: 16px; font-weight: 600; padding: 10px 12px; }
+.tix-textarea { width: 100%; resize: vertical; }
+
+.tix-btn {
+  border: 1px solid var(--tix-line); background: var(--tix-surface-2); color: var(--tix-ink);
+  border-radius: 8px; padding: 8px 16px; font-size: 13.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.tix-btn:hover { border-color: var(--tix-ink-3); }
+.tix-btn:disabled { opacity: .55; cursor: not-allowed; }
+.tix-btn-primary { background: var(--tix-brand); border-color: var(--tix-brand); color: #fff; }
+.tix-btn-primary:hover { filter: brightness(1.08); }
+.tix-btn-ghost { background: transparent; }
+.tix-btn.full { width: 100%; margin-top: 6px; }
+
+.tix-newform {
+  /* Rendered above .tix-shell, not inside it — the --tix-* variables
+     aren't in scope here, so this reads straight from the app's own
+     tokens rather than relying on a fallback value. */
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+  padding: 18px 20px; margin-bottom: 18px; color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+.tix-newform-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+
+.tix-crumb { display: flex; align-items: center; font-size: 13px; color: var(--ink-3); margin-bottom: 14px; }
+.tix-crumb a { color: var(--ink-2); }
+
+.tix-history-btn {
+  margin-left: auto; background: transparent; border: 1px solid var(--line); border-radius: var(--r-sm);
+  padding: 5px 12px; font-size: 12.5px; font-weight: 550; color: var(--ink-2); cursor: pointer; font-family: inherit;
+}
+.tix-history-btn:hover { background: var(--surface); border-color: var(--brand); color: var(--brand); }
+
+.tix-history {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+  box-shadow: var(--shadow-1); padding: 14px 18px; margin-bottom: 16px;
+}
+.tix-history-hint { margin: 0; font-size: 13px; color: var(--ink-3); }
+.tix-history-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 0; font-size: 13.5px; color: var(--ink); border-bottom: 1px solid var(--line);
+}
+.tix-history-row:last-child { border-bottom: none; }
+.tix-history-meta { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+
+/* .tix-shell already supplies the dark palette, the border/radius and
+   box-sizing reset — this just lays out the three panes on top of it. */
+.tix-detail { display: grid; grid-template-columns: 220px 1fr 280px; gap: 0; }
+
+.tix-detail-list { border-right: 1px solid var(--tix-line); padding: 10px; max-height: 720px; overflow-y: auto; }
+.tix-detail-list-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; text-decoration: none;
+  color: var(--tix-ink-2); margin-bottom: 2px;
+}
+.tix-detail-list-item:hover { background: var(--tix-surface-2); }
+.tix-detail-list-subject { display: block; font-size: 12.5px; color: var(--tix-ink); line-height: 1.35; }
+.tix-detail-list-num { display: block; font-size: 11px; color: var(--tix-ink-3); }
+
+.tix-thread { padding: 20px 24px; border-right: 1px solid var(--tix-line); min-width: 0; }
+.tix-thread-head h1 { font-size: 19px; margin: 0; color: var(--tix-ink); font-family: inherit; }
+.tix-thread-byline { font-size: 13px; color: var(--tix-ink-3); margin: 4px 0 16px; }
+
+.tix-compose {
+  border: 1px solid var(--tix-brand); border-radius: 10px; padding: 12px; margin-bottom: 20px;
+  background: var(--tix-surface);
+}
+.tix-compose-tabs { display: flex; gap: 4px; margin-bottom: 10px; }
+.tix-compose-tabs button {
+  background: transparent; border: none; color: var(--tix-ink-3); font-size: 13px; font-weight: 600;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer; font-family: inherit;
+}
+.tix-compose-tabs button.active { background: var(--tix-surface-2); color: var(--tix-ink); }
+.tix-compose-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+.tix-msg { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--tix-line); }
+.tix-msg:last-child { border-bottom: none; }
+.tix-msg.note { background: color-mix(in srgb, var(--tix-high) 8%, transparent); border-radius: 10px; padding: 12px; }
+.tix-msg-body { flex: 1; min-width: 0; }
+.tix-msg-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.tix-msg-head strong { font-size: 13.5px; color: var(--tix-ink); }
+.tix-msg-time { font-size: 12px; color: var(--tix-ink-3); margin-left: auto; }
+.tix-msg-body p { margin: 0; font-size: 13.5px; color: var(--tix-ink-2); line-height: 1.6; white-space: pre-wrap; }
+.tix-msg-error { color: var(--tix-urgent) !important; font-size: 12px !important; margin-top: 4px !important; }
+
+.tix-mailfields { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.tix-mailfield { flex: 1; min-width: 160px; }
+.tix-mailfield label { display: block; font-size: 11px; color: var(--tix-ink-3); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+
+/* Rich-text reply composer — only where a message leaves as a real email. */
+.rte-toolbar {
+  display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
+  margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid var(--tix-line);
+}
+.rte-btn {
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  padding: 5px 10px; font-size: 12.5px; color: var(--tix-ink-2); cursor: pointer;
+  font-family: inherit; line-height: 1.2;
+}
+.rte-btn:hover { background: var(--tix-surface-2); color: var(--tix-ink); }
+.rte-btn.active { background: color-mix(in srgb, var(--tix-brand) 16%, transparent); color: var(--tix-brand); border-color: var(--tix-brand); }
+.rte-sep { width: 1px; align-self: stretch; background: var(--tix-line); margin: 2px 4px; }
+
+.rte-prose {
+  min-height: 3.2em; max-height: 40vh; overflow-y: auto;
+  font-size: 13.5px; color: var(--tix-ink); line-height: 1.6; outline: none;
+}
+.rte-prose p { margin: 0 0 .6em; }
+.rte-prose p:last-child { margin-bottom: 0; }
+.rte-prose ul, .rte-prose ol { margin: 0 0 .6em; padding-left: 1.4em; }
+.rte-prose a { color: var(--tix-brand); text-decoration: underline; }
+.rte-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--tix-ink-3);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* A rendered email body reuses the same type rules as the composer, so a
+   sent reply reads back the way it was written. Sized up from the
+   13.5px other thread text uses — an email's actual content, signature
+   block included, needs to read like an email, not like a one-line
+   internal note squeezed into the same scale. */
+.tix-msg-html { font-size: 15px; line-height: 1.6; color: var(--tix-ink-2); }
+.tix-msg-html p { margin: 0 0 .6em; }
+.tix-msg-html p:last-child { margin-bottom: 0; }
+.tix-msg-html ul, .tix-msg-html ol { margin: 0 0 .6em; padding-left: 1.4em; }
+.tix-msg-html a { color: var(--tix-brand); text-decoration: underline; }
+/* An email's own inline width/height (a signature's small social icons, a
+   banner) is preserved now — see sanitizeEmailHtml.js, which strips only
+   font-related declarations, not sizing — so this is purely a backstop
+   for an image with no sizing of its own, not the primary size control. */
+.tix-msg-html img { max-width: 100%; max-height: 400px; object-fit: contain; vertical-align: middle; }
+
+.tix-properties { padding: 18px; }
+.tix-properties-head {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--tix-ink-3); margin-bottom: 16px;
+}
+.tix-prop { margin-bottom: 16px; }
+.tix-prop label { display: block; font-size: 12px; color: var(--tix-ink-3); margin-bottom: 6px; }
+.tix-readonly { font-size: 13px; color: var(--tix-ink-2); padding: 7px 0; }
+
+.tix-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tix-tag {
+  display: inline-flex; align-items: center; gap: 5px; background: var(--tix-surface-2);
+  border: 1px solid var(--tix-line); color: var(--tix-ink-2); font-size: 12px; padding: 3px 8px;
+  border-radius: 999px;
+}
+.tix-tag button { background: none; border: none; color: var(--tix-ink-3); cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+.tix-tag button:hover { color: var(--tix-ink); }
+
+@media (max-width: 900px) {
+  .tix-body { flex-direction: column; }
+  .tix-filters { width: 100%; border-left: none; border-top: 1px solid var(--tix-line); }
+  .tix-detail { grid-template-columns: 1fr; }
+  .tix-detail-list, .tix-thread { border-right: none; border-bottom: 1px solid var(--tix-line); }
 }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchStudentRegistrations, updateStudentRegistration } from "../../lib/api";
-import { Card, Button, Badge, Notice, Empty, formatDate, displayName } from "../../Components/UI";
+import { Card, Button, Badge, Notice, Empty, formatDate, displayName, Select } from "../../Components/UI";
 
 const STATUS_LABEL = {
   active: "Active",
@@ -94,17 +94,16 @@ const StudentRegistrationsPanel = () => {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select
+        <Select
           className="select"
           style={{ width: "auto" }}
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-        >
-          <option value="all">{`Everyone (${rows.length})`}</option>
-          {Object.keys(STATUS_LABEL).map((s) => (
-            <option key={s} value={s}>{`${STATUS_LABEL[s]} (${counts[s] || 0})`}</option>
-          ))}
-        </select>
+          onChange={setStatusFilter}
+          options={[
+            { value: "all", label: `Everyone (${rows.length})` },
+            ...Object.keys(STATUS_LABEL).map((s) => ({ value: s, label: `${STATUS_LABEL[s]} (${counts[s] || 0})` })),
+          ]}
+        />
       </div>
 
       {loading ? <Empty>{"Loading..."}</Empty> : null}
@@ -156,17 +155,14 @@ const StudentRegistrationsPanel = () => {
                             <Button size="sm" variant="secondary">{"Application"}</Button>
                           </Link>
                         ) : null}
-                        <select
+                        <Select
                           className="select"
                           style={{ width: "auto", padding: "6px 8px", fontSize: 13 }}
                           value={r.status}
                           disabled={busyId === r.id}
-                          onChange={(e) => changeStatus(r, e.target.value)}
-                        >
-                          {Object.keys(STATUS_LABEL).map((s) => (
-                            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => changeStatus(r, v)}
+                          options={Object.keys(STATUS_LABEL).map((s) => ({ value: s, label: STATUS_LABEL[s] }))}
+                        />
                       </span>
                     </td>
                   </tr>

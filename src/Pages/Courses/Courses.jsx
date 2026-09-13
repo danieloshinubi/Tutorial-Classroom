@@ -11,6 +11,7 @@ import {
   Button,
   Badge,
   bandClass,
+  Select,
 } from "../../Components/UI";
 
 // Every course in the school, in one place. Courses used to be reached through
@@ -84,19 +85,19 @@ const Courses = () => {
             onChange={(e) => setQuery(e.target.value)}
           />
           {sessions.length > 0 ? (
-            <select
+            <Select
               className="select"
               style={{ width: "auto" }}
               value={sessionFilter}
-              onChange={(e) => setSessionFilter(e.target.value)}
-            >
-              <option value="all">{"All sessions"}</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.is_current ? `${s.name} (current)` : s.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSessionFilter}
+              options={[
+                { value: "all", label: "All sessions" },
+                ...sessions.map((s) => ({
+                  value: s.id,
+                  label: s.is_current ? `${s.name} (current)` : s.name,
+                })),
+              ]}
+            />
           ) : null}
           </div>
         }

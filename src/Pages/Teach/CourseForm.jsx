@@ -17,6 +17,7 @@ import {
   Field,
   Button,
   Notice,
+  Select,
 } from "../../Components/UI";
 
 // Handles both /Teach/New and /Teach/:courseId/Edit.
@@ -226,18 +227,20 @@ const CourseForm = () => {
                     : "No sessions yet — an administrator adds them under School → Calendar."
                 }
               >
-                <select
+                <Select
                   className="select"
                   value={form.session_id}
-                  onChange={update("session_id")}
-                >
-                  <option value="">{"No session"}</option>
-                  {sessions.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.is_current ? `${s.name} (current)` : s.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) =>
+                    setForm((current) => ({ ...current, session_id: v }))
+                  }
+                  options={[
+                    { value: "", label: "No session" },
+                    ...sessions.map((s) => ({
+                      value: s.id,
+                      label: s.is_current ? `${s.name} (current)` : s.name,
+                    })),
+                  ]}
+                />
               </Field>
 
               <Field
@@ -249,18 +252,20 @@ const CourseForm = () => {
                 }
               >
                 {levels.length ? (
-                  <select
+                  <Select
                     className="select"
                     value={form.level_year}
-                    onChange={update("level_year")}
-                  >
-                    <option value="">{"No class"}</option>
-                    {levels.map((level) => (
-                      <option key={level.year} value={level.year}>
-                        {level.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) =>
+                      setForm((current) => ({ ...current, level_year: v }))
+                    }
+                    options={[
+                      { value: "", label: "No class" },
+                      ...levels.map((level) => ({
+                        value: level.year,
+                        label: level.label,
+                      })),
+                    ]}
+                  />
                 ) : null}
               </Field>
 

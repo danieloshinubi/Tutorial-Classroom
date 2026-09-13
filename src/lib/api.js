@@ -3193,3 +3193,208 @@ export const fetchAuditLogTables = async (schoolId) => {
   if (error) throw error;
   return [...new Set((data || []).map((r) => r.table_name))].sort();
 };
+
+/* -------------------------------------------------------------------------- */
+/* tickets                                                                    */
+/* -------------------------------------------------------------------------- */
+
+const TICKET_SELECT = `
+  id, school_id, number, subject, description, status, priority, tags,
+  first_response_at, resolved_at, closed_at, created_at, updated_at,
+  group_id, assigned_to, requester_id, channel, mailbox_id, requester_email, requester_name, description_format,
+  group:ticket_groups ( id, name ),
+  assignee:profiles!tickets_assigned_to_fkey ( id, first_name, surname, username, email ),
+  requester:profiles!tickets_requester_id_fkey ( id, first_name, surname, username, email )
+`;
+
+export const fetchTickets = async ({ schoolId, status = "unresolved", groupId, assignedTo, priority, query }) => {
+  let q = supabase.from("tickets").select(TICKET_SELECT).eq("school_id", schoolId);
+  if (status === "unresolved") q = q.in("status", ["open", "pending"]);
+  else if (status && status !== "all") q = q.eq("status", status);
+  if (groupId) q = q.eq("group_id", groupId);
+  if (assignedTo) q = q.eq("assigned_to", assignedTo);
+  if (priority) q = q.eq("priority", priority);
+  if (query) q = q.or(`subject.ilike.%${query}%,description.ilike.%${query}%`);
+  q = q.order("created_at", { ascending: false });
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+};
+
+export const fetchTicket = async (id) => {
+  const { data, error } = await supabase.from("tickets").select(TICKET_SELECT).eq("id", id).single();
+  if (error) throw error;
+  return data;
+};
+
+export const createTicket = async ({
+  schoolId, subject, description, priority = "low", groupId, requesterName, requesterEmail,
+}) => {
+  const { data, error } = await supabase.rpc("create_ticket", {
+    target_school: schoolId,
+    subject_in: subject,
+    description_in: description,
+    priority_in: priority,
+    group_id_in: groupId || null,
+    requester_name_in: requesterName || null,
+    requester_email_in: requesterEmail || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const updateTicket = async ({
+  id, status, priority, groupId, assignedTo, tags, clearGroup, clearAssignee,
+}) => {
+  const { data, error } = await supabase.rpc("update_ticket", {
+    target_ticket: id,
+    status_in: status ?? null,
+    priority_in: priority ?? null,
+    group_id_in: groupId ?? null,
+    assigned_to_in: assignedTo ?? null,
+    tags_in: tags ?? null,
+    clear_group: Boolean(clearGroup),
+    clear_assignee: Boolean(clearAssignee),
+  });
+  if (error) throw error;
+  return data;
+};
+
+// includeNotes must default to true for the staff TicketDetail view — the
+// self-service /Support view passes false explicitly. RLS alone isn't
+// enough to guarantee a requester never sees a note: a requester who also
+// holds a ticket-staff role (owner/admin/principal/bursar/admissions) gets
+// notes through their staff policy regardless of which page is asking, so
+// the self-service surface has to filter at the query itself rather than
+// trust the row never arrives.
+const TICKET_MESSAGE_SELECT = `
+  id, ticket_id, kind, body, body_format, created_at, direction,
+  to_addresses, cc_addresses, bcc_addresses, external_from, send_status, send_error,
+  author:profiles ( id, first_name, surname, username, email )
+`;
+
+export const fetchTicketMessages = async (ticketId, { includeNotes = true } = {}) => {
+  let q = supabase
+    .from("ticket_messages")
+    .select(TICKET_MESSAGE_SELECT)
+    .eq("ticket_id", ticketId);
+  if (!includeNotes) q = q.eq("kind", "reply");
+  q = q.order("created_at", { ascending: true });
+  const { data, error } = await q;
+  if (error) throw error;
+  return data || [];
+};
+
+export const addTicketMessage = async ({ ticketId, kind, body }) => {
+  const { data, error } = await supabase.rpc("add_ticket_message", {
+    target_ticket: ticketId,
+    kind_in: kind,
+    body_in: body,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchTicketGroups = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("ticket_groups")
+    .select("id, name, role, position, is_active")
+    .eq("school_id", schoolId)
+    .order("position");
+  if (error) throw error;
+  return data || [];
+};
+
+export const createTicketGroup = async ({ schoolId, name }) => {
+  const { data, error } = await supabase
+    .from("ticket_groups")
+    .insert({ school_id: schoolId, name: name.trim() })
+    .select("id, name, role")
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// Who moved this ticket between departments, and when — a narrow read
+// scoped by the same can_access_ticket() check as everything else on a
+// ticket, not a grant onto the (owner/admin-only) audit log itself.
+export const fetchTicketGroupHistory = async (ticketId) => {
+  const { data, error } = await supabase.rpc("ticket_group_history", { target_ticket: ticketId });
+  if (error) throw error;
+  return data || [];
+};
+
+/* -------------------------------------------------------------------------- */
+/* ticket mailboxes — connecting a school's own mailbox for email tickets    */
+/* -------------------------------------------------------------------------- */
+
+export const fetchTicketMailboxes = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("ticket_mailboxes")
+    .select("id, label, address, display_name, provider, is_active, last_poll_at, last_poll_status, last_poll_error, created_at")
+    .eq("school_id", schoolId)
+    .order("created_at");
+  if (error) throw error;
+  return data || [];
+};
+
+export const setMailboxActive = async ({ id, isActive }) => {
+  const { error } = await supabase.from("ticket_mailboxes").update({ is_active: isActive }).eq("id", id);
+  if (error) throw error;
+};
+
+// Cleans up the mailbox's vault secret(s) too — see
+// classroom.delete_ticket_mailbox in 080_ticket_mailboxes.sql.
+export const deleteTicketMailbox = async (id) => {
+  const { error } = await supabase.rpc("delete_ticket_mailbox", { target_mailbox: id });
+  if (error) throw error;
+};
+
+// The app password is sent once, straight to the Edge Function, which mints
+// a Supabase Vault secret and never returns it — connectTicketMailbox's
+// caller never gets it back either.
+export const connectTicketMailbox = async (payload) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("mailbox-connect", {
+    body: payload,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not connect that mailbox.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+};
+
+// Sends a real outbound email from an email-channel ticket, then records
+// the attempt (sent or failed) as a ticket_messages row.
+export const sendTicketEmailReply = async ({ ticketId, body, to, cc, bcc }) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("ticket-mail-send", {
+    body: { ticketId, body, to, cc, bcc },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not send that reply.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+};

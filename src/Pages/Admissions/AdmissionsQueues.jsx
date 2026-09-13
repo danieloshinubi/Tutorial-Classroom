@@ -20,6 +20,7 @@ import {
   Empty,
   Badge,
   Button,
+  Select,
   formatDate,
 } from "../../Components/UI";
 
@@ -261,20 +262,19 @@ const AdmissionsQueues = () => {
               value={rosterQuery}
               onChange={(e) => setRosterQuery(e.target.value)}
             />
-            <select
+            <Select
               className="select"
-              style={{ width: "auto" }}
               value={rosterStatus}
-              onChange={(e) => setRosterStatus(e.target.value)}
-            >
-              <option value="open">{`Needs a decision (${openRosterCount})`}</option>
-              <option value="all">{`Everything (${applications.length})`}</option>
-              {APPLICATION_STATUSES.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {`${label} (${counts[value] || 0})`}
-                </option>
-              ))}
-            </select>
+              onChange={setRosterStatus}
+              options={[
+                { value: "open", label: `Needs a decision (${openRosterCount})` },
+                { value: "all", label: `Everything (${applications.length})` },
+                ...APPLICATION_STATUSES.map(([value, label]) => ({
+                  value,
+                  label: `${label} (${counts[value] || 0})`,
+                })),
+              ]}
+            />
           </div>
 
           {!loading && applications.length === 0 ? (

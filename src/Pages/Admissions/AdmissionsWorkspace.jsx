@@ -39,6 +39,8 @@ import {
   Badge,
   Empty,
   formatDate,
+  Select,
+  DateTimePicker,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import AdmissionLetter from "./AdmissionLetter";
@@ -386,7 +388,7 @@ const AdmissionsWorkspace = () => {
           {activeReview ? (
             <div>
               <p>Assigned to <strong>{
-                members.find((m) => m.user_id === activeReview.reviewer_id)?.email
+                members.find((m) => m.user_id === activeReview.reviewer_id)?.profiles?.email
                 || activeReview.reviewer_id
               }</strong> on {formatDate(activeReview.assigned_at)}</p>
               {isAssignedReviewer ? (
@@ -403,7 +405,7 @@ const AdmissionsWorkspace = () => {
           {reviews.filter((r) => r.completed_at).map((r) => (
             <div key={r.id} className="past-review">
               <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-                {formatDate(r.completed_at)} · {members.find((m) => m.user_id === r.reviewer_id)?.email}
+                {formatDate(r.completed_at)} · {members.find((m) => m.user_id === r.reviewer_id)?.profiles?.email}
               </div>
               <strong>{r.recommendation}</strong>
               {r.notes ? <p style={{ margin: "4px 0 0" }}>{r.notes}</p> : null}
@@ -783,13 +785,13 @@ const AssignReviewForm = ({ applicationId, members, disabled, onDone, onError })
   return (
     <form onSubmit={submit}>
       <Field label="Reviewer">
-        <select className="select" value={reviewerId}
-          onChange={(e) => setReviewerId(e.target.value)}>
-          <option value="">{"Choose an admissions member"}</option>
-          {eligible.map((m) => (
-            <option key={m.user_id} value={m.user_id}>{m.email} · {m.role}</option>
-          ))}
-        </select>
+        <Select className="select" value={reviewerId}
+          onChange={setReviewerId}
+          options={[
+            { value: "", label: "Choose an admissions member" },
+            ...eligible.map((m) => ({ value: m.user_id, label: `${m.profiles?.email} · ${m.role}` })),
+          ]}
+        />
       </Field>
       <Button type="submit" disabled={disabled}>{"Assign review"}</Button>
     </form>
@@ -816,15 +818,17 @@ const ReviewForm = ({ applicationId, disabled, onDone, onError }) => {
   return (
     <form onSubmit={submit}>
       <Field label="Recommendation">
-        <select className="select" value={recommendation}
-          onChange={(e) => setRecommendation(e.target.value)}>
-          <option value="">{"Choose"}</option>
-          <option value="recommend_admit">{"Recommend admit"}</option>
-          <option value="recommend_reject">{"Recommend reject"}</option>
-          <option value="recommend_waitlist">{"Recommend waitlist"}</option>
-          <option value="recommend_correction">{"Request correction"}</option>
-          <option value="recommend_defer">{"Recommend defer"}</option>
-        </select>
+        <Select className="select" value={recommendation}
+          onChange={setRecommendation}
+          options={[
+            { value: "", label: "Choose" },
+            { value: "recommend_admit", label: "Recommend admit" },
+            { value: "recommend_reject", label: "Recommend reject" },
+            { value: "recommend_waitlist", label: "Recommend waitlist" },
+            { value: "recommend_correction", label: "Request correction" },
+            { value: "recommend_defer", label: "Recommend defer" },
+          ]}
+        />
       </Field>
       <Field label="Academic score">
         <input className="input" type="number" value={academicScore}
@@ -863,8 +867,7 @@ const InterviewForm = ({ applicationId, members, disabled, onDone, onError }) =>
   return (
     <form onSubmit={submit}>
       <Field label="Date and time">
-        <input className="input" type="datetime-local"
-          value={when} onChange={(e) => setWhen(e.target.value)} />
+        <DateTimePicker value={when} onChange={setWhen} />
       </Field>
       <Field label="Location">
         <input className="input" value={location}
@@ -875,13 +878,13 @@ const InterviewForm = ({ applicationId, members, disabled, onDone, onError }) =>
           onChange={(e) => setMeetingLink(e.target.value)} />
       </Field>
       <Field label="Interviewer">
-        <select className="select" value={interviewerId}
-          onChange={(e) => setInterviewerId(e.target.value)}>
-          <option value="">{"No interviewer set"}</option>
-          {eligible.map((m) => (
-            <option key={m.user_id} value={m.user_id}>{m.email} · {m.role}</option>
-          ))}
-        </select>
+        <Select className="select" value={interviewerId}
+          onChange={setInterviewerId}
+          options={[
+            { value: "", label: "No interviewer set" },
+            ...eligible.map((m) => ({ value: m.user_id, label: `${m.profiles?.email} · ${m.role}` })),
+          ]}
+        />
       </Field>
       <Button type="submit" disabled={disabled}>{"Schedule interview"}</Button>
     </form>
@@ -1029,12 +1032,12 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
           {`This applicant already signed in as ${ownAccount.email} to apply — enrolling adds that same account as a pupil here, no new login needed.`}
         </p>
         <Field label="Class" hint={classes.length ? "Optional — you can place them later." : "No classes yet."}>
-          <select className="select" value={classId} onChange={(e) => setClassId(e.target.value)}>
-            <option value="">{"Decide later"}</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>{`${c.name} — ${labelFor(c.level_year)}`}</option>
-            ))}
-          </select>
+          <Select className="select" value={classId} onChange={setClassId}
+            options={[
+              { value: "", label: "Decide later" },
+              ...classes.map((c) => ({ value: c.id, label: `${c.name} — ${labelFor(c.level_year)}` })),
+            ]}
+          />
         </Field>
         <Button type="submit" disabled={disabled || busy}>
           {busy ? "Registering..." : "Register this pupil"}
@@ -1073,10 +1076,12 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
         {"This creates the pupil's place: a school account and, if you pick one, a class."}
       </p>
       <Field label="Account">
-        <select className="select" value={mode} onChange={(e) => setMode(e.target.value)}>
-          <option value="create">{"Create a new pupil account"}</option>
-          <option value="existing">{"Use an existing pupil account"}</option>
-        </select>
+        <Select className="select" value={mode} onChange={setMode}
+          options={[
+            { value: "create", label: "Create a new pupil account" },
+            { value: "existing", label: "Use an existing pupil account" },
+          ]}
+        />
       </Field>
       {mode === "create" ? (
         <Field label="Email for the pupil" hint="Defaults to whatever's on the application. Change it if the pupil has their own.">
@@ -1085,22 +1090,22 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
         </Field>
       ) : (
         <Field label="Pupil">
-          <select className="select" value={existingStudent}
-            onChange={(e) => setExistingStudent(e.target.value)}>
-            <option value="">{"Choose"}</option>
-            {students.map((m) => (
-              <option key={m.user_id} value={m.user_id}>{`${m.email}`}</option>
-            ))}
-          </select>
+          <Select className="select" value={existingStudent}
+            onChange={setExistingStudent}
+            options={[
+              { value: "", label: "Choose" },
+              ...students.map((m) => ({ value: m.user_id, label: `${m.profiles?.email}` })),
+            ]}
+          />
         </Field>
       )}
       <Field label="Class" hint={classes.length ? "Optional — you can place them later." : "No classes yet."}>
-        <select className="select" value={classId} onChange={(e) => setClassId(e.target.value)}>
-          <option value="">{"Decide later"}</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>{`${c.name} — ${labelFor(c.level_year)}`}</option>
-          ))}
-        </select>
+        <Select className="select" value={classId} onChange={setClassId}
+          options={[
+            { value: "", label: "Decide later" },
+            ...classes.map((c) => ({ value: c.id, label: `${c.name} — ${labelFor(c.level_year)}` })),
+          ]}
+        />
       </Field>
       <Button type="submit" disabled={disabled || busy}>
         {busy ? "Registering..." : "Register this pupil"}
@@ -1136,14 +1141,16 @@ const DecisionForm = ({ application, disabled, onDone, onError }) => {
         {"The database enforces every prerequisite: fee, form, documents, screening, interview where required. If any of those is unsatisfied the decision will be refused."}
       </Notice>
       <Field label="Decision">
-        <select className="select" value={decision}
-          onChange={(e) => setDecision(e.target.value)}>
-          <option value="">{"Choose"}</option>
-          <option value="offered">{"Admit (offer)"}</option>
-          <option value="rejected">{"Reject"}</option>
-          <option value="waitlisted">{"Waitlist"}</option>
-          <option value="deferred">{"Defer"}</option>
-        </select>
+        <Select className="select" value={decision}
+          onChange={setDecision}
+          options={[
+            { value: "", label: "Choose" },
+            { value: "offered", label: "Admit (offer)" },
+            { value: "rejected", label: "Reject" },
+            { value: "waitlisted", label: "Waitlist" },
+            { value: "deferred", label: "Defer" },
+          ]}
+        />
       </Field>
       <Field label="Note">
         <textarea className="textarea" value={note}
@@ -1152,8 +1159,7 @@ const DecisionForm = ({ application, disabled, onDone, onError }) => {
       {decision === "offered" ? (
         <>
           <Field label="Offer expires">
-            <input className="input" type="datetime-local"
-              value={expires} onChange={(e) => setExpires(e.target.value)} />
+            <DateTimePicker value={expires} onChange={setExpires} />
           </Field>
           <Field label="Conditions" hint="Optional — shown to the applicant on their offer.">
             <textarea className="textarea" value={conditions}

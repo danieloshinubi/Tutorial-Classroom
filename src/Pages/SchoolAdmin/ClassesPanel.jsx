@@ -25,6 +25,7 @@ import {
   Badge,
   Notice,
   Empty,
+  Select,
   displayName,
 } from "../../Components/UI";
 
@@ -271,21 +272,18 @@ const ClassesPanel = () => {
               {openClass === row.id ? (
                 <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
                   <Field label="Form teacher">
-                    <select
+                    <Select
                       className="select"
                       value={row.form_teacher_id || ""}
-                      onChange={async (e) => {
-                        await updateClass(row.id, { form_teacher_id: e.target.value || null });
+                      onChange={async (v) => {
+                        await updateClass(row.id, { form_teacher_id: v || null });
                         load();
                       }}
-                    >
-                      <option value="">{"Nobody"}</option>
-                      {staff.map((m) => (
-                        <option key={m.profiles.id} value={m.profiles.id}>
-                          {displayName(m.profiles)}
-                        </option>
-                      ))}
-                    </select>
+                      options={[
+                        { value: "", label: "Nobody" },
+                        ...staff.map((m) => ({ value: m.profiles.id, label: displayName(m.profiles) })),
+                      ]}
+                    />
                   </Field>
 
                   <h4 style={{ marginBottom: 8 }}>{`Pupils (${roster.length})`}</h4>
@@ -323,20 +321,15 @@ const ClassesPanel = () => {
                   )}
 
                   <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-                    <select
+                    <Select
                       className="select"
                       value={addStudentId}
-                      onChange={(e) => setAddStudentId(e.target.value)}
-                    >
-                      <option value="">
-                        {unplacedStudents.length ? "Add a pupil" : "Every pupil is placed"}
-                      </option>
-                      {unplacedStudents.map((s) => (
-                        <option key={s.profiles.id} value={s.profiles.id}>
-                          {displayName(s.profiles)}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={setAddStudentId}
+                      options={[
+                        { value: "", label: unplacedStudents.length ? "Add a pupil" : "Every pupil is placed" },
+                        ...unplacedStudents.map((s) => ({ value: s.profiles.id, label: displayName(s.profiles) })),
+                      ]}
+                    />
                     <Button size="sm" disabled={busy || !addStudentId} onClick={placeStudent}>
                       {"Add"}
                     </Button>
@@ -361,24 +354,21 @@ const ClassesPanel = () => {
                           }}
                         >
                           <span style={{ flex: 1, minWidth: 120 }}>{t.subjects?.name}</span>
-                          <select
+                          <Select
                             className="select"
                             style={{ width: "auto", padding: "5px 8px" }}
                             value={t.teacher_id || ""}
-                            onChange={async (e) => {
+                            onChange={async (v) => {
                               await updateClassSubject(t.id, {
-                                teacher_id: e.target.value || null,
+                                teacher_id: v || null,
                               });
                               refreshDetail(row.id);
                             }}
-                          >
-                            <option value="">{"No teacher"}</option>
-                            {staff.map((m) => (
-                              <option key={m.profiles.id} value={m.profiles.id}>
-                                {displayName(m.profiles)}
-                              </option>
-                            ))}
-                          </select>
+                            options={[
+                              { value: "", label: "No teacher" },
+                              ...staff.map((m) => ({ value: m.profiles.id, label: displayName(m.profiles) })),
+                            ]}
+                          />
                           <Button
                             size="sm"
                             variant="ghost"
@@ -396,30 +386,26 @@ const ClassesPanel = () => {
                   )}
 
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <select
+                    <Select
                       className="select"
                       style={{ flex: 1, minWidth: 140 }}
                       value={addSubject.subjectId}
-                      onChange={(e) => setAddSubject((c) => ({ ...c, subjectId: e.target.value }))}
-                    >
-                      <option value="">{subjects.length ? "Add a subject" : "No subjects yet"}</option>
-                      {subjects.map((s) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                    <select
+                      onChange={(v) => setAddSubject((c) => ({ ...c, subjectId: v }))}
+                      options={[
+                        { value: "", label: subjects.length ? "Add a subject" : "No subjects yet" },
+                        ...subjects.map((s) => ({ value: s.id, label: s.name })),
+                      ]}
+                    />
+                    <Select
                       className="select"
                       style={{ flex: 1, minWidth: 140 }}
                       value={addSubject.teacherId}
-                      onChange={(e) => setAddSubject((c) => ({ ...c, teacherId: e.target.value }))}
-                    >
-                      <option value="">{"Teacher (optional)"}</option>
-                      {staff.map((m) => (
-                        <option key={m.profiles.id} value={m.profiles.id}>
-                          {displayName(m.profiles)}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setAddSubject((c) => ({ ...c, teacherId: v }))}
+                      options={[
+                        { value: "", label: "Teacher (optional)" },
+                        ...staff.map((m) => ({ value: m.profiles.id, label: displayName(m.profiles) })),
+                      ]}
+                    />
                     <Button size="sm" disabled={busy || !addSubject.subjectId} onClick={teachSubject}>
                       {"Assign"}
                     </Button>
@@ -443,43 +429,36 @@ const ClassesPanel = () => {
                 />
               </Field>
               <Field label="Class level">
-                <select
+                <Select
                   className="select"
                   value={form.levelYear}
-                  onChange={(e) => setForm((c) => ({ ...c, levelYear: e.target.value }))}
-                >
-                  <option value="">{"Choose"}</option>
-                  {levels.map((l) => (
-                    <option key={l.year} value={l.year}>{l.label}</option>
-                  ))}
-                </select>
+                  onChange={(v) => setForm((c) => ({ ...c, levelYear: v }))}
+                  options={[
+                    { value: "", label: "Choose" },
+                    ...levels.map((l) => ({ value: l.year, label: l.label })),
+                  ]}
+                />
               </Field>
               {sessions.length ? (
                 <Field label="Session">
-                  <select
+                  <Select
                     className="select"
                     value={form.sessionId}
-                    onChange={(e) => setForm((c) => ({ ...c, sessionId: e.target.value }))}
-                  >
-                    {sessions.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                  </select>
+                    onChange={(v) => setForm((c) => ({ ...c, sessionId: v }))}
+                    options={sessions.map((s) => ({ value: s.id, label: s.name }))}
+                  />
                 </Field>
               ) : null}
               <Field label="Form teacher">
-                <select
+                <Select
                   className="select"
                   value={form.formTeacherId}
-                  onChange={(e) => setForm((c) => ({ ...c, formTeacherId: e.target.value }))}
-                >
-                  <option value="">{"Decide later"}</option>
-                  {staff.map((m) => (
-                    <option key={m.profiles.id} value={m.profiles.id}>
-                      {displayName(m.profiles)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setForm((c) => ({ ...c, formTeacherId: v }))}
+                  options={[
+                    { value: "", label: "Decide later" },
+                    ...staff.map((m) => ({ value: m.profiles.id, label: displayName(m.profiles) })),
+                  ]}
+                />
               </Field>
               <Button type="submit" disabled={busy || levels.length === 0}>
                 {"Add class"}

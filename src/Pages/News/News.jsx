@@ -19,11 +19,13 @@ import {
 import {
   Page,
   Card,
-  Field,   
+  Field,
   Button,
   Badge,
   Notice,
   Empty,
+  Select,
+  DateTimePicker,
   displayName,
   formatDate,
 } from "../../Components/UI";
@@ -494,17 +496,12 @@ const News = () => {
                 label="Who it is for"
                 hint="Enforced in the database, not just hidden — a staff notice cannot be read by a parent."
               >
-                <select
+                <Select
                   className="select"
                   value={audience}
-                  onChange={(e) => setAudience(e.target.value)}
-                >
-                  {NOTICE_AUDIENCES.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAudience}
+                  options={NOTICE_AUDIENCES.map(([value, label]) => ({ value, label }))}
+                />
               </Field>
 
               <Field label="Keep it at the top">
@@ -533,12 +530,7 @@ const News = () => {
             {isEvent ? (
               <div className="split">
                 <Field label="When">
-                  <input
-                    className="input"
-                    type="datetime-local"
-                    value={eventAt}
-                    onChange={(e) => setEventAt(e.target.value)}
-                  />
+                  <DateTimePicker value={eventAt} onChange={setEventAt} />
                 </Field>
                 <Field label="Where">
                   <input

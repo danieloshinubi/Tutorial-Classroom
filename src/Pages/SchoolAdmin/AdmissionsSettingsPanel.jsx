@@ -14,7 +14,7 @@ import {
   upsertDocumentRequirement,
   deleteDocumentRequirement,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput } from "../../Components/UI";
+import { Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput, Select } from "../../Components/UI";
 import ClearanceDepartmentsPanel from "./ClearanceDepartmentsPanel";
 
 // Defaults mirror classroom.effective_admission_config()'s fallback exactly
@@ -137,12 +137,13 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
           onChange={set("form_locked_until_paid")}
           hint="If off, applicants can fill in every section before paying." />
         <Field label="How a manual payment is confirmed" hint="Gateway payments always settle themselves regardless of this setting.">
-          <select className="select" value={form.payment_verification}
-            onChange={(e) => set("payment_verification")(e.target.value)}>
-            <option value="manual">{"A staff member checks proof of payment"}</option>
-            <option value="gateway">{"Only the payment gateway (Paystack) — no manual proof accepted"}</option>
-            <option value="automatic">{"Treated as paid immediately (no verification)"}</option>
-          </select>
+          <Select className="select" value={form.payment_verification}
+            onChange={set("payment_verification")}
+            options={[
+              { value: "manual", label: "A staff member checks proof of payment" },
+              { value: "gateway", label: "Only the payment gateway (Paystack) — no manual proof accepted" },
+              { value: "automatic", label: "Treated as paid immediately (no verification)" },
+            ]} />
         </Field>
       </Card>
 
@@ -177,12 +178,13 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
       <Card style={{ marginBottom: 16, maxWidth: 640 }}>
         <h3 style={{ marginTop: 0 }}>{"How applicants reach the form"}</h3>
         <Field label="Academic structure" hint="Controls whether a programme carries a faculty and/or department.">
-          <select className="select" value={form.academic_hierarchy}
-            onChange={(e) => set("academic_hierarchy")(e.target.value)}>
-            <option value="flat">{"Flat — no faculty or department"}</option>
-            <option value="department_only">{"Departments only"}</option>
-            <option value="faculty_department">{"Faculties and departments"}</option>
-          </select>
+          <Select className="select" value={form.academic_hierarchy}
+            onChange={set("academic_hierarchy")}
+            options={[
+              { value: "flat", label: "Flat — no faculty or department" },
+              { value: "department_only", label: "Departments only" },
+              { value: "faculty_department", label: "Faculties and departments" },
+            ]} />
         </Field>
         <Toggle label="Allow signed-in applicants to track their own application" checked={form.use_applicant_accounts}
           onChange={set("use_applicant_accounts")} />
@@ -276,15 +278,16 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
               onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} /></Field>
           </div>
           <Field label="Study mode">
-            <select className="select" value={form.study_mode}
-              onChange={(e) => setForm((f) => ({ ...f, study_mode: e.target.value }))}>
-              <option value="full_time">{"Full time"}</option>
-              <option value="part_time">{"Part time"}</option>
-              <option value="distance">{"Distance"}</option>
-              <option value="sandwich">{"Sandwich"}</option>
-              <option value="evening">{"Evening"}</option>
-              <option value="other">{"Other"}</option>
-            </select>
+            <Select className="select" value={form.study_mode}
+              onChange={(v) => setForm((f) => ({ ...f, study_mode: v }))}
+              options={[
+                { value: "full_time", label: "Full time" },
+                { value: "part_time", label: "Part time" },
+                { value: "distance", label: "Distance" },
+                { value: "sandwich", label: "Sandwich" },
+                { value: "evening", label: "Evening" },
+                { value: "other", label: "Other" },
+              ]} />
           </Field>
           <Button type="submit" disabled={busy}>{"Add programme"}</Button>
         </form>
@@ -481,12 +484,16 @@ const AdmissionsSettingsPanel = () => {
 
       <div className="panel-top">
         <Field label="Session this applies to" hint="A session-specific setting overrides the school default for that session only.">
-          <select className="select" style={{ maxWidth: 320 }} value={sessionId} onChange={(e) => setSessionId(e.target.value)}>
-            <option value="">{"School default (every session, unless overridden)"}</option>
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
+          <Select
+            className="select"
+            style={{ maxWidth: 320 }}
+            value={sessionId}
+            onChange={setSessionId}
+            options={[
+              { value: "", label: "School default (every session, unless overridden)" },
+              ...sessions.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
         </Field>
       </div>
 

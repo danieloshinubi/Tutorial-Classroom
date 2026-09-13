@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { user as userIcon } from "react-icons-kit/feather/user";
 import { chevronDown } from "react-icons-kit/feather/chevronDown";
@@ -100,16 +100,17 @@ const AccountMenu = () => {
 
           <div className="account-items">
             {items.map((item) => (
-              <Link
+              <NavLink
                 key={item.to + item.label}
                 to={item.to}
+                end
                 role="menuitem"
-                className="account-item"
+                className={({ isActive }) => `account-item${isActive ? " current" : ""}`}
                 onClick={() => setOpen(false)}
               >
                 <Icon icon={item.icon} size={16} />
                 <span>{item.label}</span>
-              </Link>
+              </NavLink>
             ))}
           </div>
 

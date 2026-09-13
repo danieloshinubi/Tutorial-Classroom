@@ -11,6 +11,8 @@ import {
   Notice,
   Empty,
   formatDate,
+  Select,
+  DateTimePicker,
 } from "../../Components/UI";
 
 const ACTION_VERB = { INSERT: "Created", UPDATE: "Updated", DELETE: "Deleted" };
@@ -242,28 +244,28 @@ const AuditLog = () => {
         <Card style={{ marginBottom: 16 }}>
           <div className="split" style={{ marginBottom: 0 }}>
             <Field label="Table">
-              <select
+              <Select
                 className="select"
                 value={tableFilter}
-                onChange={(e) => applyFilter(setTableFilter)(e.target.value)}
-              >
-                <option value="">{"All tables"}</option>
-                {tables.map((t) => (
-                  <option key={t} value={t}>{TABLE_LABELS[t] || t}</option>
-                ))}
-              </select>
+                onChange={applyFilter(setTableFilter)}
+                options={[
+                  { value: "", label: "All tables" },
+                  ...tables.map((t) => ({ value: t, label: TABLE_LABELS[t] || t })),
+                ]}
+              />
             </Field>
             <Field label="Action">
-              <select
+              <Select
                 className="select"
                 value={actionFilter}
-                onChange={(e) => applyFilter(setActionFilter)(e.target.value)}
-              >
-                <option value="">{"All actions"}</option>
-                <option value="INSERT">{"Created"}</option>
-                <option value="UPDATE">{"Updated"}</option>
-                <option value="DELETE">{"Deleted"}</option>
-              </select>
+                onChange={applyFilter(setActionFilter)}
+                options={[
+                  { value: "", label: "All actions" },
+                  { value: "INSERT", label: "Created" },
+                  { value: "UPDATE", label: "Updated" },
+                  { value: "DELETE", label: "Deleted" },
+                ]}
+              />
             </Field>
           </div>
           <div className="split" style={{ marginTop: 12 }}>
@@ -276,20 +278,10 @@ const AuditLog = () => {
               />
             </Field>
             <Field label="From">
-              <input
-                type="datetime-local"
-                className="input"
-                value={from}
-                onChange={(e) => applyFilter(setFrom)(e.target.value)}
-              />
+              <DateTimePicker value={from} onChange={applyFilter(setFrom)} />
             </Field>
             <Field label="To">
-              <input
-                type="datetime-local"
-                className="input"
-                value={to}
-                onChange={(e) => applyFilter(setTo)(e.target.value)}
-              />
+              <DateTimePicker value={to} onChange={applyFilter(setTo)} />
             </Field>
           </div>
           {hasFilters ? (

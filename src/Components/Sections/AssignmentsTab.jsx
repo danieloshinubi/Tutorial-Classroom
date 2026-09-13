@@ -16,6 +16,7 @@ import {
   Notice,
   Empty,
   Badge,
+  DateTimePicker,
   formatDate,
 } from "../UI";
 import { useDocumentPreview } from "../DocumentPreview";
@@ -320,12 +321,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
               />
             </Field>
             <Field label="Due" hint="Leave blank for no deadline.">
-              <input
-                type="datetime-local"
-                className="input"
-                value={form.due_at}
-                onChange={update("due_at")}
-              />
+              <DateTimePicker value={form.due_at} onChange={(v) => setForm((current) => ({ ...current, due_at: v }))} />
             </Field>
             <Button type="submit" disabled={saving || uploading}>
               {saving

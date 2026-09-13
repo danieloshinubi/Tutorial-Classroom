@@ -13,6 +13,7 @@ import {
   Badge,
   Notice,
   Empty,
+  Select,
   displayName,
   initials,
 } from "../../Components/UI";
@@ -138,18 +139,18 @@ const GuardiansPanel = () => {
           <h3 style={{ marginTop: 0 }}>{"Link a child to a parent"}</h3>
           <form onSubmit={handleLink}>
             <Field label="Parent">
-              <select
+              <Select
                 className="select"
                 value={selected}
-                onChange={(e) => setSelected(e.target.value)}
-              >
-                <option value="">{"Choose a parent"}</option>
-                {parents.map((p) => (
-                  <option key={p.profiles.id} value={p.profiles.id}>
-                    {`${displayName(p.profiles)} — ${p.profiles.email}`}
-                  </option>
-                ))}
-              </select>
+                onChange={setSelected}
+                options={[
+                  { value: "", label: "Choose a parent" },
+                  ...parents.map((p) => ({
+                    value: p.profiles.id,
+                    label: `${displayName(p.profiles)} — ${p.profiles.email}`,
+                  })),
+                ]}
+              />
             </Field>
 
             <Field
@@ -160,19 +161,19 @@ const GuardiansPanel = () => {
                   : "No student accounts yet — add one under People first."
               }
             >
-              <select
+              <Select
                 className="select"
                 value={childId}
-                onChange={(e) => setChildId(e.target.value)}
+                onChange={setChildId}
                 disabled={students.length === 0}
-              >
-                <option value="">{"Choose a child"}</option>
-                {students.map((s) => (
-                  <option key={s.profiles.id} value={s.profiles.id}>
-                    {`${displayName(s.profiles)} — ${s.profiles.email}`}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: "", label: "Choose a child" },
+                  ...students.map((s) => ({
+                    value: s.profiles.id,
+                    label: `${displayName(s.profiles)} — ${s.profiles.email}`,
+                  })),
+                ]}
+              />
             </Field>
 
             <Field label="Relationship" hint="Optional — mother, father, guardian.">

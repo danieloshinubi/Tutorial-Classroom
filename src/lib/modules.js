@@ -46,6 +46,20 @@ export const MODULES = [
     roles: ROLES,
   },
   {
+    id: "support",
+    priority: 25,
+    group: "Overview",
+    path: "/Support",
+    // Not "Support" — the sidebar footer already has a fixed mailto link by
+    // that name (support@schoolivio.com, Schoolivio's own platform contact).
+    // This is a different thing: the school's own internal request queue.
+    label: "Help Desk",
+    // Raise your own request and follow it — every role, same as News. The
+    // staff-side queue at /Tickets (module "tickets") is a separate, much
+    // narrower module for managing everyone's requests.
+    roles: ROLES,
+  },
+  {
     id: "courses",
     priority: 30,
     group: "Teaching",
@@ -120,6 +134,19 @@ export const MODULES = [
     // recorded action, across every family and every member of staff, is a
     // security/compliance surface for whoever actually runs the school.
     roles: RUNS_THE_SCHOOL,
+  },
+  {
+    id: "tickets",
+    priority: 85,
+    group: "Admin",
+    path: "/Tickets",
+    label: "Tickets",
+    // Staff filing and tracking their own operational issues with each
+    // other — a broken projector, a network outage, an access request.
+    // Every staff role now, teacher included — each sees only their own
+    // department's queue (classroom.can_access_ticket), owner/admin see
+    // every department's.
+    roles: [...RUNS_THE_SCHOOL, "principal", "bursar", "admissions", "teacher"],
   },
 ];
 

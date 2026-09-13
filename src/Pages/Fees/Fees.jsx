@@ -23,6 +23,8 @@ import {
   Notice,
   Empty,
   MoneyInput,
+  Select,
+  DatePicker,
   displayName,
   formatDate,
 } from "../../Components/UI";
@@ -411,28 +413,18 @@ const InvoiceCard = ({
               />
             </Field>
             <Field label="How you paid">
-              <select
+              <Select
                 className="select"
                 value={method}
-                onChange={(e) => setMethod(e.target.value)}
-              >
-                {PAYMENT_METHODS.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                onChange={setMethod}
+                options={PAYMENT_METHODS.map(([value, label]) => ({ value, label }))}
+              />
             </Field>
           </div>
 
           <div className="split">
             <Field label="When" >
-              <input
-                className="input"
-                type="date"
-                value={paidOn}
-                onChange={(e) => setPaidOn(e.target.value)}
-              />
+              <DatePicker value={paidOn} onChange={setPaidOn} />
             </Field>
             <Field label="Teller or transfer reference" hint="Optional, but it speeds the check up.">
               <input

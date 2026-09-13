@@ -1,4 +1,10 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "react-icons-kit";
+import { chevronDown } from "react-icons-kit/feather/chevronDown";
+import { chevronLeft } from "react-icons-kit/feather/chevronLeft";
+import { chevronRight } from "react-icons-kit/feather/chevronRight";
+import { check } from "react-icons-kit/feather/check";
+import { calendar as calendarIcon } from "react-icons-kit/feather/calendar";
 
 // Thin wrappers over the classes in styles/theme.css. Pages compose these so
 // spacing, colour and radius stay consistent without repeating inline styles.
@@ -12,7 +18,7 @@ import React, { useEffect, useRef } from "react";
 //
 // The main region is the scroll container (see .shell in theme.css), so this
 // is sticky within it rather than the window.
-export const Page = ({ title, subtitle, action, toolbar, children }) => {
+export const Page = ({ title, subtitle, action, toolbar, children, wide = false }) => {
   // Anything inside a page that also wants to stay put — a filter row, an
   // "add" form, a row of totals — has to sit below the page header rather
   // than under it. The header's height is not fixed (a subtitle wraps, a tab
@@ -36,7 +42,7 @@ export const Page = ({ title, subtitle, action, toolbar, children }) => {
   });
 
   return (
-  <div className="page" ref={pageRef}>
+  <div className={`page${wide ? " page-wide" : ""}`} ref={pageRef}>
     {(title || action || toolbar) && (
       <div className="page-top" ref={topRef}>
         {(title || action) && (
@@ -119,6 +125,508 @@ export const MoneyInput = ({ value, onChange, className = "input", ...props }) =
     }}
   />
 );
+
+// A drop-in replacement for a native <select> whose open panel we can
+// actually design — a browser's own option list ignores CSS almost
+// entirely (the exact "Open/Pending/Resolved/Closed" popover with the
+// system-grey highlight and no rounding that prompted this component), so
+// getting a designed dropdown means building the listbox ourselves rather
+// than styling a control we don't control the rendering of.
+//
+// `options` is a flat [{ value, label }] array — including a blank/"any"
+// entry as a real option when a call site wants one, exactly like the
+// <option value=""> it replaces. The trigger keeps whatever className the
+// call site already passed (".select", ".tix-select full", ...) so its
+// box — border, padding, radius, focus ring — stays the one already
+// defined for that context; only the popup panel is new.
+export const Select = ({
+  value,
+  onChange,
+  options,
+  className = "select",
+  disabled = false,
+  placeholder = "Select…",
+  id,
+  style,
+  ...rest
+}) => {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const wrapRef = useRef(null);
+  const triggerRef = useRef(null);
+  const listRef = useRef(null);
+  const typeAhead = useRef({ text: "", timer: null });
+
+  const selectedIndex = options.findIndex((o) => o.value === value);
+  const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    listRef.current?.children[activeIndex]?.scrollIntoView({ block: "nearest" });
+  }, [open, activeIndex]);
+
+  const openMenu = () => {
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setOpen(true);
+  };
+
+  const commit = (index) => {
+    const opt = options[index];
+    setOpen(false);
+    triggerRef.current?.focus();
+    if (opt && opt.value !== value) onChange(opt.value);
+  };
+
+  const onKeyDown = (e) => {
+    if (disabled) return;
+    if (!open) {
+      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
+        e.preventDefault();
+        openMenu();
+      }
+      return;
+    }
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        setOpen(false);
+        return;
+      case "ArrowDown":
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(options.length - 1, i + 1));
+        return;
+      case "ArrowUp":
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(0, i - 1));
+        return;
+      case "Home":
+        e.preventDefault();
+        setActiveIndex(0);
+        return;
+      case "End":
+        e.preventDefault();
+        setActiveIndex(options.length - 1);
+        return;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        commit(activeIndex);
+        return;
+      case "Tab":
+        setOpen(false);
+        return;
+      default: {
+        if (e.key.length !== 1 || !/[a-z0-9]/i.test(e.key)) return;
+        const ref = typeAhead.current;
+        clearTimeout(ref.timer);
+        ref.text += e.key.toLowerCase();
+        const match = options.findIndex((o) => String(o.label ?? "").toLowerCase().startsWith(ref.text));
+        if (match >= 0) setActiveIndex(match);
+        ref.timer = setTimeout(() => { ref.text = ""; }, 600);
+      }
+    }
+  };
+
+  return (
+    <div className="uiselect" ref={wrapRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={`${className} uiselect-trigger`}
+        style={style}
+        disabled={disabled}
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={id ? `${id}-listbox` : undefined}
+        aria-activedescendant={open && activeIndex >= 0 && id ? `${id}-opt-${activeIndex}` : undefined}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={onKeyDown}
+        {...rest}
+      >
+        <span className="uiselect-trigger-label">{selected ? selected.label : placeholder}</span>
+        <Icon icon={chevronDown} size={15} className={`uiselect-caret${open ? " up" : ""}`} />
+      </button>
+
+      {open ? (
+        <ul id={id ? `${id}-listbox` : undefined} className="uiselect-panel" role="listbox" ref={listRef}>
+          {options.length === 0 ? (
+            <li className="uiselect-empty">{"No options"}</li>
+          ) : (
+            options.map((opt, i) => (
+              <li
+                key={opt.value ?? i}
+                id={id ? `${id}-opt-${i}` : undefined}
+                role="option"
+                aria-selected={opt.value === value}
+                className={`uiselect-option${i === activeIndex ? " active" : ""}`}
+                onMouseEnter={() => setActiveIndex(i)}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => commit(i)}
+              >
+                <span className="uiselect-option-label">{opt.label}</span>
+                <Icon icon={check} size={14} className="uiselect-option-check" />
+              </li>
+            ))
+          )}
+        </ul>
+      ) : null}
+    </div>
+  );
+};
+
+// ---- DatePicker's local date helpers — plain year/month/day math throughout,
+// never Date.toISOString()/UTC parsing, which can shift a calendar date by a
+// day depending on the viewer's timezone. A date here is always "the day the
+// person meant," not an instant.
+const isoToLocalDate = (iso) => {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+};
+
+const localDateToIso = (date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+const isSameDay = (a, b) =>
+  !!a && !!b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
+
+const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+// Six-week-max grid, always a whole number of weeks — the same "no half rows"
+// convention every real calendar widget uses, so partial weeks never look
+// like a rendering bug.
+const buildMonthGrid = (viewDate) => {
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = firstWeekday; i > 0; i -= 1) {
+    cells.push({ date: new Date(year, month, 1 - i), outside: true });
+  }
+  for (let d = 1; d <= daysInMonth; d += 1) {
+    cells.push({ date: new Date(year, month, d), outside: false });
+  }
+  while (cells.length % 7 !== 0) {
+    const last = cells[cells.length - 1].date;
+    cells.push({ date: new Date(last.getFullYear(), last.getMonth(), last.getDate() + 1), outside: true });
+  }
+  return cells;
+};
+
+// value/onChange for the time-aware variant carry "YYYY-MM-DDTHH:mm" — the
+// exact shape a native <input type="datetime-local"> already used, so this
+// is a drop-in swap at every call site, no parent-state format change.
+const splitValue = (value) => {
+  if (!value) return { datePart: null, timePart: null };
+  const [datePart, timePart] = value.split("T");
+  return { datePart, timePart: timePart || null };
+};
+
+const clampInt = (n, min, max) => Math.min(max, Math.max(min, Number.isFinite(n) ? n : min));
+
+const formatDateTimeValue = (date, hh, mm) => {
+  const datePart = localDateToIso(date);
+  return `${datePart}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+};
+
+// Shared engine behind DatePicker and DateTimePicker — both are a drop-in
+// replacement for a native <input type="date"> / <input type="datetime-local">
+// whose popup has exactly the same problem a native <select> has: the OS
+// renders it, not this app, so no CSS reaches it. Shaped like Select on
+// purpose (a styled trigger + a custom popover, same --dd-* tokens for the
+// panel itself) so a date field sitting next to a Select in the same form
+// reads as one family of control, not two unrelated ones.
+const BaseDatePicker = ({
+  value,
+  onChange,
+  withTime = false,
+  className = "input",
+  disabled = false,
+  placeholder,
+  style,
+  ...rest
+}) => {
+  const { datePart, timePart } = splitValue(value);
+  const selected = isoToLocalDate(datePart);
+  const [initialHh, initialMm] = timePart ? timePart.split(":").map(Number) : [null, null];
+
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(() => startOfMonth(selected || new Date()));
+  const [focusedDate, setFocusedDate] = useState(() => selected || new Date());
+  // Only meaningful when withTime — the draft day + time-of-day being built
+  // up in the open panel before "Set" commits them together. A plain date
+  // has no such draft: clicking a day commits immediately, same as before.
+  const [draftDate, setDraftDate] = useState(() => selected || new Date());
+  const [hours, setHours] = useState(() => (initialHh != null ? initialHh : new Date().getHours()));
+  const [minutes, setMinutes] = useState(() => (initialMm != null ? initialMm : 0));
+  const wrapRef = useRef(null);
+  const gridRef = useRef(null);
+  const triggerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  // Keeps real DOM focus following the roving tabIndex day cell, so arrow-
+  // key navigation and Tab both land in the same place a mouse click would.
+  useEffect(() => {
+    if (!open) return;
+    const el = gridRef.current?.querySelector(`[data-date="${localDateToIso(focusedDate)}"]`);
+    el?.focus();
+  }, [open, focusedDate, viewDate]);
+
+  const openPanel = () => {
+    const base = selected || focusedDate || new Date();
+    setViewDate(startOfMonth(base));
+    setFocusedDate(base);
+    setDraftDate(base);
+    setHours(initialHh != null ? initialHh : new Date().getHours());
+    setMinutes(initialMm != null ? initialMm : 0);
+    setOpen(true);
+  };
+
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  const commitDate = (date) => {
+    onChange(localDateToIso(date));
+    close();
+  };
+
+  const commitDateTime = () => {
+    onChange(formatDateTimeValue(draftDate, hours, minutes));
+    close();
+  };
+
+  const pickDay = (date) => {
+    if (withTime) {
+      setFocusedDate(date);
+      setDraftDate(date);
+    } else {
+      commitDate(date);
+    }
+  };
+
+  const clear = () => {
+    onChange("");
+    close();
+  };
+
+  const moveFocus = (days) => {
+    setFocusedDate((current) => {
+      const next = new Date(current.getFullYear(), current.getMonth(), current.getDate() + days);
+      if (next.getMonth() !== viewDate.getMonth() || next.getFullYear() !== viewDate.getFullYear()) {
+        setViewDate(startOfMonth(next));
+      }
+      if (withTime) setDraftDate(next);
+      return next;
+    });
+  };
+
+  const shiftMonth = (delta) => {
+    setFocusedDate((current) => {
+      const next = new Date(current.getFullYear(), current.getMonth() + delta, current.getDate());
+      setViewDate(startOfMonth(next));
+      return next;
+    });
+  };
+
+  const handleKeyDown = (e) => {
+    if (disabled) return;
+    if (!open) {
+      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
+        e.preventDefault();
+        openPanel();
+      }
+      return;
+    }
+    switch (e.key) {
+      case "Escape":
+        e.preventDefault();
+        close();
+        return;
+      case "ArrowLeft":
+        e.preventDefault();
+        moveFocus(-1);
+        return;
+      case "ArrowRight":
+        e.preventDefault();
+        moveFocus(1);
+        return;
+      case "ArrowUp":
+        e.preventDefault();
+        moveFocus(-7);
+        return;
+      case "ArrowDown":
+        e.preventDefault();
+        moveFocus(7);
+        return;
+      case "PageUp":
+        e.preventDefault();
+        shiftMonth(-1);
+        return;
+      case "PageDown":
+        e.preventDefault();
+        shiftMonth(1);
+        return;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        pickDay(focusedDate);
+        return;
+      default:
+    }
+  };
+
+  const cells = buildMonthGrid(viewDate);
+  const today = new Date();
+  const highlightDate = withTime ? draftDate : selected;
+
+  const triggerLabel = () => {
+    if (withTime) {
+      if (!selected) return placeholder || "Select a date and time";
+      return `${selected.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}, ${String(initialHh ?? 0).padStart(2, "0")}:${String(initialMm ?? 0).padStart(2, "0")}`;
+    }
+    return selected
+      ? selected.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+      : placeholder || "Select a date";
+  };
+
+  return (
+    <div className="uidate" ref={wrapRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className={`${className} uidate-trigger`}
+        style={style}
+        disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => (open ? close() : openPanel())}
+        onKeyDown={handleKeyDown}
+        {...rest}
+      >
+        <span className="uidate-trigger-label">{triggerLabel()}</span>
+        <Icon icon={calendarIcon} size={15} className="uidate-icon" />
+      </button>
+
+      {open ? (
+        <div className="uidate-panel" role="dialog" aria-label={withTime ? "Choose a date and time" : "Choose a date"}>
+          <div className="uidate-nav">
+            <button type="button" className="uidate-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Previous month">
+              <Icon icon={chevronLeft} size={15} />
+            </button>
+            <span className="uidate-nav-label">
+              {viewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+            </span>
+            <button type="button" className="uidate-nav-btn" onClick={() => shiftMonth(1)} aria-label="Next month">
+              <Icon icon={chevronRight} size={15} />
+            </button>
+          </div>
+
+          <div className="uidate-weekdays">
+            {WEEKDAY_LABELS.map((w) => <span key={w}>{w}</span>)}
+          </div>
+
+          <div className="uidate-grid" ref={gridRef} onKeyDown={handleKeyDown}>
+            {cells.map(({ date, outside }) => {
+              const iso = localDateToIso(date);
+              const isFocused = isSameDay(date, focusedDate);
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  data-date={iso}
+                  tabIndex={isFocused ? 0 : -1}
+                  className={`uidate-day${outside ? " outside" : ""}${isSameDay(date, highlightDate) ? " selected" : ""}${isSameDay(date, today) ? " today" : ""}`}
+                  onClick={() => pickDay(date)}
+                  onFocus={() => setFocusedDate(date)}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+
+          {withTime ? (
+            <div className="uidate-time">
+              <span className="uidate-time-label">{"Time"}</span>
+              <div className="uidate-time-inputs">
+                <input
+                  type="number"
+                  className="uidate-time-num"
+                  min={0}
+                  max={23}
+                  value={String(hours).padStart(2, "0")}
+                  onChange={(e) => setHours(clampInt(parseInt(e.target.value, 10), 0, 23))}
+                  aria-label="Hour"
+                />
+                <span className="uidate-time-sep">{":"}</span>
+                <input
+                  type="number"
+                  className="uidate-time-num"
+                  min={0}
+                  max={59}
+                  value={String(minutes).padStart(2, "0")}
+                  onChange={(e) => setMinutes(clampInt(parseInt(e.target.value, 10), 0, 59))}
+                  aria-label="Minute"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div className="uidate-footer">
+            {withTime ? (
+              <>
+                <button type="button" className="uidate-link" onClick={() => setDraftDate(new Date())}>{"Today"}</button>
+                <span className="uidate-footer-spacer" />
+                {value ? (
+                  <button type="button" className="uidate-link muted" onClick={clear}>{"Clear"}</button>
+                ) : null}
+                <button type="button" className="btn btn-primary btn-sm" onClick={commitDateTime}>{"Set"}</button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="uidate-link" onClick={() => commitDate(new Date())}>{"Today"}</button>
+                {value ? (
+                  <button type="button" className="uidate-link muted" onClick={clear}>{"Clear"}</button>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+export const DatePicker = (props) => <BaseDatePicker {...props} withTime={false} />;
+export const DateTimePicker = (props) => <BaseDatePicker {...props} withTime />;
 
 export const Badge = ({ children, tone }) => (
   <span className={`badge${tone ? ` ${tone}` : ""}`}>{children}</span>
