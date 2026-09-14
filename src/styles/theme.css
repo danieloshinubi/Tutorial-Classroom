@@ -3242,6 +3242,15 @@ table.data tr:last-child td { border-bottom: none; }
   background: #fff;
   color: var(--brand-dark);
 }
+/* Without this, :hover's own .btn-primary rule (one selector-part more
+   specific: element+pseudo-class+:not()) wins over the plain two-class
+   selector above and reverts the background to the same brand-dark as
+   this banner's own background — text and fill then match exactly, so
+   the whole button visually vanishes the moment the pointer reaches it. */
+.live-update-banner .btn-primary:hover:not(:disabled) {
+  background: #fff;
+  filter: brightness(0.95);
+}
 @keyframes live-update-in {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }

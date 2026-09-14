@@ -184,6 +184,15 @@ export const Select = ({
   const triggerRef = useRef(null);
   const listRef = useRef(null);
   const typeAhead = useRef({ text: "", timer: null });
+  // Picking an option removes the <li> that was actually clicked, mid
+  // pointer-event, and at least on Chromium the click that follows gets
+  // re-dispatched to whatever now sits under the cursor — reliably the
+  // trigger button, which sits directly above the option list. Without
+  // this guard that phantom click reopens the menu it just closed, so the
+  // dropdown never visually goes away until an unrelated later click
+  // lands outside it. Anything within this window after commit() is
+  // treated as an echo of the same selection, not a fresh open request.
+  const justClosedAtRef = useRef(0);
 
   const selectedIndex = options.findIndex((o) => o.value === value);
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
@@ -210,6 +219,7 @@ export const Select = ({
   const commit = (index) => {
     const opt = options[index];
     setOpen(false);
+    justClosedAtRef.current = performance.now();
     triggerRef.current?.focus();
     if (opt && opt.value !== value) onChange(opt.value);
   };
@@ -277,7 +287,10 @@ export const Select = ({
         aria-expanded={open}
         aria-controls={id ? `${id}-listbox` : undefined}
         aria-activedescendant={open && activeIndex >= 0 && id ? `${id}-opt-${activeIndex}` : undefined}
-        onClick={() => (open ? setOpen(false) : openMenu())}
+        onClick={() => {
+          if (!open && performance.now() - justClosedAtRef.current < 400) return;
+          open ? setOpen(false) : openMenu();
+        }}
         onKeyDown={onKeyDown}
         {...rest}
       >

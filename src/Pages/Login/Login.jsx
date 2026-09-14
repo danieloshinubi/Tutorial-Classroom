@@ -74,6 +74,11 @@ const Login = () => {
             {"Your school's workspace is ready — sign in with the password you just chose to get started."}
           </Notice>
         ) : null}
+        {params.get("reason") === "inactivity" ? (
+          <Notice tone="muted">
+            {"You were signed out after 7 minutes of inactivity. Sign in again to continue."}
+          </Notice>
+        ) : null}
         <Field label="Email">
           <input
             required

@@ -11,6 +11,14 @@ import { supabase } from "../lib/supabaseClient";
 
 const AuthContext = createContext(null);
 
+// Every signed-in person, any role, any tenant — a school holds children's
+// records, so a session left open on a shared or unattended device is a
+// real exposure. 7 minutes with no mouse/keyboard/touch/scroll activity
+// anywhere on the page signs them out and sends them back to /Login, the
+// same as the session simply having expired.
+const INACTIVITY_LIMIT_MS = 7 * 60 * 1000;
+const ACTIVITY_EVENTS = ["mousedown", "mousemove", "keydown", "wheel", "touchstart", "scroll"];
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -114,6 +122,32 @@ export const AuthProvider = ({ children }) => {
       subscription.unsubscribe();
     };
   }, [loadProfile]);
+
+  // Inactivity sign-out. Not signOut() from below — that's declared after
+  // this effect and only matters once, so this calls the same Supabase API
+  // directly rather than reordering the file around a hook dependency.
+  useEffect(() => {
+    if (!session) return undefined;
+
+    let timer;
+    const lock = () => {
+      supabase.auth.signOut().finally(() => {
+        window.location.href = "/Login?reason=inactivity";
+      });
+    };
+    const resetTimer = () => {
+      clearTimeout(timer);
+      timer = setTimeout(lock, INACTIVITY_LIMIT_MS);
+    };
+
+    resetTimer();
+    ACTIVITY_EVENTS.forEach((name) => window.addEventListener(name, resetTimer, { passive: true }));
+
+    return () => {
+      clearTimeout(timer);
+      ACTIVITY_EVENTS.forEach((name) => window.removeEventListener(name, resetTimer));
+    };
+  }, [session]);
 
   const signUp = useCallback(
     async ({ email, password, firstName, surname, username, role }) => {

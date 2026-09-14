@@ -11,6 +11,7 @@ import { Mark } from "../Components/Logo";
 // console it is, and where to go instead if you came to the wrong address.
 const PlatformLogin = () => {
   const { signIn } = useAuth();
+  const inactive = new URLSearchParams(window.location.search).get("reason") === "inactivity";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -55,6 +56,11 @@ const PlatformLogin = () => {
           {"For Schoolivio staff. This console manages every school on the platform."}
         </p>
 
+        {inactive ? (
+          <Notice tone="muted">
+            {"You were signed out after 7 minutes of inactivity. Sign in again to continue."}
+          </Notice>
+        ) : null}
         <Notice tone="error">{error}</Notice>
 
         <Field label="Email">
