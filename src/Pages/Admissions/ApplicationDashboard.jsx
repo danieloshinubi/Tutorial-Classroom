@@ -29,6 +29,7 @@ import {
   Badge,
   Empty,
   formatDate,
+  DatePicker,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 
@@ -76,6 +77,15 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
     setDraft((current) => ({
       ...current,
       [name]: event.target.value,
+    }));
+
+  // DatePicker's onChange hands back the ISO value directly, not an event —
+  // same "YYYY-MM-DD" string a native <input type="date"> would have put in
+  // event.target.value, just not wrapped in one.
+  const updateValue = (name) => (value) =>
+    setDraft((current) => ({
+      ...current,
+      [name]: value,
     }));
 
   const save = async (event) => {
@@ -126,6 +136,12 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
                     value={draft[field.name] || ""}
                     disabled={disabled}
                     onChange={update(field.name)}
+                  />
+                ) : field.type === "date" ? (
+                  <DatePicker
+                    value={draft[field.name] || ""}
+                    disabled={disabled}
+                    onChange={updateValue(field.name)}
                   />
                 ) : (
                   <input
