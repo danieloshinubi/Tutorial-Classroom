@@ -37,6 +37,12 @@ const ApplicationStatus = () => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // Carries the name already on file into /Apply/Claim's signup form too —
+  // no reason to make someone retype what they already gave the school.
+  const claimLink = (r) =>
+    `/Apply/Claim?reference=${encodeURIComponent(r.reference)}&email=${encodeURIComponent(email.trim())}` +
+    `&firstName=${encodeURIComponent(r.first_name || "")}&surname=${encodeURIComponent(r.surname || "")}`;
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
@@ -162,9 +168,7 @@ const ApplicationStatus = () => {
                 {`Sections to fix: ${result.correction_sections.map((s) => SECTION_LABEL[s] || s).join(", ")}`}
               </p>
             ) : null}
-            <Link
-              to={`/Apply/Claim?reference=${encodeURIComponent(result.reference)}&email=${encodeURIComponent(email.trim())}`}
-            >
+            <Link to={claimLink(result)}>
               <Button size="sm">{"Sign in or create an account to fix this"}</Button>
             </Link>
           </Card>
@@ -176,9 +180,7 @@ const ApplicationStatus = () => {
             <p style={{ margin: "6px 0 12px", color: "var(--ink-2)", fontSize: 14 }}>
               {"Create an account (or sign in, if you already have one) to see full details, get notified the moment anything changes, and update this application yourself."}
             </p>
-            <Link
-              to={`/Apply/Claim?reference=${encodeURIComponent(result.reference)}&email=${encodeURIComponent(email.trim())}`}
-            >
+            <Link to={claimLink(result)}>
               <Button size="sm" variant="secondary">{"Create an account or sign in"}</Button>
             </Link>
           </Card>

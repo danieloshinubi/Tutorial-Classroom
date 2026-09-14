@@ -24,8 +24,11 @@ const ApplyClaim = () => {
   const [claimEmail, setClaimEmail] = useState(searchParams.get("email") || "");
   const [mode, setMode] = useState("signup");
   const [form, setForm] = useState({
-    firstName: "",
-    surname: "",
+    // Pre-filled from the name given at submission (carried here as a query
+    // param from ApplicationStatus.jsx) — still editable, since a typo back
+    // then shouldn't have to survive into the account too.
+    firstName: searchParams.get("firstName") || "",
+    surname: searchParams.get("surname") || "",
     accountEmail: searchParams.get("email") || "",
     password: "",
     confirm: "",
