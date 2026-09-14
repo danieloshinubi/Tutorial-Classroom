@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
+import { allCountries } from "country-region-data";
 import { ApplicantShell } from "../../Components/ApplicantShell";
 import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
@@ -30,8 +31,25 @@ import {
   Empty,
   formatDate,
   DatePicker,
+  Select,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+
+// country-region-data ships each country as a [name, isoCode, regions] tuple
+// (regions themselves [name, isoCode] pairs) rather than the {countryName,
+// ...} shape its own README shows — that shape is from an older major
+// version. Names, not codes, are stored: nationality/state_of_origin were
+// plain free-text before this, so anything already saved (and anywhere
+// downstream that just displays the string) keeps working unchanged.
+const COUNTRY_OPTIONS = allCountries
+  .map(([name]) => ({ value: name, label: name }))
+  .sort((a, b) => a.label.localeCompare(b.label));
+
+const regionOptionsFor = (countryName) => {
+  const country = allCountries.find(([name]) => name === countryName);
+  if (!country) return [];
+  return country[2].map(([name]) => ({ value: name, label: name }));
+};
 
 // Humanises applications.status for this screen specifically. api.js's own
 // STATUS_LABEL/STATUS_TONE cover only a subset of the enum — an accounted
@@ -79,14 +97,27 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
       [name]: event.target.value,
     }));
 
-  // DatePicker's onChange hands back the ISO value directly, not an event —
-  // same "YYYY-MM-DD" string a native <input type="date"> would have put in
-  // event.target.value, just not wrapped in one.
+  // DatePicker's/Select's onChange hands back the value directly, not an
+  // event — same string a native input's event.target.value would have
+  // held, just not wrapped in one.
   const updateValue = (name) => (value) =>
     setDraft((current) => ({
       ...current,
       [name]: value,
     }));
+
+  // Changing a "country" field clears any "region" field that depends on
+  // it — its old value (a state/province of whichever country was picked
+  // before) almost certainly doesn't belong to the new one, and leaving it
+  // in the draft would save a state under the wrong country.
+  const updateCountry = (name) => (value) =>
+    setDraft((current) => {
+      const next = { ...current, [name]: value };
+      fields.forEach((f) => {
+        if (f.type === "region" && f.dependsOn === name) next[f.name] = "";
+      });
+      return next;
+    });
 
   const save = async (event) => {
     event.preventDefault();
@@ -141,6 +172,22 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
                   <DatePicker
                     value={draft[field.name] || ""}
                     disabled={disabled}
+                    onChange={updateValue(field.name)}
+                  />
+                ) : field.type === "country" ? (
+                  <Select
+                    value={draft[field.name] || ""}
+                    disabled={disabled}
+                    placeholder="Select a country"
+                    options={COUNTRY_OPTIONS}
+                    onChange={updateCountry(field.name)}
+                  />
+                ) : field.type === "region" ? (
+                  <Select
+                    value={draft[field.name] || ""}
+                    disabled={disabled || !draft[field.dependsOn]}
+                    placeholder={draft[field.dependsOn] ? "Select a state / region" : "Choose a country first"}
+                    options={regionOptionsFor(draft[field.dependsOn])}
                     onChange={updateValue(field.name)}
                   />
                 ) : (
@@ -786,8 +833,8 @@ const ApplicationDashboard = () => {
               { name: "surname", label: "Surname" },
               { name: "date_of_birth", label: "Date of birth", type: "date" },
               { name: "gender", label: "Gender" },
-              { name: "nationality", label: "Nationality" },
-              { name: "state_of_origin", label: "State of origin" },
+              { name: "nationality", label: "Nationality", type: "country" },
+              { name: "state_of_origin", label: "State of origin", type: "region", dependsOn: "nationality" },
               { name: "address", label: "Home address", type: "textarea" },
               { name: "phone", label: "Phone" },
               { name: "email", label: "Email", type: "email" },
