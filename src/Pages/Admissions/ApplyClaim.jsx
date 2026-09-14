@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
 import { claimApplication } from "../../lib/api";
+import { applyTenantBranding } from "../../lib/branding";
 import { Field, Button, Notice } from "../../Components/UI";
 
 // The bridge for an application that was submitted without an account (the
@@ -52,6 +53,14 @@ const ApplyClaim = () => {
       })
       .catch(() => {});
   }, [slug]);
+
+  useEffect(() => {
+    applyTenantBranding({
+      name: school?.name,
+      logoUrl: school?.logo_url,
+      themeColor: school?.theme_color,
+    });
+  }, [school]);
 
   const doClaim = () => {
     if (!claimRef.trim() || !claimEmail.trim()) {

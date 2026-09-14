@@ -8,6 +8,7 @@ import {
   removePublicApplicationDocument,
 } from "../../lib/api";
 import { Field, Button, Notice, Select, DatePicker } from "../../Components/UI";
+import { applyTenantBranding } from "../../lib/branding";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -47,6 +48,10 @@ const Apply = () => {
   const slug = resolveSlug();
 
   const [school, setSchool] = useState(null);
+  // The school's own class names — "JSS 2", "Year 8", "Grade 4", whatever it
+  // calls them — so "Applying for class" is a pick, not a guess at which
+  // number this school's numbering scheme maps to.
+  const [levels, setLevels] = useState([]);
   const [form, setForm] = useState({
     firstName: "",
     middleName: "",
@@ -83,7 +88,19 @@ const Apply = () => {
         if (data?.length) setSchool(data[0]);
       })
       .catch(() => {});
+    supabase
+      .rpc("public_school_levels", { target_slug: slug })
+      .then(({ data }) => setLevels(data || []))
+      .catch(() => {});
   }, [slug]);
+
+  useEffect(() => {
+    applyTenantBranding({
+      name: school?.name,
+      logoUrl: school?.logo_url,
+      themeColor: school?.theme_color,
+    });
+  }, [school]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -237,7 +254,7 @@ const Apply = () => {
               ? `Complete this form to apply to ${school.name}. You do not need an account — you will be given a reference to track it with.`
               : "Complete this form to apply. You do not need an account."}
           </p>
-          <p className="apply-lede" style={{ marginTop: -14, fontSize: 14 }}>
+          <p className="apply-lede apply-lede-secondary">
             {"Prefer to pay fees online and get updates without checking back? "}
             <Link to="/Apply/Account">{"Create an account instead"}</Link>
           </p>
@@ -284,13 +301,23 @@ const Apply = () => {
                 />
               </Field>
               <Field label="Applying for class" hint="The class level, if you know it.">
-                <input
-                  type="number"
-                  className="input"
-                  value={form.applyingForLevel}
-                  onChange={update("applyingForLevel")}
-                  placeholder="1"
-                />
+                {levels.length > 0 ? (
+                  <Select
+                    className="select"
+                    value={form.applyingForLevel}
+                    onChange={(v) => setForm((current) => ({ ...current, applyingForLevel: v }))}
+                    placeholder="Select a class"
+                    options={levels.map((l) => ({ value: String(l.year), label: l.label }))}
+                  />
+                ) : (
+                  <input
+                    type="number"
+                    className="input"
+                    value={form.applyingForLevel}
+                    onChange={update("applyingForLevel")}
+                    placeholder="1"
+                  />
+                )}
               </Field>
             </div>
             <Field label="Previous school" hint="Leave blank if this is their first school.">

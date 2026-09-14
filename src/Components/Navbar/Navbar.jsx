@@ -6,6 +6,7 @@ import { bookOpen } from "react-icons-kit/feather/bookOpen";
 import { users as usersIcon } from "react-icons-kit/feather/users";
 import { creditCard } from "react-icons-kit/feather/creditCard";
 import { award } from "react-icons-kit/feather/award";
+import { checkSquare } from "react-icons-kit/feather/checkSquare";
 import { fileText } from "react-icons-kit/feather/fileText";
 import { settings as settingsIcon } from "react-icons-kit/feather/settings";
 import { bell } from "react-icons-kit/feather/bell";
@@ -42,6 +43,7 @@ const ICONS = {
   bursary: creditCard,
   fees: creditCard,
   admissions: fileText,
+  attendance: checkSquare,
   reports: fileText,
   tutors: usersIcon,
   school: settingsIcon,

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { resolveSlug } from "../lib/tenant";
+import { applyTenantBranding } from "../lib/branding";
 import Logo, { Mark } from "./Logo";
 
 // What the platform ties together, drawn as an orbit around the school.
@@ -119,6 +120,14 @@ const AuthLayout = ({ title, subtitle, children, footer }) => {
       active = false;
     };
   }, [slug]);
+
+  useEffect(() => {
+    applyTenantBranding({
+      name: school?.name,
+      logoUrl: school?.logo_url,
+      themeColor: school?.theme_color,
+    });
+  }, [school]);
 
   // Still if the reader asked for less motion.
   const still = useMemo(

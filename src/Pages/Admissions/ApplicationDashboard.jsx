@@ -63,6 +63,48 @@ const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 1959 }, (_, i) => {
   return { value: String(year), label: String(year) };
 });
 
+// Education history's "qualification" is whatever certificate/diploma/degree
+// the applicant earned at that school, and the name for the very same thing
+// differs by country (WASSCE in West Africa, GCSE/A-Level in the UK, a
+// Bachelor's degree everywhere) — a free-text box invites a dozen spellings
+// of the same qualification. This is a curated spread across the systems an
+// applicant is likely to have come through, primary to postgraduate,
+// roughly in the order someone would earn them. "Other" plus the free-text
+// box it reveals below covers anything genuinely not on the list, and also
+// keeps showing whatever was typed in here before this dropdown existed.
+const QUALIFICATION_OPTIONS = [
+  "Primary School Leaving Certificate (PSLC)",
+  "Basic Education Certificate (BECE / JSCE)",
+  "General Certificate of Secondary Education (GCSE)",
+  "International General Certificate of Secondary Education (IGCSE)",
+  "West African Senior School Certificate (WASSCE / SSCE)",
+  "National Examination Council Certificate (NECO)",
+  "National Business and Technical Examinations Board Certificate (NABTEB)",
+  "GCE Ordinary Level (O'Level)",
+  "GCE Advanced Level (A'Level)",
+  "Kenya Certificate of Secondary Education (KCSE)",
+  "Uganda Certificate of Education (UCE)",
+  "Uganda Advanced Certificate of Education (UACE)",
+  "Senior Secondary Certificate Examination (India — CBSE/ICSE/State Board)",
+  "Higher Secondary Certificate (HSC)",
+  "Matriculation Certificate (Matric)",
+  "High School Diploma",
+  "International Baccalaureate (IB) Diploma",
+  "Baccalauréat",
+  "Abitur",
+  "National Certificate in Education (NCE)",
+  "Ordinary National Diploma (OND)",
+  "National Diploma (ND)",
+  "Higher National Diploma (HND)",
+  "Associate Degree",
+  "Bachelor's Degree (BA / BSc / BEng, etc.)",
+  "Postgraduate Diploma (PGD)",
+  "Master's Degree (MA / MSc / MBA, etc.)",
+  "Doctorate (PhD)",
+].map((label) => ({ value: label, label }));
+const QUALIFICATION_OTHER = "__other__";
+const isKnownQualification = (v) => QUALIFICATION_OPTIONS.some((o) => o.value === v);
+
 // Humanises applications.status for this screen specifically. api.js's own
 // STATUS_LABEL/STATUS_TONE cover only a subset of the enum — an accounted
 // application can sit in draft/in_progress/waitlisted/deferred/under_review
@@ -93,15 +135,32 @@ const STATUS_META = {
 // instead of staying open at full height — five long forms stacked and
 // permanently expanded was the single biggest source of scroll fatigue on
 // this page for anyone past the fill-in stage.
+// A "qualification" field is in free-text mode (showing the extra input
+// below the Select) whenever it already holds a value that isn't one of the
+// preset options — either because the applicant picked "Other", or because
+// this is old data saved back when the field was a plain text box.
+const computeCustomQual = (fields, value) => {
+  const map = {};
+  fields.forEach((f) => {
+    if (f.type === "qualification") {
+      const v = value?.[f.name];
+      map[f.name] = !!v && !isKnownQualification(v);
+    }
+  });
+  return map;
+};
+
 const Section = ({ title, description, value, onSave, disabled, fields, defaultOpen }) => {
   const [draft, setDraft] = useState(value || {});
   const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [customQual, setCustomQual] = useState(() => computeCustomQual(fields, value));
 
   useEffect(() => setDraft(value || {}), [value]);
   useEffect(() => setOpen(defaultOpen), [defaultOpen]);
+  useEffect(() => setCustomQual(computeCustomQual(fields, value)), [fields, value]);
 
   const update = (name) => (event) =>
     setDraft((current) => ({
@@ -210,6 +269,30 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
                     options={YEAR_OPTIONS}
                     onChange={updateValue(field.name)}
                   />
+                ) : field.type === "qualification" ? (
+                  <>
+                    <Select
+                      value={customQual[field.name] ? QUALIFICATION_OTHER : draft[field.name] || ""}
+                      disabled={disabled}
+                      placeholder="Select a qualification"
+                      options={[...QUALIFICATION_OPTIONS, { value: QUALIFICATION_OTHER, label: "Other" }]}
+                      onChange={(next) => {
+                        const isOther = next === QUALIFICATION_OTHER;
+                        setCustomQual((c) => ({ ...c, [field.name]: isOther }));
+                        updateValue(field.name)(isOther ? "" : next);
+                      }}
+                    />
+                    {customQual[field.name] ? (
+                      <input
+                        className="input"
+                        style={{ marginTop: 8 }}
+                        placeholder="Type your qualification"
+                        value={draft[field.name] || ""}
+                        disabled={disabled}
+                        onChange={update(field.name)}
+                      />
+                    ) : null}
+                  </>
                 ) : (
                   <input
                     className="input"
@@ -873,7 +956,7 @@ const ApplicationDashboard = () => {
               { name: "country", label: "Country", type: "country" },
               { name: "start_year", label: "Start year", type: "year" },
               { name: "end_year", label: "End year", type: "year" },
-              { name: "qualification", label: "Qualification" },
+              { name: "qualification", label: "Qualification", type: "qualification" },
             ]}
           />
 

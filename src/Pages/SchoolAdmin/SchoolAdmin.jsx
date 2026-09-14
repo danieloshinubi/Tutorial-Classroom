@@ -28,6 +28,8 @@ import {
   deleteTicketMailbox,
 } from "../../lib/api";
 import { ImageUpload } from "../../Components/ImageUpload";
+import { ExportButton } from "../../Components/ExportButton";
+import { applyTenantBranding } from "../../lib/branding";
 import {
   Page,
   Card,
@@ -58,6 +60,16 @@ const ROLES = [
 ];
 
 const ROLE_LABEL = Object.fromEntries(ROLES);
+
+const PEOPLE_EXPORT_COLUMNS = [
+  { key: "profiles.first_name", label: "First name" },
+  { key: "profiles.surname", label: "Surname" },
+  { key: "profiles.email", label: "Email" },
+  { key: "profiles.username", label: "Username" },
+  { key: "role", label: "Role" },
+  { key: "is_active", label: "Active" },
+  { key: "created_at", label: "Joined" },
+];
 
 const toneFor = (role) => {
   if (role === "owner" || role === "admin" || role === "principal") return "danger";
@@ -295,12 +307,19 @@ const PeoplePanel = () => {
             ]}
           />
         </div>
-        <Button
-          variant={showInvite ? "secondary" : "primary"}
-          onClick={() => setShowInvite((open) => !open)}
-        >
-          {showInvite ? "Cancel" : "Add someone"}
-        </Button>
+        <div className="btn-row">
+          <ExportButton
+            columns={PEOPLE_EXPORT_COLUMNS}
+            rows={filtered}
+            filename={`people-${new Date().toISOString().slice(0, 10)}.csv`}
+          />
+          <Button
+            variant={showInvite ? "secondary" : "primary"}
+            onClick={() => setShowInvite((open) => !open)}
+          >
+            {showInvite ? "Cancel" : "Add someone"}
+          </Button>
+        </div>
         </div>
       </div>
 
@@ -596,6 +615,9 @@ const PeoplePanel = () => {
 };
 
 /* ---------------------------------------------------------------- settings */
+const DEFAULT_BRAND_COLOR = "#6d3fc4";
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+
 const SettingsPanel = () => {
   const { school, reload } = useSchool();
   const [form, setForm] = useState({
@@ -604,6 +626,7 @@ const SettingsPanel = () => {
     phone: "",
     address: "",
     logo_url: "",
+    theme_color: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -617,8 +640,29 @@ const SettingsPanel = () => {
       phone: school.phone || "",
       address: school.address || "",
       logo_url: school.logo_url || "",
+      theme_color: school.theme_color || "",
     });
   }, [school]);
+
+  // Live preview: recolour/re-badge this admin's own tab as they pick,
+  // before Save persists anything. Reverts to the school's actual saved
+  // branding on the way out — leaving the panel shouldn't leave a preview
+  // stuck on screen if they never saved it.
+  useEffect(() => {
+    if (!school) return undefined;
+    applyTenantBranding({
+      name: school.name,
+      logoUrl: form.logo_url,
+      themeColor: form.theme_color,
+    });
+    return () => {
+      applyTenantBranding({
+        name: school.name,
+        logoUrl: school.logo_url,
+        themeColor: school.theme_color,
+      });
+    };
+  }, [school, form.logo_url, form.theme_color]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -627,6 +671,11 @@ const SettingsPanel = () => {
     event.preventDefault();
     setError("");
     setNotice("");
+    const themeColor = form.theme_color.trim();
+    if (themeColor && !HEX_COLOR_RE.test(themeColor)) {
+      setError("Theme colour must be a hex code like #2563eb.");
+      return;
+    }
     setSaving(true);
     try {
       await updateSchool(school.id, {
@@ -635,6 +684,7 @@ const SettingsPanel = () => {
         phone: form.phone.trim() || null,
         address: form.address.trim() || null,
         logo_url: form.logo_url.trim() || null,
+        theme_color: themeColor || null,
       });
       await reload();
       setNotice("School details saved.");
@@ -667,7 +717,10 @@ const SettingsPanel = () => {
         <Field label="Address">
           <textarea className="textarea" style={{ minHeight: 80 }} value={form.address} onChange={update("address")} />
         </Field>
-        <Field label="Logo" hint="Shown in the navigation bar and on report cards.">
+        <Field
+          label="Logo"
+          hint="Replaces the Schoolivio mark everywhere this school's app shows it — the sidebar, the sign-in screen, the applicant portal, and the browser tab icon. Until one is set, Schoolivio's own mark is shown as a placeholder."
+        >
           <ImageUpload
             value={form.logo_url}
             shape="square"
@@ -680,6 +733,37 @@ const SettingsPanel = () => {
               setForm((current) => ({ ...current, logo_url: "" }));
             }}
           />
+        </Field>
+        <Field
+          label="Theme colour"
+          hint="Recolours buttons, active tabs, badges and highlights across this school's app — sign-in included. Leave it as Schoolivio's own purple until you'd rather match your school's colours."
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <input
+              type="color"
+              value={HEX_COLOR_RE.test(form.theme_color) ? form.theme_color : DEFAULT_BRAND_COLOR}
+              onChange={(e) => setForm((current) => ({ ...current, theme_color: e.target.value }))}
+              style={{ width: 44, height: 36, padding: 2, border: "1px solid var(--line)", borderRadius: 8, background: "none", cursor: "pointer" }}
+              aria-label="Theme colour"
+            />
+            <input
+              className="input"
+              style={{ maxWidth: 140 }}
+              value={form.theme_color}
+              onChange={update("theme_color")}
+              placeholder={DEFAULT_BRAND_COLOR}
+            />
+            {form.theme_color ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setForm((current) => ({ ...current, theme_color: "" }))}
+              >
+                {"Reset to default"}
+              </Button>
+            ) : null}
+          </div>
         </Field>
 
         <Notice tone="error">{error}</Notice>

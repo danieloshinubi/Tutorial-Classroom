@@ -93,6 +93,21 @@ export const MODULES = [
     roles: ["parent", "student"],
   },
   {
+    id: "attendance",
+    priority: 38,
+    group: "School",
+    path: "/Attendance",
+    label: "Attendance",
+    // Class attendance (teacher-marked) and school attendance (biometric/
+    // card resumption, students AND staff) are two different things behind
+    // one page. Every role reaches it — a bursar or a student has no
+    // "Mark"/"Records"/leadership tab, but does have "My attendance", their
+    // own resumption history — the same self-read RLS a student's own
+    // class-attendance rows already get. The page itself, not this list,
+    // decides which tabs each role actually sees.
+    roles: ROLES,
+  },
+  {
     id: "admissions",
     priority: 40,
     group: "School",

@@ -12,6 +12,16 @@
   --brand: #6d3fc4;
   --brand-dark: #4c2a94;
   --brand-soft: #efe6ff;
+  /* Gradient stops used alongside --brand in a handful of hero/badge
+     backgrounds. Kept as their own variables (rather than hardcoded hex
+     inline) so a tenant's own theme colour — set at runtime as inline
+     styles on :root, see src/lib/branding.js — recolours those gradients
+     too, not just flat brand-coloured surfaces. Defaults match the values
+     these replaced, so nothing changes visually until a school picks one. */
+  --brand-light: #7c3aed;
+  --brand-lighter: #a855f7;
+  --brand-glow: #8657d4;
+  --brand-darker: #3a2078;
 
   --ink: #14161a;
   --ink-2: #4a5160;
@@ -509,7 +519,7 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 
 .tile-band {
   height: 92px;
-  background: linear-gradient(135deg, var(--brand) 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-light) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -558,7 +568,7 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 .brand-mark {
   width: 30px; height: 30px;
   border-radius: 9px;
-  background: linear-gradient(135deg, var(--brand), #7c3aed);
+  background: linear-gradient(135deg, var(--brand), var(--brand-light));
   color: #fff;
   display: grid; place-items: center;
   font-size: 15px; font-weight: 700;
@@ -1023,7 +1033,7 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
   border-radius: var(--r-lg);
   padding: 30px 28px;
   color: #fff;
-  background: linear-gradient(135deg, var(--brand) 0%, #7c3aed 55%, #a855f7 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-light) 55%, var(--brand-lighter) 100%);
   box-shadow: var(--shadow-2);
   display: flex;
   flex-wrap: wrap;
@@ -1356,8 +1366,8 @@ table.data tr:last-child td { border-bottom: none; }
   color: #fdfcff;
   /* The mark's own gradient, extended to fill the panel. */
   background:
-    radial-gradient(120% 90% at 50% -10%, #8657d4 0%, transparent 62%),
-    linear-gradient(160deg, #6d3fc4 0%, #4c2a94 58%, #3a2078 100%);
+    radial-gradient(120% 90% at 50% -10%, var(--brand-glow) 0%, transparent 62%),
+    linear-gradient(160deg, var(--brand) 0%, var(--brand-dark) 58%, var(--brand-darker) 100%);
 }
 .auth-aside-inner {
   height: 100%;
@@ -1585,13 +1595,28 @@ table.data tr:last-child td { border-bottom: none; }
 .apply-inner { width: min(760px, 100% - 40px); margin: 0 auto; }
 
 .apply-head {
-  background: linear-gradient(158deg, #4f46e5 0%, #4338ca 55%, #312e81 100%);
+  /* var(), not a hardcoded gradient — this banner is the first thing an
+     applicant sees on the public Apply/claim pages, so it needs to pick up
+     a tenant's own theme colour exactly like the signed-in app does. */
+  background: linear-gradient(158deg, var(--brand) 0%, var(--brand-dark) 55%, var(--brand-darker) 100%);
   color: #fff;
   padding: 40px 0 44px;
   margin-bottom: 32px;
 }
 .apply-head h1 { color: #fff; margin: 0 0 8px; font-size: clamp(26px, 3.4vw, 36px); }
 .apply-lede { margin: 0; color: rgb(255 255 255 / 0.82); font-size: 15.5px; max-width: 60ch; line-height: 1.6; }
+/* The global `a { color: var(--brand) }` is a dark indigo — practically
+   invisible on this header's own dark indigo-to-violet gradient. Needs an
+   explicit light color here, underlined so it still reads as a link rather
+   than just brighter body text. */
+.apply-lede a { color: #fff; text-decoration: underline; text-underline-offset: 2px; }
+.apply-lede a:hover { color: rgb(255 255 255 / 0.85); }
+/* A second, secondary line under the main lede (e.g. the "create an account
+   instead" offer) — needs real spacing from it, not a negative margin, since
+   a negative offset assumes a fixed height for the line above it and the
+   main lede's own height varies with the school's name and viewport width;
+   pull it up far enough and it overlaps that text instead of sitting under it. */
+.apply-lede-secondary { margin-top: 10px; font-size: 14px; }
 
 .apply-brand { display: flex; align-items: center; gap: 11px; margin-bottom: 22px; font-weight: 600; }
 .apply-brand img, .apply-brand span:first-child {

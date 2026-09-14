@@ -49,6 +49,7 @@ import TrialGate from "./Components/TrialGate";
 import { isPlatformHost, isMarketingHost } from "./lib/tenant";
 import News from "./Pages/News/News";
 import Bursary from "./Pages/Bursary/Bursary";
+import Attendance from "./Pages/Attendance/Attendance";
 import Fees from "./Pages/Fees/Fees";
 import PaymentReturn from "./Pages/Fees/PaymentReturn";
 import Reports from "./Pages/Reports/Reports";
@@ -180,6 +181,13 @@ function App() {
                 results, not the accounts. */}
             <Route element={<SchoolRoute module="bursary" />}>
               <Route path="/Bursary" element={<Bursary />} />
+            </Route>
+
+            {/* Daily, per-class marks — form/subject teachers and school
+                leadership mark; staff broadly and a guardian for their own
+                child read (classroom.can_mark_attendance/is_guardian_of). */}
+            <Route element={<SchoolRoute module="attendance" />}>
+              <Route path="/Attendance" element={<Attendance />} />
             </Route>
 
             {/* School administration */}

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
+import { applyTenantBranding } from "../../lib/branding";
 import { Field, Button, Notice } from "../../Components/UI";
 
 // The accounted flow's real front door. /Apply/Start (where you pick a
@@ -38,6 +39,14 @@ const ApplyAccount = () => {
       })
       .catch(() => {});
   }, [slug]);
+
+  useEffect(() => {
+    applyTenantBranding({
+      name: school?.name,
+      logoUrl: school?.logo_url,
+      themeColor: school?.theme_color,
+    });
+  }, [school]);
 
   // Already signed in (came back from confirming an email, or just never
   // signed out) — no reason to sit on a signup form.

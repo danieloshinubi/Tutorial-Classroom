@@ -8,8 +8,10 @@ import {
   fetchStudentMarks,
   fetchReportableStudents,
   fetchGuardiansOf,
+  fetchStudentClassAttendance,
+  fetchSchoolAttendanceRecords,
 } from "../../lib/api";
-import { analyse, marksAsSeries, bandFor } from "../../lib/analysis";
+import { analyse, marksAsSeries, bandFor, analyseAttendance } from "../../lib/analysis";
 import {
   StatRow,
   CourseBars,
@@ -46,6 +48,9 @@ const StudentReport = () => {
   const [rows, setRows] = useState([]);
   const [marks, setMarks] = useState([]);
   const [guardians, setGuardians] = useState([]);
+  const [classAttendance, setClassAttendance] = useState([]);
+  const [schoolAttendance, setSchoolAttendance] = useState([]);
+  const [showAttendanceDetail, setShowAttendanceDetail] = useState(false);
   const [showTable, setShowTable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -57,15 +62,19 @@ const StudentReport = () => {
     setLoading(true);
     setError("");
     try {
-      const [report, marksRows, people, guardianRows] = await Promise.all([
+      const [report, marksRows, people, guardianRows, classAttendanceRows, schoolAttendanceRows] = await Promise.all([
         fetchStudentReport(studentId, schoolId),
         fetchStudentMarks(studentId, schoolId),
         fetchReportableStudents(schoolId),
         fetchGuardiansOf(studentId, schoolId).catch(() => []),
+        fetchStudentClassAttendance(studentId, schoolId).catch(() => []),
+        fetchSchoolAttendanceRecords({ schoolId, personId: studentId }).catch(() => []),
       ]);
       setRows(report);
       setMarks(marksRows);
       setGuardians(guardianRows);
+      setClassAttendance(classAttendanceRows);
+      setSchoolAttendance(schoolAttendanceRows);
       setStudent(
         people.find((p) => p.student_id === studentId) ||
           (studentId === user?.id ? { student_id: user.id, email: user.email } : null)
@@ -83,6 +92,10 @@ const StudentReport = () => {
 
   const report = useMemo(() => analyse(rows, marks), [rows, marks]);
   const series = useMemo(() => marksAsSeries(marks), [marks]);
+  const attendance = useMemo(
+    () => analyseAttendance(classAttendance, schoolAttendance),
+    [classAttendance, schoolAttendance]
+  );
 
   const name = student
     ? displayName({
@@ -112,7 +125,7 @@ const StudentReport = () => {
     );
   }
 
-  if (!report.hasData) {
+  if (!report.hasData && !attendance.hasData) {
     return (
       <div className="shell">
         <Navbar />
@@ -195,14 +208,95 @@ const StudentReport = () => {
         />
 
         {/* The judgement comes before the charts: a parent wants to know what
-            to do, and only then the evidence behind it. */}
-        {report.findings.length ? (
+            to do, and only then the evidence behind it. Academic and
+            attendance findings share one list — a parent reading "what this
+            shows" should not have to check two separate places for concerns. */}
+        {report.findings.length || attendance.findings.length ? (
           <section className="section" style={{ marginTop: 8 }}>
             <h2>{"What this shows"}</h2>
-            {report.findings.map((f) => (
+            {[...report.findings, ...attendance.findings].map((f) => (
               <Finding key={f.title} finding={f} />
             ))}
           </section>
+        ) : null}
+
+        {attendance.hasData ? (
+          <Card style={{ marginTop: 8 }}>
+            <div className="page-head" style={{ marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>{"Attendance"}</h3>
+              <Button variant="secondary" size="sm" onClick={() => setShowAttendanceDetail((v) => !v)}>
+                {showAttendanceDetail ? "Hide details" : "View full details"}
+              </Button>
+            </div>
+            <div className="split">
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{"Class attendance"}</span>
+                  <Badge tone={attendance.classBand.tone}>{attendance.classBand.label}</Badge>
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 700 }}>
+                  {attendance.classAttendanceRate === null ? "—" : `${attendance.classAttendanceRate}%`}
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
+                  {attendance.sessionsRecorded === 0
+                    ? "No class sessions marked yet."
+                    : `Present in ${attendance.presentCount} of ${attendance.sessionsRecorded} recorded sessions.`}
+                </div>
+              </div>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{"School attendance"}</span>
+                  <Badge tone={attendance.schoolBand.tone}>{attendance.schoolBand.label}</Badge>
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 700 }}>
+                  {attendance.schoolAttendanceRate === null ? "—" : `${attendance.schoolAttendanceRate}%`}
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
+                  {attendance.averageResumptionTime
+                    ? `Usually resumes around ${attendance.averageResumptionTime}.`
+                    : "No resumption scans recorded yet."}
+                </div>
+              </div>
+            </div>
+
+            {showAttendanceDetail ? (
+              <div className="table-wrap" style={{ marginTop: 18 }}>
+                <table className="data">
+                  <thead>
+                    <tr>
+                      <th>{"Date & time"}</th>
+                      <th>{"Kind"}</th>
+                      <th>{"Detail"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      ...classAttendance.map((r) => ({
+                        id: `class-${r.id}`,
+                        at: r.session_at,
+                        kind: "Class attendance",
+                        detail: `${r.classes?.name || "Class"} — ${r.status === "present" ? "Present" : "Absent"}`,
+                      })),
+                      ...schoolAttendance.map((r) => ({
+                        id: `school-${r.id}`,
+                        at: r.resumed_at,
+                        kind: "School resumption",
+                        detail: r.source === "manual" ? "Logged manually" : "Biometric / card scan",
+                      })),
+                    ]
+                      .sort((a, b) => new Date(b.at) - new Date(a.at))
+                      .map((row) => (
+                        <tr key={row.id}>
+                          <td>{formatDate(row.at)}</td>
+                          <td>{row.kind}</td>
+                          <td>{row.detail}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </Card>
         ) : null}
 
         <div className="split" style={{ marginTop: 30 }}>

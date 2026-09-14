@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { applyTenantBranding } from "../lib/branding";
 import { Mark } from "./Logo";
 
 // A minimal header for the accounted-applicant flow — deliberately NOT the
@@ -12,6 +13,18 @@ import { Mark } from "./Logo";
 export const ApplicantShell = ({ school }) => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  // The one spot this fires for every applicant-portal page (Applications,
+  // ApplyStart, ApplicationDashboard all render this shell), covering the
+  // applicant's own favicon/tab-title/theme colour without repeating the
+  // effect in each of them individually.
+  useEffect(() => {
+    applyTenantBranding({
+      name: school?.name,
+      logoUrl: school?.logo_url,
+      themeColor: school?.theme_color,
+    });
+  }, [school]);
 
   const handleSignOut = async () => {
     await signOut();

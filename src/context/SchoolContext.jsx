@@ -10,6 +10,7 @@ import React, {
 import { supabase } from "../lib/supabaseClient";
 import { joinSchool } from "../lib/api";
 import { resolveSlug } from "../lib/tenant";
+import { applyTenantBranding } from "../lib/branding";
 import { useAuth } from "./AuthContext";
 
 const SchoolContext = createContext(null);
@@ -54,7 +55,7 @@ export const SchoolProvider = ({ children }) => {
     try {
       const { data: schoolRow, error: schoolError } = await supabase
         .from("schools")
-        .select("id, name, slug, logo_url, timezone, currency, plan, trial_ends_at, is_active")
+        .select("id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active")
         .eq("slug", slug)
         .maybeSingle();
 
@@ -118,6 +119,20 @@ export const SchoolProvider = ({ children }) => {
   useEffect(() => {
     if (!authLoading) load();
   }, [authLoading, load]);
+
+  // Recolours the tab (CSS variables), swaps the favicon and sets the tab
+  // title for this tenant — covers every page a signed-in member ever sees,
+  // since this provider wraps the whole route tree. The pre-auth and
+  // applicant-only surfaces (Login, /Apply*, the applicant's own portal)
+  // never reach this membership-gated fetch, so they each call the same
+  // applyTenantBranding() from their own independent public_school() lookup.
+  useEffect(() => {
+    applyTenantBranding({
+      name: school?.name,
+      logoUrl: school?.logo_url,
+      themeColor: school?.theme_color,
+    });
+  }, [school?.name, school?.logo_url, school?.theme_color]);
 
   // A school stays fully usable while plan === 'trial' and trial_ends_at is
   // in the future (or unset — a school the platform console created

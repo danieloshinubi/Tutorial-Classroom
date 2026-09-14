@@ -246,6 +246,119 @@ const trendOf = (marks) => {
   return null;
 };
 
+// Red/yellow/green thresholds for an attendance rate — deliberately
+// stricter than the academic grade bands above: missing a fifth of class
+// sessions is a real concern in a way a 79% exam average is not.
+const rateBand = (rate) => {
+  if (rate === null) return { label: "No data", tone: undefined };
+  if (rate >= 90) return { label: "Good", tone: "success" };
+  if (rate >= 75) return { label: "Watch", tone: "warn" };
+  return { label: "Needs attention", tone: "danger" };
+};
+
+const dateKey = (iso) => iso.slice(0, 10);
+
+const averageTimeOfDay = (isoTimestamps) => {
+  if (isoTimestamps.length === 0) return null;
+  // Averaging minutes-since-midnight, not the timestamps themselves — two
+  // resumptions at 7:00 and 7:20 should average to 7:10, which only works
+  // if the calendar date is discarded first.
+  const minutes = isoTimestamps.map((iso) => {
+    const d = new Date(iso);
+    return d.getHours() * 60 + d.getMinutes();
+  });
+  const meanMinutes = Math.round(minutes.reduce((a, b) => a + b, 0) / minutes.length);
+  const h24 = Math.floor(meanMinutes / 60) % 24;
+  const m = meanMinutes % 60;
+  const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${h24 < 12 ? "AM" : "PM"}`;
+};
+
+/**
+ * Attendance, scored the same "never invent a number" way the academic
+ * side is: a student with no class-attendance rows yet has no class rate,
+ * not a misleading 0%.
+ *
+ * classRecords: [{ session_at, status: 'present'|'absent' }] — this
+ * student's own class-attendance marks, any class, any teacher.
+ * schoolRecords: [{ resumed_at }] — this student's biometric/card/manual
+ * resumption scans, any number of scans a day (only the earliest counts).
+ *
+ * schoolAttendanceRate has no independent school calendar to measure
+ * against, so it is expressed against the days THIS student has ANY
+ * attendance signal at all (a class mark or a resumption scan) — "of the
+ * days we know school was on for them, how many did they actually walk
+ * in." That is a real, defensible number; inventing a school-wide working
+ * day count here would not be.
+ */
+export const analyseAttendance = (classRecords = [], schoolRecords = []) => {
+  const marked = classRecords.filter((r) => r.status === "present" || r.status === "absent");
+  const presentCount = marked.filter((r) => r.status === "present").length;
+  const classAttendanceRate = marked.length > 0 ? Math.round((presentCount / marked.length) * 100) : null;
+
+  const classDays = new Set(marked.map((r) => dateKey(r.session_at)));
+  const resumptionDays = new Set(schoolRecords.map((r) => dateKey(r.resumed_at)));
+  const knownDays = new Set([...classDays, ...resumptionDays]);
+  const schoolAttendanceRate =
+    knownDays.size > 0 ? Math.round((resumptionDays.size / knownDays.size) * 100) : null;
+
+  // Earliest scan per day — a second tap re-entering a building later
+  // should not drag the "what time do they normally arrive" figure around.
+  const earliestPerDay = new Map();
+  schoolRecords.forEach((r) => {
+    const key = dateKey(r.resumed_at);
+    const existing = earliestPerDay.get(key);
+    if (!existing || new Date(r.resumed_at) < new Date(existing)) earliestPerDay.set(key, r.resumed_at);
+  });
+  const averageResumptionTime = averageTimeOfDay([...earliestPerDay.values()]);
+
+  const classBand = rateBand(classAttendanceRate);
+  const schoolBand = rateBand(schoolAttendanceRate);
+
+  const findings = [];
+  if (classAttendanceRate !== null && classAttendanceRate < 75) {
+    const missed = marked.length - presentCount;
+    findings.push({
+      kind: "concern",
+      title: "Frequently absent from class",
+      detail: `Marked absent ${missed} of ${marked.length} recorded session${marked.length === 1 ? "" : "s"} (${classAttendanceRate}% present).`,
+    });
+  }
+  if (schoolAttendanceRate !== null && schoolAttendanceRate < 75) {
+    findings.push({
+      kind: "concern",
+      title: "Often does not resume at school",
+      detail: `Only resumed on ${resumptionDays.size} of ${knownDays.size} days this covers (${schoolAttendanceRate}%).`,
+    });
+  }
+  if (
+    classAttendanceRate !== null &&
+    schoolAttendanceRate !== null &&
+    classAttendanceRate >= 95 &&
+    schoolAttendanceRate >= 95
+  ) {
+    findings.push({
+      kind: "strength",
+      title: "Excellent attendance",
+      detail: `${classAttendanceRate}% present in class, ${schoolAttendanceRate}% school resumption.`,
+    });
+  }
+
+  return {
+    classAttendanceRate,
+    schoolAttendanceRate,
+    classBand,
+    schoolBand,
+    averageResumptionTime,
+    presentCount,
+    sessionsRecorded: marked.length,
+    daysWithResumption: resumptionDays.size,
+    daysKnown: knownDays.size,
+    findings,
+    hasData: marked.length > 0 || schoolRecords.length > 0,
+  };
+};
+
 export const marksAsSeries = (marks) =>
   marks
     .filter((m) => m.out_of > 0 && m.scored !== null)

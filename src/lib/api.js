@@ -1162,7 +1162,7 @@ export const countAttempts = async ({ schoolId, examId }) => {
 export const fetchSchool = async (slug) => {
   const { data, error } = await supabase
     .from("schools")
-    .select("id, name, slug, logo_url, address, phone, email, timezone, currency, plan, is_active")
+    .select("id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency, plan, is_active")
     .eq("slug", slug)
     .maybeSingle();
   if (error) throw error;
@@ -1174,7 +1174,7 @@ export const updateSchool = async (id, changes) => {
     .from("schools")
     .update(changes)
     .eq("id", id)
-    .select("id, name, slug, logo_url, address, phone, email, timezone, currency")
+    .select("id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency")
     .single();
   if (error) throw error;
   return data;
@@ -1679,6 +1679,229 @@ export const removeStudentFromClass = async (rowId, schoolId) => {
   if (!owned) throw new Error("Student not found in this class.");
 
   const { error } = await supabase.from("class_students").delete().eq("id", rowId);
+  if (error) throw error;
+};
+
+/* -------------------------------------------------------------------------- */
+/* attendance                                                                 */
+/* -------------------------------------------------------------------------- */
+
+// A bare "YYYY-MM-DD" upper bound compared against a timestamptz column
+// means midnight at the START of that day — anything marked later the same
+// day would be silently excluded. Stretches a bare date to the last instant
+// of that day; a value that already carries a time (or is empty) passes
+// through untouched.
+const endOfDay = (to) => (to && to.length === 10 ? `${to}T23:59:59.999` : to);
+
+// Every class the signed-in caller may mark today — the server-side rule
+// (classroom.can_mark_attendance: form teacher, a subject teacher on that
+// class, or owner/admin/principal) decides this, not a role check here.
+export const fetchMarkableClasses = async (schoolId) => {
+  const { data, error } = await supabase.rpc("markable_classes", { target_school: schoolId });
+  if (error) throw error;
+  return data || [];
+};
+
+// The roster for one class SESSION (a specific date+time, not just a day —
+// the same class can be marked more than once a day, once per period) each
+// row already carrying that session's mark if one exists. A left join done
+// client-side since class_students and attendance_records don't share a
+// foreign key to join on directly for a single session.
+export const fetchAttendanceForClass = async ({ classId, schoolId, sessionAt }) => {
+  const [roster, { data: marks, error }] = await Promise.all([
+    fetchClassRoster(classId, schoolId),
+    supabase
+      .from("attendance_records")
+      .select("id, student_id, status, note")
+      .eq("class_id", classId)
+      .eq("session_at", sessionAt),
+  ]);
+  if (error) throw error;
+  const byStudent = new Map((marks || []).map((m) => [m.student_id, m]));
+  return roster.map((row) => ({
+    student: row.student,
+    mark: byStudent.get(row.student.id) || null,
+  }));
+};
+
+// records: [{ student_id, status, note }] — one bulk upsert for the whole
+// roster's mark for one session. marked_by/updated_at are stamped
+// server-side (attendance_records_stamp trigger), never trusted from here.
+export const saveAttendance = async ({ schoolId, classId, sessionAt, records }) => {
+  const { error } = await supabase
+    .from("attendance_records")
+    .upsert(
+      records.map((r) => ({
+        school_id: schoolId,
+        class_id: classId,
+        session_at: sessionAt,
+        student_id: r.student_id,
+        status: r.status,
+        note: r.note || null,
+      })),
+      { onConflict: "class_id,student_id,session_at" }
+    );
+  if (error) throw error;
+};
+
+// The Records/report view — a class's marks over a date range, most recent
+// first. Omit classId to see every class in the school (staff only; RLS
+// still narrows a guardian down to their own child regardless of filters).
+export const fetchAttendanceRecords = async ({ schoolId, classId, from, to }) => {
+  let query = supabase
+    .from("attendance_records")
+    .select(
+      `id, session_at, status, note,
+       student:profiles!attendance_records_student_id_fkey ( ${PROFILE_FIELDS} ),
+       classes!inner ( id, name, school_id ),
+       marker:profiles!attendance_records_marked_by_fkey ( first_name, surname )`
+    )
+    .eq("classes.school_id", schoolId)
+    .order("session_at", { ascending: false });
+  if (classId) query = query.eq("class_id", classId);
+  if (from) query = query.gte("session_at", from);
+  if (to) query = query.lte("session_at", endOfDay(to));
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.filter((row) => row.student);
+};
+
+// A parent's own children's class attendance, across however many of them
+// are enrolled at this school — RLS (is_guardian_of) is what actually
+// enforces this stays to their own kids regardless of what's asked for here.
+export const fetchMyChildrenAttendance = async ({ schoolId, guardianId, from, to }) => {
+  const children = await fetchChildren(guardianId, schoolId);
+  if (children.length === 0) return [];
+  const studentIds = children.map((c) => c.student.id);
+  let query = supabase
+    .from("attendance_records")
+    .select(
+      `id, session_at, status, note,
+       student:profiles!attendance_records_student_id_fkey ( ${PROFILE_FIELDS} ),
+       classes!inner ( name, school_id )`
+    )
+    .eq("classes.school_id", schoolId)
+    .in("student_id", studentIds)
+    .order("session_at", { ascending: false });
+  if (from) query = query.gte("session_at", from);
+  if (to) query = query.lte("session_at", endOfDay(to));
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.filter((row) => row.student);
+};
+
+// One student's whole class-attendance history, across every class they've
+// been marked in — what the student profile's Attendance card is built
+// from. RLS (staff/self/guardian) decides whether the caller may see it.
+export const fetchStudentClassAttendance = async (studentId, schoolId) => {
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select(`id, session_at, status, note, classes!inner ( id, name, school_id )`)
+    .eq("student_id", studentId)
+    .eq("classes.school_id", schoolId)
+    .order("session_at", { ascending: false });
+  if (error) throw error;
+  return data;
+};
+
+/* -------------------------------------------------------------------------- */
+/* school attendance — the biometric/card resumption feed                    */
+/* -------------------------------------------------------------------------- */
+
+// A manual entry (front-desk sign-in) for one person's arrival — the RLS
+// policy "leadership manage school attendance" is what actually restricts
+// this to owner/admin/principal, not a role check here.
+export const logSchoolAttendance = async ({ schoolId, personId, resumedAt, note }) => {
+  const { error } = await supabase.from("school_attendance_records").insert({
+    school_id: schoolId,
+    person_id: personId,
+    resumed_at: resumedAt,
+    source: "manual",
+    note: note || null,
+  });
+  if (error) throw error;
+};
+
+// Every school member (student or staff) whose resumption can be looked up
+// or logged — the same roster a front-desk search box picks a name from.
+export const fetchSchoolPeopleForAttendance = async (schoolId) => {
+  const rows = await fetchSchoolMembers(schoolId);
+  return rows.map((r) => ({ id: r.profiles.id, role: r.role, profile: r.profiles }));
+};
+
+export const fetchSchoolAttendanceRecords = async ({ schoolId, personId, from, to }) => {
+  let query = supabase
+    .from("school_attendance_records")
+    .select(
+      `id, resumed_at, source, note,
+       person:profiles!school_attendance_records_person_id_fkey ( ${PROFILE_FIELDS} )`
+    )
+    .eq("school_id", schoolId)
+    .order("resumed_at", { ascending: false });
+  if (personId) query = query.eq("person_id", personId);
+  if (from) query = query.gte("resumed_at", from);
+  if (to) query = query.lte("resumed_at", endOfDay(to));
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.filter((row) => row.person);
+};
+
+// Any signed-in person's own resumption history — a staff member checking
+// their own record, or the fallback a parent's "my children" view builds on.
+export const fetchMySchoolAttendance = async ({ schoolId, personId, from, to }) =>
+  fetchSchoolAttendanceRecords({ schoolId, personId, from, to });
+
+export const fetchMyChildrenSchoolAttendance = async ({ schoolId, guardianId, from, to }) => {
+  const children = await fetchChildren(guardianId, schoolId);
+  if (children.length === 0) return [];
+  const studentIds = children.map((c) => c.student.id);
+  let query = supabase
+    .from("school_attendance_records")
+    .select(
+      `id, resumed_at, source, note,
+       person:profiles!school_attendance_records_person_id_fkey ( ${PROFILE_FIELDS} )`
+    )
+    .eq("school_id", schoolId)
+    .in("person_id", studentIds)
+    .order("resumed_at", { ascending: false });
+  if (from) query = query.gte("resumed_at", from);
+  if (to) query = query.lte("resumed_at", endOfDay(to));
+  const { data, error } = await query;
+  if (error) throw error;
+  return data.filter((row) => row.person);
+};
+
+/* -------------------------------------------------------------------------- */
+/* attendance devices — biometric/card reader credentials                    */
+/* -------------------------------------------------------------------------- */
+
+export const fetchAttendanceDevices = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("attendance_devices")
+    .select("id, label, is_active, created_at, last_used_at")
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+// Returns { id, api_key } — api_key is only ever available in this one
+// response; classroom.create_attendance_device() stores only its hash.
+export const createAttendanceDevice = async ({ schoolId, label }) => {
+  const { data, error } = await supabase.rpc("create_attendance_device", {
+    target_school: schoolId,
+    device_label: label,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const setAttendanceDeviceActive = async ({ deviceId, schoolId, isActive }) => {
+  const { error } = await supabase
+    .from("attendance_devices")
+    .update({ is_active: isActive })
+    .eq("id", deviceId)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
