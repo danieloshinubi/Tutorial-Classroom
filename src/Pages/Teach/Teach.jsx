@@ -16,26 +16,26 @@ import {
 
 const Teach = () => {
   const { user } = useAuth();
-  const { labelFor } = useSchool();
+  const { schoolId, labelFor } = useSchool();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = () => {
-    if (!user) return;
+    if (!user || !schoolId) return;
     setLoading(true);
-    fetchCoursesOwnedBy(user.id)
+    fetchCoursesOwnedBy({ schoolId, userId: user.id })
       .then(setCourses)
       .catch((err) => setError(err.message || "Could not load your courses."))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [user]);
+  useEffect(load, [user, schoolId]);
 
   const handleArchiveToggle = async (course) => {
     setError("");
     try {
-      await updateCourse(course.id, { archived: !course.archived });
+      await updateCourse(course.id, { archived: !course.archived }, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not update that course.");
@@ -52,7 +52,7 @@ const Teach = () => {
     if (!confirmed) return;
 
     try {
-      await deleteCourse(course.id);
+      await deleteCourse(course.id, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not delete that course.");

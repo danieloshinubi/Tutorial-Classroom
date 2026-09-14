@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import {
   fetchExam,
   fetchQuestionsForSitting,
@@ -74,6 +75,7 @@ const QuestionImage = ({ path }) => {
 const TakeExam = () => {
   const { examId } = useParams();
   const { user } = useAuth();
+  const { schoolId } = useSchool();
 
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -104,11 +106,12 @@ const TakeExam = () => {
   attemptRef.current = attempt;
 
   useEffect(() => {
+    if (!schoolId) return undefined;
     let active = true;
 
     Promise.all([
-      fetchExam(examId),
-      fetchQuestionsForSitting(examId),
+      fetchExam({ id: examId, schoolId }),
+      fetchQuestionsForSitting({ examId, schoolId }),
       fetchMyAttempt({ examId, userId: user.id }),
     ])
       .then(async ([examRow, questionRows, attemptRow]) => {
@@ -122,7 +125,7 @@ const TakeExam = () => {
           // typed more recently than whatever was last delivered.
           let store = loadLocalAnswers(attemptRow.id);
           try {
-            const saved = await fetchAnswers(attemptRow.id);
+            const saved = await fetchAnswers({ attemptId: attemptRow.id, schoolId });
             store = mergeServerAnswers(attemptRow.id, saved);
           } catch (err) {
             if (!isNetworkError(err)) throw err;
@@ -150,7 +153,7 @@ const TakeExam = () => {
     return () => {
       active = false;
     };
-  }, [examId, user.id]);
+  }, [examId, user.id, schoolId]);
 
   // Pushes anything unsynced and reports what the connection is doing.
   const flush = useCallback(async () => {

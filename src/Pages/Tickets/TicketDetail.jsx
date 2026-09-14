@@ -86,11 +86,11 @@ const TicketDetail = () => {
     setLoading(true);
     setError("");
     try {
-      const t = await fetchTicket(ticketId);
+      const t = await fetchTicket(ticketId, schoolId);
       setTicket(t);
       setPending({});
       const [msgs, all] = await Promise.all([
-        fetchTicketMessages(ticketId),
+        fetchTicketMessages(ticketId, { schoolId }),
         schoolId ? fetchTickets({ schoolId, status: "unresolved" }) : Promise.resolve([]),
       ]);
       setMessages(msgs);
@@ -132,7 +132,7 @@ const TicketDetail = () => {
     if (opening && !historyLoaded) {
       setHistoryLoading(true);
       try {
-        setHistory(await fetchTicketGroupHistory(ticketId));
+        setHistory(await fetchTicketGroupHistory(ticketId, schoolId));
         setHistoryLoaded(true);
       } catch (err) {
         setError(err.message || "Could not load this ticket's history.");
@@ -157,16 +157,17 @@ const TicketDetail = () => {
       if (sendingByEmail) {
         await sendTicketEmailReply({
           ticketId,
+          schoolId,
           body: composeBody.trim(),
           to: parseAddresses(toInput),
           cc: parseAddresses(ccInput),
           bcc: parseAddresses(bccInput),
         });
       } else {
-        await addTicketMessage({ ticketId, kind: composeKind, body: composeBody.trim() });
+        await addTicketMessage({ ticketId, kind: composeKind, body: composeBody.trim(), schoolId });
       }
       setComposeBody("");
-      const [t, msgs] = await Promise.all([fetchTicket(ticketId), fetchTicketMessages(ticketId)]);
+      const [t, msgs] = await Promise.all([fetchTicket(ticketId, schoolId), fetchTicketMessages(ticketId, { schoolId })]);
       setTicket(t);
       setMessages(msgs);
     } catch (err) {
@@ -202,13 +203,13 @@ const TicketDetail = () => {
       const changes = { ...pending };
       if ("groupId" in changes && !changes.groupId) changes.clearGroup = true;
       if ("assignedTo" in changes && !changes.assignedTo) changes.clearAssignee = true;
-      await updateTicket({ id: ticketId, ...changes });
+      await updateTicket({ id: ticketId, schoolId, ...changes });
       try {
         // update_ticket returns the flat classroom.tickets row, with no
         // requester/assignee/group embed — refetch the full shape rather
         // than rendering the byline/avatar/Requester field off a row
         // missing them.
-        const fresh = await fetchTicket(ticketId);
+        const fresh = await fetchTicket(ticketId, schoolId);
         setTicket(fresh);
         setPending({});
         setSaveNotice("Updated.");

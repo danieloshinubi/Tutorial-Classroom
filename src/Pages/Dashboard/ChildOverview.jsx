@@ -70,7 +70,7 @@ const CourseRow = ({ course }) => (
 );
 
 // One child's courses and teachers, for a parent.
-const ChildOverview = ({ child, relationship }) => {
+const ChildOverview = ({ child, relationship, schoolId }) => {
   const [courses, setCourses] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -78,12 +78,12 @@ const ChildOverview = ({ child, relationship }) => {
   const [showPast, setShowPast] = useState(false);
 
   const load = useCallback(async () => {
-    if (!child?.id) return;
+    if (!child?.id || !schoolId) return;
     setLoading(true);
     try {
       const [c, t] = await Promise.all([
-        fetchChildCourses(child.id),
-        fetchChildTeachers(child.id).catch(() => []),
+        fetchChildCourses(child.id, schoolId),
+        fetchChildTeachers(child.id, schoolId).catch(() => []),
       ]);
       setCourses(c);
       setTeachers(t);
@@ -92,7 +92,7 @@ const ChildOverview = ({ child, relationship }) => {
     } finally {
       setLoading(false);
     }
-  }, [child]);
+  }, [child, schoolId]);
 
   useEffect(() => {
     load();

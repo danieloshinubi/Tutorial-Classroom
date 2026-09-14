@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import {
   createExam,
   updateExam,
@@ -54,6 +55,7 @@ const ExamBuilder = () => {
   const [searchParams] = useSearchParams();
   const isEditing = Boolean(examId);
   const { user } = useAuth();
+  const { schoolId } = useSchool();
   const navigate = useNavigate();
   const imageInputs = useRef({});
   const preview = useDocumentPreview();
@@ -84,13 +86,13 @@ const ExamBuilder = () => {
 
   // Load an existing paper for editing.
   useEffect(() => {
-    if (!isEditing) return;
+    if (!isEditing || !schoolId) return;
     let active = true;
 
     Promise.all([
-      fetchExam(examId),
-      fetchQuestionsForEditing(examId),
-      countAttempts(examId),
+      fetchExam({ id: examId, schoolId }),
+      fetchQuestionsForEditing({ examId, schoolId }),
+      countAttempts({ schoolId, examId }),
     ])
       .then(([examRow, questionRows, attempts]) => {
         if (!active) return;
@@ -144,7 +146,7 @@ const ExamBuilder = () => {
     return () => {
       active = false;
     };
-  }, [examId, isEditing]);
+  }, [examId, isEditing, schoolId]);
 
   const setExamField = (field) => (event) => {
     const value =
@@ -321,11 +323,11 @@ const ExamBuilder = () => {
       };
 
       const target = isEditing
-        ? await updateExam(examId, fields).then(() => ({ id: examId }))
+        ? await updateExam(examId, fields, schoolId).then(() => ({ id: examId }))
         : await createExam({ ...fields, course_id: courseId, created_by: user.id });
 
       for (const id of removedIds) {
-        await deleteQuestion(id);
+        await deleteQuestion(id, schoolId);
       }
 
       for (let i = 0; i < questions.length; i += 1) {
@@ -344,10 +346,10 @@ const ExamBuilder = () => {
 
         let questionId = question.id;
         if (questionId) {
-          await updateQuestion(questionId, shape);
+          await updateQuestion(questionId, shape, schoolId);
           // Options are replaced wholesale — simpler and safer than trying to
           // diff them, and the confirmation above already covered the cost.
-          await deleteOptionsForQuestion(questionId);
+          await deleteOptionsForQuestion(questionId, schoolId);
         } else {
           const saved = await createQuestion({ ...shape, exam_id: target.id });
           questionId = saved.id;

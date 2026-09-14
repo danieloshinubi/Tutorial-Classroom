@@ -38,7 +38,7 @@ const Applications = () => {
     try {
       const [acct, apps] = await Promise.all([
         fetchMyApplicantAccount(schoolId),
-        fetchMyApplications(),
+        fetchMyApplications(schoolId),
       ]);
       setAccount(acct);
       setApplications(apps);

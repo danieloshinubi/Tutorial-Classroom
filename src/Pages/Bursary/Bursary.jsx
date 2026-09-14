@@ -217,6 +217,7 @@ const Structures = ({
     }
     try {
       await addFeeItem({
+        schoolId,
         structureId,
         name: itemName.trim(),
         amount,
@@ -259,7 +260,7 @@ const Structures = ({
   const remove = async (structure) => {
     if (!window.confirm(`Delete "${structure.name}"?`)) return;
     try {
-      await deleteFeeStructure(structure.id);
+      await deleteFeeStructure(structure.id, schoolId);
       onChange("Deleted.");
     } catch (err) {
       onError(err.message || "Could not delete that.");
@@ -384,7 +385,7 @@ const Structures = ({
                           type="button"
                           className="comment-toggle"
                           onClick={async () => {
-                            await deleteFeeItem(l.id);
+                            await deleteFeeItem(l.id, schoolId);
                             onChange();
                           }}
                         >

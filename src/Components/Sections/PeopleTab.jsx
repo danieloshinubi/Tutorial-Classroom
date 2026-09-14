@@ -36,19 +36,20 @@ const Person = ({ profile, children, sub }) => (
   </div>
 );
 
-const PeopleTab = ({ course, canManage }) => {
+const PeopleTab = ({ course, canManage, schoolId }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
+    if (!schoolId) return;
     setLoading(true);
-    fetchParticipants(course.id)
+    fetchParticipants({ courseId: course.id, schoolId })
       .then(setRows)
       .catch((err) => setError(err.message || "Could not load participants."))
       .finally(() => setLoading(false));
-  }, [course.id]);
+  }, [course.id, schoolId]);
 
   useEffect(load, [load]);
 

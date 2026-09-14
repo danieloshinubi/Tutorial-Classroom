@@ -7,25 +7,26 @@ import { Card, Button, Badge, Notice, Empty, formatDate } from "../UI";
 // "midterm" (the "Mid-exams" tab) — same table, same component, just a
 // different slice of it, so nothing about creating, editing, publishing or
 // grading needs its own copy.
-const ExamsTab = ({ courseId, canManage, kind = "exam" }) => {
+const ExamsTab = ({ courseId, canManage, kind = "exam", schoolId }) => {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const load = () => {
+    if (!schoolId) return;
     setLoading(true);
-    fetchExams(courseId)
+    fetchExams(courseId, schoolId)
       .then((rows) => setExams(rows.filter((r) => (r.kind || "exam") === kind)))
       .catch((err) => setError(err.message || "Could not load exams."))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [courseId, kind]);
+  useEffect(load, [courseId, kind, schoolId]);
 
   const togglePublished = async (exam) => {
     setError("");
     try {
-      await updateExam(exam.id, { published: !exam.published });
+      await updateExam(exam.id, { published: !exam.published }, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not update that exam.");
@@ -42,7 +43,7 @@ const ExamsTab = ({ courseId, canManage, kind = "exam" }) => {
     }
     setError("");
     try {
-      await deleteExam(exam.id);
+      await deleteExam(exam.id, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not delete that exam.");

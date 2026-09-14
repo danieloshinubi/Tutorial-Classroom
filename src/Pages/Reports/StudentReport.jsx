@@ -58,10 +58,10 @@ const StudentReport = () => {
     setError("");
     try {
       const [report, marksRows, people, guardianRows] = await Promise.all([
-        fetchStudentReport(studentId),
-        fetchStudentMarks(studentId),
+        fetchStudentReport(studentId, schoolId),
+        fetchStudentMarks(studentId, schoolId),
         fetchReportableStudents(schoolId),
-        fetchGuardiansOf(studentId).catch(() => []),
+        fetchGuardiansOf(studentId, schoolId).catch(() => []),
       ]);
       setRows(report);
       setMarks(marksRows);

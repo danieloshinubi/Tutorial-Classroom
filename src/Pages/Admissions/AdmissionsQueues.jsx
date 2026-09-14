@@ -99,7 +99,7 @@ const AdmissionsQueues = () => {
     setSessionBusy(true);
     setError("");
     try {
-      await setSessionApplicationsOpen({ sessionId: session.id, open });
+      await setSessionApplicationsOpen({ sessionId: session.id, schoolId, open });
       load();
     } catch (err) {
       setError(err.message || "Could not change that.");

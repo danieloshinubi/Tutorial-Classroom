@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useSchool } from "../context/SchoolContext";
 import {
   fetchNotifications,
   generateDueReminders,
@@ -12,35 +13,36 @@ import { formatDate } from "./UI";
 
 const Notifications = () => {
   const { user } = useAuth();
+  const { schoolId } = useSchool();
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
   const navigate = useNavigate();
 
   const load = useCallback(() => {
-    if (!user) return;
+    if (!user || !schoolId) return;
     // Top up the due-soon and overdue reminders first, so what is listed is
     // current even where pg_cron is not running.
     generateDueReminders()
       .catch(() => {})
-      .then(fetchNotifications)
+      .then(() => fetchNotifications({ schoolId }))
       .then(setItems)
       .catch(() => setItems([]));
-  }, [user]);
+  }, [user, schoolId]);
 
   useEffect(load, [load]);
 
   // New notifications arrive over realtime, so a tutor sees a join request
   // without refreshing.
   useEffect(() => {
-    if (!user) return undefined;
-    const channel = subscribeToNotifications(user.id, (row) =>
+    if (!user || !schoolId) return undefined;
+    const channel = subscribeToNotifications(user.id, schoolId, (row) =>
       setItems((current) =>
         current.some((item) => item.id === row.id) ? current : [row, ...current]
       )
     );
     return () => channel.unsubscribe();
-  }, [user]);
+  }, [user, schoolId]);
 
   // Click outside closes the panel.
   useEffect(() => {
@@ -62,7 +64,7 @@ const Notifications = () => {
           row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row
         )
       );
-      markNotificationRead(item.id).catch(() => load());
+      markNotificationRead(item.id, schoolId).catch(() => load());
     }
     if (item.link) navigate(item.link);
   };
@@ -71,7 +73,7 @@ const Notifications = () => {
     setItems((current) =>
       current.map((row) => ({ ...row, read_at: row.read_at || new Date().toISOString() }))
     );
-    markAllNotificationsRead(user.id).catch(() => load());
+    markAllNotificationsRead(user.id, schoolId).catch(() => load());
   };
 
   if (!user) return null;

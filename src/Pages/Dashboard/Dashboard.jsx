@@ -35,7 +35,7 @@ const CourseCard = ({ course, labelFor }) => (
 
 const Dashboard = () => {
   const { profile, user } = useAuth();
-  const { labelFor, isStaff, isParent } = useSchool();
+  const { schoolId, labelFor, isStaff, isParent } = useSchool();
   const [enrolled, setEnrolled] = useState([]);
   const [teaching, setTeaching] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,12 +43,12 @@ const Dashboard = () => {
 
 
   useEffect(() => {
-    if (!user) return undefined;
+    if (!user || !schoolId) return undefined;
     let active = true;
     setLoading(true);
 
-    const work = [fetchMyCourses(user.id)];
-    if (isStaff) work.push(fetchCoursesOwnedBy(user.id));
+    const work = [fetchMyCourses({ schoolId, userId: user.id })];
+    if (isStaff) work.push(fetchCoursesOwnedBy({ schoolId, userId: user.id }));
 
     Promise.all(work)
       .then(([mine, owned]) => {
@@ -66,7 +66,7 @@ const Dashboard = () => {
     return () => {
       active = false;
     };
-  }, [user, isStaff]);
+  }, [user, schoolId, isStaff]);
 
   // A parent is not a student. Offering them courses to join, and telling
   // them they have not joined any, describes a relationship they do not have

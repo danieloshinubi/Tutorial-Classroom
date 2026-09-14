@@ -172,7 +172,7 @@ const Comments = ({ message, comments, onPost, onEdit, onRemove }) => {
   );
 };
 
-const ClassChat = ({ courseId }) => {
+const ClassChat = ({ courseId, schoolId }) => {
   const [messages, setMessages] = useState([]);
   const [comments, setComments] = useState({});
   const [reactions, setReactions] = useState({});
@@ -205,7 +205,7 @@ const ClassChat = ({ courseId }) => {
         const ids = data.map((m) => m.id);
         const [byMessage, byReaction] = await Promise.all([
           fetchCommentsFor(ids).catch(() => ({})),
-          fetchMessageReactions(ids, user?.id).catch(() => ({})),
+          fetchMessageReactions(ids, courseId, user?.id).catch(() => ({})),
         ]);
         if (active) {
           setComments(byMessage);
@@ -219,7 +219,7 @@ const ClassChat = ({ courseId }) => {
     const channel = subscribeToMessages(courseId, async (row) => {
       // The realtime payload has no joined profile, so refetch the row to
       // get the author's name with it.
-      const full = await fetchMessageById(row.id).catch(() => null);
+      const full = await fetchMessageById({ schoolId, id: row.id }).catch(() => null);
       if (active) addMessage(full || row);
     });
 
@@ -227,7 +227,7 @@ const ClassChat = ({ courseId }) => {
       active = false;
       channel.unsubscribe();
     };
-  }, [courseId, addMessage, user]);
+  }, [courseId, addMessage, user, schoolId]);
 
   const saveEdit = async (message) => {
     const body = draftEdit.trim();
@@ -251,7 +251,7 @@ const ClassChat = ({ courseId }) => {
     if (!window.confirm("Delete this post and its comments?")) return;
     setError("");
     try {
-      await deleteMessage(message.id);
+      await deleteMessage({ id: message.id, schoolId });
       setMessages((current) => current.filter((row) => row.id !== message.id));
     } catch (err) {
       setError(err.message || "Could not delete that post.");
@@ -279,7 +279,7 @@ const ClassChat = ({ courseId }) => {
   const removeComment = async (comment) => {
     if (!window.confirm("Delete this comment?")) return;
     try {
-      await deleteComment(comment.id);
+      await deleteComment({ id: comment.id, schoolId });
       setComments((current) => ({
         ...current,
         [comment.message_id]: (current[comment.message_id] || []).filter(

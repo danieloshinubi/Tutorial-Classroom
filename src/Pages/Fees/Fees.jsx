@@ -89,13 +89,13 @@ const Fees = () => {
     if (!schoolId || !user) return;
     setLoading(true);
     try {
-      const rows = await fetchMyInvoices();
+      const rows = await fetchMyInvoices(schoolId);
       setInvoices(rows);
       const ids = rows.map((r) => r.invoice_id);
       const [itemRows, payRows, kids, termRows] = await Promise.all([
-        fetchInvoiceItems(ids).catch(() => ({})),
-        fetchPaymentsFor(ids).catch(() => ({})),
-        fetchChildren(user.id).catch(() => []),
+        fetchInvoiceItems(ids, schoolId).catch(() => ({})),
+        fetchPaymentsFor(ids, schoolId).catch(() => ({})),
+        fetchChildren(user.id, schoolId).catch(() => []),
         fetchTerms(schoolId).catch(() => []),
       ]);
       setItems(itemRows);

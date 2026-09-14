@@ -244,7 +244,7 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
     if (!window.confirm(`Remove "${row.name}"? Applications already against it keep their history.`)) return;
     setBusy(true);
     try {
-      await deleteAdmissionProgramme(row.id);
+      await deleteAdmissionProgramme(row.id, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not remove that.");
@@ -353,11 +353,11 @@ const ChecklistPanel = ({
     setBusy(true);
     try {
       await upsertRow({
-        school_id: schoolId, session_id: sessionId,
+        session_id: sessionId,
         kind: form.kind.trim(), label: form.label.trim(),
         is_required: form.is_required, notes: form.notes.trim() || null,
         position: rows.length,
-      });
+      }, schoolId);
       setForm({ kind: "", label: "", is_required: true, notes: "" });
       load();
     } catch (err) {
@@ -370,7 +370,7 @@ const ChecklistPanel = ({
   const toggleRequired = async (row) => {
     setBusy(true);
     try {
-      await upsertRow({ ...row, is_required: !row.is_required });
+      await upsertRow({ ...row, is_required: !row.is_required }, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not update that.");
@@ -383,7 +383,7 @@ const ChecklistPanel = ({
     if (!window.confirm(`Delete "${row.label}"?`)) return;
     setBusy(true);
     try {
-      await deleteRow(row.id);
+      await deleteRow(row.id, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not delete that.");

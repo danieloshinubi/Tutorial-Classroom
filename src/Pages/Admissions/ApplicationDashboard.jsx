@@ -204,11 +204,11 @@ const ApplicationDashboard = () => {
   const live = useLiveApplicationUpdates(applicationId);
 
   const load = useCallback(async () => {
-    if (!applicationId) return;
+    if (!applicationId || !school?.id) return;
     setLoading(true);
     try {
       const [apps, workflow] = await Promise.all([
-        fetchMyApplications(),
+        fetchMyApplications(school.id),
         fetchApplicationWorkflowSteps(applicationId).catch(() => []),
       ]);
       const app = apps.find((a) => a.id === applicationId);
@@ -221,9 +221,9 @@ const ApplicationDashboard = () => {
 
       const [cfg, inv, ev, off] = await Promise.all([
         fetchAdmissionConfig({ schoolId: app.school_id, sessionId: app.session_id }),
-        fetchMyApplicationInvoice(app.id).catch(() => null),
-        fetchApplicationEvents(app.id).catch(() => []),
-        fetchMyOffer(app.id).catch(() => null),
+        fetchMyApplicationInvoice(app.id, "application_fee", school?.id).catch(() => null),
+        fetchApplicationEvents(app.id, app.school_id).catch(() => []),
+        fetchMyOffer(app.id, school?.id).catch(() => null),
       ]);
       setConfig(cfg);
       setInvoice(inv);
@@ -231,12 +231,12 @@ const ApplicationDashboard = () => {
       setOffer(off);
       setAcceptanceInvoice(
         off?.status === "accepted"
-          ? await fetchMyApplicationInvoice(app.id, "acceptance_fee").catch(() => null)
+          ? await fetchMyApplicationInvoice(app.id, "acceptance_fee", school?.id).catch(() => null)
           : null
       );
       setClearance(
         off?.status === "accepted"
-          ? await fetchMyClearance(app.id).catch(() => [])
+          ? await fetchMyClearance(app.id, app.school_id).catch(() => [])
           : []
       );
     } catch (err) {
@@ -244,7 +244,7 @@ const ApplicationDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [applicationId]);
+  }, [applicationId, school?.id]);
 
   useEffect(() => {
     load();
@@ -333,9 +333,9 @@ const ApplicationDashboard = () => {
       setApplication(app);
       const [workflow, off, acc, clr] = await Promise.all([
         fetchApplicationWorkflowSteps(app.id).catch(() => []),
-        fetchMyOffer(app.id).catch(() => null),
-        fetchMyApplicationInvoice(app.id, "acceptance_fee").catch(() => null),
-        fetchMyClearance(app.id).catch(() => []),
+        fetchMyOffer(app.id, school?.id).catch(() => null),
+        fetchMyApplicationInvoice(app.id, "acceptance_fee", school?.id).catch(() => null),
+        fetchMyClearance(app.id, app.school_id).catch(() => []),
       ]);
       setSteps(workflow);
       setOffer(off);
@@ -357,7 +357,7 @@ const ApplicationDashboard = () => {
       setApplication(app);
       const [workflow, off] = await Promise.all([
         fetchApplicationWorkflowSteps(app.id).catch(() => []),
-        fetchMyOffer(app.id).catch(() => null),
+        fetchMyOffer(app.id, school?.id).catch(() => null),
       ]);
       setSteps(workflow);
       setOffer(off);

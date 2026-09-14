@@ -38,7 +38,7 @@ const Reports = () => {
     try {
       const [all, mine] = await Promise.all([
         fetchReportableStudents(schoolId),
-        fetchChildren(user.id).catch(() => []),
+        fetchChildren(user.id, schoolId).catch(() => []),
       ]);
       setStudents(all);
       setChildren(mine);

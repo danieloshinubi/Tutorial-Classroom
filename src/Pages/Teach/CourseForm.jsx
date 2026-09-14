@@ -84,8 +84,8 @@ const CourseForm = () => {
   }, [schoolId, isEditing]);
 
   useEffect(() => {
-    if (!isEditing) return;
-    fetchCourseById(courseId)
+    if (!isEditing || !schoolId) return;
+    fetchCourseById(courseId, schoolId)
       .then((course) => {
         if (!course) {
           setError("That course no longer exists.");
@@ -102,7 +102,7 @@ const CourseForm = () => {
       })
       .catch((err) => setError(err.message || "Could not load the course."))
       .finally(() => setLoading(false));
-  }, [courseId, isEditing]);
+  }, [courseId, isEditing, schoolId]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -168,7 +168,7 @@ const CourseForm = () => {
       };
 
       if (isEditing) {
-        await updateCourse(courseId, payload);
+        await updateCourse(courseId, payload, schoolId);
       } else {
         await createCourse({ ...payload, owner_id: user.id });
       }

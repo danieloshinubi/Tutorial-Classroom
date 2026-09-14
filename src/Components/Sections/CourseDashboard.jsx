@@ -78,7 +78,7 @@ const CourseDashboard = () => {
     setBusy(true);
     setError("");
     try {
-      await unenroll({ userId: user.id, courseId: course.id });
+      await unenroll({ userId: user.id, courseId: course.id, schoolId });
       setMembership(null);
     } catch (err) {
       setError(err.message || "Could not leave the course.");
@@ -183,7 +183,7 @@ const CourseDashboard = () => {
           <>
             {tab === "stream" ? (
               <div className="split">
-                <ClassChat courseId={course.id} />
+                <ClassChat courseId={course.id} schoolId={schoolId} />
                 <Upcoming courseId={course.id} />
               </div>
             ) : null}
@@ -197,15 +197,15 @@ const CourseDashboard = () => {
             ) : null}
 
             {tab === "exams" ? (
-              <ExamsTab courseId={course.id} canManage={canManage} kind="exam" />
+              <ExamsTab courseId={course.id} canManage={canManage} kind="exam" schoolId={schoolId} />
             ) : null}
 
             {tab === "midexams" ? (
-              <ExamsTab courseId={course.id} canManage={canManage} kind="midterm" />
+              <ExamsTab courseId={course.id} canManage={canManage} kind="midterm" schoolId={schoolId} />
             ) : null}
 
             {tab === "people" ? (
-              <PeopleTab course={course} canManage={canManage} />
+              <PeopleTab course={course} canManage={canManage} schoolId={schoolId} />
             ) : null}
           </>
         )}

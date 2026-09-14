@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import Navbar from "../../Components/Navbar/Navbar";
+import { useSchool } from "../../context/SchoolContext";
 import { fetchTutors } from "../../lib/api";
 import {
   Page,
@@ -12,14 +13,16 @@ import {
 } from "../../Components/UI";
 
 const Tutors = () => {
+  const { schoolId } = useSchool();
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (!schoolId) return undefined;
     let active = true;
 
-    fetchTutors()
+    fetchTutors(schoolId)
       .then((data) => {
         if (active) setTutors(data);
       })
@@ -33,7 +36,7 @@ const Tutors = () => {
     return () => {
       active = false;
     };
-  }, []);
+  }, [schoolId]);
 
   return (
     <div className="shell">

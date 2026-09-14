@@ -168,7 +168,7 @@ const PeoplePanel = () => {
     setBusyId(row.id);
     setError("");
     try {
-      await updateMemberRole({ memberId: row.id, role });
+      await updateMemberRole({ schoolId, memberId: row.id, role });
       setNotice(`${displayName(row.profiles)} is now ${ROLE_LABEL[role]}.`);
       load();
     } catch (err) {
@@ -182,7 +182,7 @@ const PeoplePanel = () => {
     setBusyId(row.id);
     setError("");
     try {
-      await setMemberActive({ memberId: row.id, isActive: !row.is_active });
+      await setMemberActive({ schoolId, memberId: row.id, isActive: !row.is_active });
       load();
     } catch (err) {
       setError(err.message || "Could not update that account.");
@@ -202,7 +202,7 @@ const PeoplePanel = () => {
     setBusyId(row.id);
     setError("");
     try {
-      await removeMember(row.id);
+      await removeMember({ memberId: row.id, schoolId });
       load();
     } catch (err) {
       setError(err.message || "Could not remove that person.");
@@ -964,7 +964,7 @@ const MailboxesPanel = () => {
     setBusyId(row.id);
     setError("");
     try {
-      await setMailboxActive({ id: row.id, isActive: !row.is_active });
+      await setMailboxActive({ id: row.id, isActive: !row.is_active, schoolId });
       load();
     } catch (err) {
       setError(err.message || "Could not update that mailbox.");
@@ -978,7 +978,7 @@ const MailboxesPanel = () => {
     setBusyId(row.id);
     setError("");
     try {
-      await deleteTicketMailbox(row.id);
+      await deleteTicketMailbox(row.id, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not disconnect that mailbox.");

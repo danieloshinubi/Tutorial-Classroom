@@ -90,8 +90,8 @@ const ClassesPanel = () => {
     setBusy(true);
     try {
       const [r, cs] = await Promise.all([
-        fetchClassRoster(row.id),
-        fetchClassSubjects(row.id),
+        fetchClassRoster(row.id, schoolId),
+        fetchClassSubjects(row.id, schoolId),
       ]);
       setRoster(r);
       setTaught(cs);
@@ -104,8 +104,8 @@ const ClassesPanel = () => {
 
   const refreshDetail = async (classId) => {
     const [r, cs] = await Promise.all([
-      fetchClassRoster(classId),
-      fetchClassSubjects(classId),
+      fetchClassRoster(classId, schoolId),
+      fetchClassSubjects(classId, schoolId),
     ]);
     setRoster(r);
     setTaught(cs);
@@ -149,7 +149,7 @@ const ClassesPanel = () => {
     }
     setBusy(true);
     try {
-      await deleteClass(row.id);
+      await deleteClass(row.id, schoolId);
       setOpenClass(null);
       load();
     } catch (err) {
@@ -184,7 +184,7 @@ const ClassesPanel = () => {
     setBusy(true);
     setError("");
     try {
-      await addStudentToClass({ classId: openClass, studentId: addStudentId });
+      await addStudentToClass({ classId: openClass, studentId: addStudentId, schoolId });
       setAddStudentId("");
       await refreshDetail(openClass);
     } catch (err) {
@@ -276,7 +276,7 @@ const ClassesPanel = () => {
                       className="select"
                       value={row.form_teacher_id || ""}
                       onChange={async (v) => {
-                        await updateClass(row.id, { form_teacher_id: v || null });
+                        await updateClass(row.id, schoolId, { form_teacher_id: v || null });
                         load();
                       }}
                       options={[
@@ -309,7 +309,7 @@ const ClassesPanel = () => {
                             variant="ghost"
                             disabled={busy}
                             onClick={async () => {
-                              await removeStudentFromClass(r.id);
+                              await removeStudentFromClass(r.id, schoolId);
                               refreshDetail(row.id);
                             }}
                           >
@@ -359,7 +359,7 @@ const ClassesPanel = () => {
                             style={{ width: "auto", padding: "5px 8px" }}
                             value={t.teacher_id || ""}
                             onChange={async (v) => {
-                              await updateClassSubject(t.id, {
+                              await updateClassSubject(t.id, schoolId, {
                                 teacher_id: v || null,
                               });
                               refreshDetail(row.id);
@@ -374,7 +374,7 @@ const ClassesPanel = () => {
                             variant="ghost"
                             disabled={busy}
                             onClick={async () => {
-                              await removeClassSubject(t.id);
+                              await removeClassSubject(t.id, schoolId);
                               refreshDetail(row.id);
                             }}
                           >
@@ -518,7 +518,7 @@ const ClassesPanel = () => {
                       }}
                       onClick={async () => {
                         if (!window.confirm(`Delete ${s.name}? It is removed from every class.`)) return;
-                        await deleteSubject(s.id);
+                        await deleteSubject(s.id, schoolId);
                         load();
                       }}
                     >

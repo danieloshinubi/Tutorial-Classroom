@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const authorization = req.headers.get("Authorization") ?? "";
     if (!authorization) return json({ error: "Sign in first." }, 401);
 
-    const { ticketId, body, to, cc, bcc } = await req.json();
+    const { ticketId, schoolId, body, to, cc, bcc } = await req.json();
     const plainBody = stripHtml(body || "");
     if (!ticketId || !plainBody) return json({ error: "A message body is required." }, 400);
     const toList: string[] = (Array.isArray(to) ? to : [to]).filter(Boolean);
@@ -73,6 +73,14 @@ Deno.serve(async (req) => {
       .eq("id", ticketId)
       .single();
     if (ticketError || !ticket) return json({ error: "That ticket could not be found." }, 404);
+    // The caller's own claim of "current school" must match the ticket's
+    // real one — RLS/is_ticket_staff below only checks that this ticket's
+    // actual school grants staff authority, not that it's the tenant the
+    // caller currently has open, so a stale ticketId from another school
+    // they also staff would otherwise be accepted here.
+    if (!schoolId || ticket.school_id !== schoolId) {
+      return json({ error: "That ticket could not be found." }, 404);
+    }
 
     const { data: isStaff, error: staffError } = await caller.rpc("is_ticket_staff", {
       target_school: ticket.school_id,

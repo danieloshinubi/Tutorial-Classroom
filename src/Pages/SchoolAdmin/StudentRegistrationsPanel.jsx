@@ -69,7 +69,7 @@ const StudentRegistrationsPanel = () => {
     setBusyId(row.id);
     setError("");
     try {
-      await updateStudentRegistration({ id: row.id, status, notes });
+      await updateStudentRegistration({ id: row.id, schoolId, status, notes });
       load();
     } catch (err) {
       setError(err.message || "Could not update that registration.");

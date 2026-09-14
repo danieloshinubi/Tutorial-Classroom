@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
+import { useSchool } from "../../context/SchoolContext";
 import {
   fetchExam,
   fetchAttemptsForExam,
@@ -23,16 +24,16 @@ import {
 
 // The invigilator's record for one paper. Read-only by design: there is no
 // update or delete policy on exam_events, so this log cannot be rewritten.
-const ProctorLog = ({ attemptId }) => {
+const ProctorLog = ({ attemptId, schoolId }) => {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchExamEvents(attemptId)
+    fetchExamEvents(attemptId, schoolId)
       .then(setEvents)
       .catch(() => setEvents([]))
       .finally(() => setLoading(false));
-  }, [attemptId]);
+  }, [attemptId, schoolId]);
 
   if (loading) return <Empty>{"Loading activity..."}</Empty>;
   if (events.length === 0) return <Empty>{"No activity recorded."}</Empty>;
@@ -69,7 +70,7 @@ const ProctorLog = ({ attemptId }) => {
 };
 
 // Expanded view of one student's paper, where written answers get marked.
-const AttemptDetail = ({ attempt, onGraded }) => {
+const AttemptDetail = ({ attempt, schoolId, onGraded }) => {
   const [rows, setRows] = useState([]);
   const [marks, setMarks] = useState({});
   const [loading, setLoading] = useState(true);
@@ -77,7 +78,7 @@ const AttemptDetail = ({ attempt, onGraded }) => {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchAttemptDetail(attempt.id)
+    fetchAttemptDetail({ attemptId: attempt.id, schoolId })
       .then((data) => {
         const sorted = [...data].sort(
           (a, b) => (a.exam_questions?.position ?? 0) - (b.exam_questions?.position ?? 0)
@@ -94,7 +95,7 @@ const AttemptDetail = ({ attempt, onGraded }) => {
       })
       .catch((err) => setError(err.message || "Could not load the paper."))
       .finally(() => setLoading(false));
-  }, [attempt.id]);
+  }, [attempt.id, schoolId]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -107,7 +108,7 @@ const AttemptDetail = ({ attempt, onGraded }) => {
           Number(marks[row.id]) !== row.awarded_points
       );
       for (const row of changed) {
-        await markAnswer({ id: row.id, points: Number(marks[row.id]) });
+        await markAnswer({ id: row.id, points: Number(marks[row.id]), schoolId });
       }
       const updated = await recalculateAttempt(attempt.id);
       onGraded(updated);
@@ -186,6 +187,7 @@ const AttemptDetail = ({ attempt, onGraded }) => {
 
 const ExamResults = () => {
   const { examId } = useParams();
+  const { schoolId } = useSchool();
   const [exam, setExam] = useState(null);
   const [attempts, setAttempts] = useState([]);
   const [openId, setOpenId] = useState(null);
@@ -194,14 +196,15 @@ const ExamResults = () => {
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
-    Promise.all([fetchExam(examId), fetchAttemptsForExam(examId)])
+    if (!schoolId) return;
+    Promise.all([fetchExam({ id: examId, schoolId }), fetchAttemptsForExam({ examId, schoolId })])
       .then(([examRow, attemptRows]) => {
         setExam(examRow);
         setAttempts(attemptRows);
       })
       .catch((err) => setError(err.message || "Could not load results."))
       .finally(() => setLoading(false));
-  }, [examId]);
+  }, [examId, schoolId]);
 
   useEffect(load, [load]);
 
@@ -290,11 +293,12 @@ const ExamResults = () => {
               </div>
             </div>
 
-            {logId === attempt.id ? <ProctorLog attemptId={attempt.id} /> : null}
+            {logId === attempt.id ? <ProctorLog attemptId={attempt.id} schoolId={schoolId} /> : null}
 
             {openId === attempt.id ? (
               <AttemptDetail
                 attempt={attempt}
+                schoolId={schoolId}
                 onGraded={() => {
                   setOpenId(null);
                   load();

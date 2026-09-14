@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import {
   fetchAssignments,
   createAssignment,
@@ -37,6 +38,7 @@ const humanSize = (bytes) => {
 
 const AssignmentsTab = ({ courseId, canManage }) => {
   const { user } = useAuth();
+  const { schoolId } = useSchool();
   const [assignments, setAssignments] = useState([]);
   // The form. attachment holds an already-uploaded file's metadata; keeping
   // uploads out of the form's plain fields makes them easier to reason about.
@@ -177,9 +179,9 @@ const AssignmentsTab = ({ courseId, canManage }) => {
       if (editingId) {
         // Editing leaves existing submissions and marks alone — only the
         // wording, points, deadline and attachment change.
-        await updateAssignment(editingId, fields);
+        await updateAssignment(editingId, fields, courseId);
       } else {
-        await createAssignment({ ...fields, course_id: courseId, created_by: user.id });
+        await createAssignment({ ...fields, course_id: courseId, created_by: user.id, schoolId });
       }
       cancelForm();
       load();
@@ -208,7 +210,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
       if (assignment.file_path) {
         deleteMaterialFile(assignment.file_path).catch(() => {});
       }
-      await deleteAssignment(assignment.id);
+      await deleteAssignment({ id: assignment.id, schoolId });
       load();
     } catch (err) {
       setError(err.message || "Could not delete that assignment.");

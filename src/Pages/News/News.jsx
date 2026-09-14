@@ -224,7 +224,7 @@ const News = () => {
       const ids = rows.map((r) => r.id);
       const [byNotice, byReaction] = await Promise.all([
         fetchNoticeReplies(ids).catch(() => ({})),
-        fetchNoticeReactions(ids, user?.id).catch(() => ({})),
+        fetchNoticeReactions(ids, user?.id, schoolId).catch(() => ({})),
       ]);
       setReplies(byNotice);
       setReactions(byReaction);
@@ -282,6 +282,7 @@ const News = () => {
     try {
       await updateNotice({
         id: editingId,
+        schoolId,
         title: title.trim(),
         body: body.trim(),
         audience,
@@ -329,7 +330,7 @@ const News = () => {
         authorId: user.id,
       });
       if (publishNow) {
-        await publishNotice(created.id);
+        await publishNotice(created.id, schoolId);
         setNotice(
           audience === "everyone"
             ? "Posted. Everyone at the school has been notified."
@@ -350,7 +351,7 @@ const News = () => {
   const send = async (row) => {
     setError("");
     try {
-      await publishNotice(row.id);
+      await publishNotice(row.id, schoolId);
       setNotice("Sent.");
       load();
     } catch (err) {
@@ -360,7 +361,7 @@ const News = () => {
 
   const togglePin = async (row) => {
     try {
-      await updateNotice({ id: row.id, pinned: !row.pinned });
+      await updateNotice({ id: row.id, schoolId, pinned: !row.pinned });
       load();
     } catch (err) {
       setError(err.message || "Could not change that notice.");
@@ -370,7 +371,7 @@ const News = () => {
   const remove = async (row) => {
     if (!window.confirm(`Delete "${row.title}" and its replies?`)) return;
     try {
-      await deleteNotice(row.id);
+      await deleteNotice(row.id, schoolId);
       setNotices((current) => current.filter((r) => r.id !== row.id));
     } catch (err) {
       setError(err.message || "Could not delete that notice.");
@@ -378,7 +379,7 @@ const News = () => {
   };
 
   const onReply = async (noticeId, replyBody) => {
-    const saved = await replyToNotice({ noticeId, userId: user.id, body: replyBody });
+    const saved = await replyToNotice({ noticeId, schoolId, userId: user.id, body: replyBody });
     setReplies((current) => ({
       ...current,
       [noticeId]: [...(current[noticeId] || []), saved],
@@ -419,7 +420,7 @@ const News = () => {
   const onRemoveReply = async (reply) => {
     if (!window.confirm("Delete this reply?")) return;
     try {
-      await deleteNoticeReply(reply.id);
+      await deleteNoticeReply(reply.id, schoolId);
       setReplies((current) => ({
         ...current,
         [reply.notice_id]: (current[reply.notice_id] || []).filter(

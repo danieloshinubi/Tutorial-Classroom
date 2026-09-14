@@ -77,7 +77,7 @@ const ClearanceDepartmentsPanel = () => {
     if (!draftName.trim()) return;
     setBusy(true);
     try {
-      await renameClearanceDepartment({ id: row.id, name: draftName.trim() });
+      await renameClearanceDepartment({ id: row.id, schoolId, name: draftName.trim() });
       setEditing(null);
       load();
     } catch (err) {
@@ -90,7 +90,7 @@ const ClearanceDepartmentsPanel = () => {
   const toggleActive = async (row) => {
     setBusy(true);
     try {
-      await setClearanceDepartmentActive({ id: row.id, isActive: !row.is_active });
+      await setClearanceDepartmentActive({ id: row.id, isActive: !row.is_active, schoolId });
       load();
     } catch (err) {
       setError(err.message || "Could not update that.");
@@ -108,7 +108,7 @@ const ClearanceDepartmentsPanel = () => {
 
     setBusy(true);
     try {
-      await deleteClearanceDepartment(row.id);
+      await deleteClearanceDepartment({ id: row.id, schoolId });
       load();
     } catch (err) {
       setError(err.message || "Could not delete that.");

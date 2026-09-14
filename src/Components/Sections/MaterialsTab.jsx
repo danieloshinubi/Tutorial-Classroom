@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import {
   fetchMaterials,
   createMaterial,
@@ -27,6 +28,7 @@ const humanSize = (bytes) => {
 
 const MaterialsTab = ({ courseId, canManage }) => {
   const { user } = useAuth();
+  const { schoolId } = useSchool();
   const [materials, setMaterials] = useState([]);
   const [form, setForm] = useState({ title: "", description: "", url: "" });
   const [file, setFile] = useState(null);
@@ -41,14 +43,15 @@ const MaterialsTab = ({ courseId, canManage }) => {
   const fileInput = useRef(null);
 
   const load = () => {
+    if (!schoolId) return;
     setLoading(true);
-    fetchMaterials(courseId)
+    fetchMaterials(courseId, schoolId)
       .then(setMaterials)
       .catch((err) => setError(err.message || "Could not load materials."))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [courseId]);
+  useEffect(load, [courseId, schoolId]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -113,7 +116,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
           description: form.description.trim() || null,
           url: form.url.trim() || null,
           ...fileFields,
-        });
+        }, schoolId);
       } else {
         await createMaterial({
           course_id: courseId,
@@ -122,7 +125,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
           url: form.url.trim() || null,
           created_by: user.id,
           ...fileFields,
-        });
+        }, schoolId);
       }
 
       cancelForm();
@@ -157,7 +160,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
           // A missing object should not block removing the row.
         });
       }
-      await deleteMaterial(material.id);
+      await deleteMaterial(material.id, courseId);
       load();
     } catch (err) {
       setError(err.message || "Could not delete that material.");

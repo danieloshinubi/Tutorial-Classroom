@@ -101,6 +101,7 @@ const parseBrief = (text) => {
 
 // The student's own view: submit work, then see the grade once it lands.
 const SubmitPanel = ({ assignment, userId }) => {
+  const { schoolId } = useSchool();
   const [submission, setSubmission] = useState(null);
   const [form, setForm] = useState({ body: "", url: "" });
   const [attachment, setAttachment] = useState(null);
@@ -174,6 +175,7 @@ const SubmitPanel = ({ assignment, userId }) => {
       const saved = await submitWork({
         assignmentId: assignment.id,
         userId,
+        schoolId,
         body: form.body.trim() || null,
         url: form.url.trim() || null,
         filePath: attachment?.path || null,
@@ -284,6 +286,7 @@ const SubmitPanel = ({ assignment, userId }) => {
 
 // The tutor's view: every submission, each with a grade box.
 const GradePanel = ({ assignment, graderId }) => {
+  const { schoolId } = useSchool();
   const [submissions, setSubmissions] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [loading, setLoading] = useState(true);
@@ -293,7 +296,7 @@ const GradePanel = ({ assignment, graderId }) => {
 
   const load = useCallback(() => {
     setLoading(true);
-    fetchSubmissionsForAssignment(assignment.id)
+    fetchSubmissionsForAssignment({ assignmentId: assignment.id, schoolId })
       .then((data) => {
         setSubmissions(data);
         setDrafts(
@@ -310,7 +313,7 @@ const GradePanel = ({ assignment, graderId }) => {
       })
       .catch((err) => setError(err.message || "Could not load submissions."))
       .finally(() => setLoading(false));
-  }, [assignment.id]);
+  }, [assignment.id, schoolId]);
 
   useEffect(load, [load]);
 
@@ -334,6 +337,7 @@ const GradePanel = ({ assignment, graderId }) => {
     try {
       await gradeSubmission({
         id: submission.id,
+        schoolId,
         grade,
         feedback: draft.feedback.trim() || null,
         graderId,
@@ -451,7 +455,7 @@ const GradePanel = ({ assignment, graderId }) => {
 const AssignmentDetail = () => {
   const { assignmentId } = useParams();
   const { user } = useAuth();
-  const { isAdmin } = useSchool();
+  const { isAdmin, schoolId } = useSchool();
 
   const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -459,9 +463,10 @@ const AssignmentDetail = () => {
   const briefPreview = useDocumentPreview();
 
   useEffect(() => {
+    if (!schoolId) return undefined;
     let active = true;
 
-    fetchAssignment(assignmentId)
+    fetchAssignment({ schoolId, id: assignmentId })
       .then((data) => {
         if (!active) return;
         if (!data) {
@@ -480,7 +485,7 @@ const AssignmentDetail = () => {
     return () => {
       active = false;
     };
-  }, [assignmentId]);
+  }, [assignmentId, schoolId]);
 
   const canManage =
     isAdmin ||

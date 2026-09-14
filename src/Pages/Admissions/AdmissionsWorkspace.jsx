@@ -70,10 +70,10 @@ const AdmissionsWorkspace = () => {
     setLoading(true);
     try {
       const [ws, mems, cls, reg] = await Promise.all([
-        fetchApplicationWorkspace(applicationId),
+        fetchApplicationWorkspace(applicationId, schoolId),
         fetchSchoolMembers(schoolId).catch(() => []),
         fetchClasses(schoolId).catch(() => []),
-        fetchStudentRegistrationForApplication(applicationId).catch(() => null),
+        fetchStudentRegistrationForApplication(applicationId, schoolId).catch(() => null),
       ]);
       setWorkspace(ws);
       setMembers(mems);
@@ -94,7 +94,7 @@ const AdmissionsWorkspace = () => {
     setLetterLoading(true);
     setError("");
     try {
-      const row = await fetchApplication(applicationId);
+      const row = await fetchApplication(applicationId, schoolId);
       setLetterApp({ ...row, registration_number: registration?.registration_number });
     } catch (err) {
       setError(err.message || "Could not open the admission letter.");
@@ -247,7 +247,7 @@ const AdmissionsWorkspace = () => {
                       }>{p.status === "submitted" ? "being checked" : p.status}</Badge>
                       {p.status === "submitted" ? (
                         <Button size="sm" variant="secondary" disabled={busy}
-                          onClick={() => run(() => verifyApplicationPayment({ paymentId: p.id }), "verify payment")}>
+                          onClick={() => run(() => verifyApplicationPayment({ paymentId: p.id, schoolId }), "verify payment")}>
                           {"Verify payment"}
                         </Button>
                       ) : null}
@@ -290,14 +290,14 @@ const AdmissionsWorkspace = () => {
                       <span className="doc-actions">
                         <Button size="sm" variant="secondary"
                           disabled={busy || d.status === "verified"}
-                          onClick={() => run(() => verifyDocument({ docId: d.id }), "verify")}>
+                          onClick={() => run(() => verifyDocument({ docId: d.id, schoolId }), "verify")}>
                           {"Verify"}
                         </Button>
                         <Button size="sm" variant="secondary"
                           disabled={busy}
                           onClick={() => {
                             const reason = window.prompt("Why is this being rejected?");
-                            if (reason) run(() => rejectDocument({ docId: d.id, reason }), "reject");
+                            if (reason) run(() => rejectDocument({ docId: d.id, reason, schoolId }), "reject");
                           }}>
                           {"Reject"}
                         </Button>
@@ -306,7 +306,7 @@ const AdmissionsWorkspace = () => {
                             disabled={busy}
                             onClick={() => {
                               const reason = window.prompt("Why is this being waived?");
-                              if (reason) run(() => waiveDocument({ docId: d.id, reason }), "waive");
+                              if (reason) run(() => waiveDocument({ docId: d.id, reason, schoolId }), "waive");
                             }}>
                             {"Waive"}
                           </Button>
@@ -325,7 +325,7 @@ const AdmissionsWorkspace = () => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>{"Screening"}</h3>
             <Button size="sm" variant="secondary" disabled={busy}
-              onClick={() => run(() => prepareScreeningItems(app.id), "prepare screening")}>
+              onClick={() => run(() => prepareScreeningItems(app.id, schoolId), "prepare screening")}>
               {"Prepare items from config"}
             </Button>
           </div>
@@ -348,20 +348,20 @@ const AdmissionsWorkspace = () => {
                       item.status === "correction_required" ? "warn" : "muted"
                     }>{item.status}</Badge>
                     <Button size="sm" variant="secondary" disabled={busy}
-                      onClick={() => run(() => setScreeningItemStatus({ itemId: item.id, status: "passed" }), "pass")}>
+                      onClick={() => run(() => setScreeningItemStatus({ itemId: item.id, schoolId, status: "passed" }), "pass")}>
                       {"Pass"}
                     </Button>
                     <Button size="sm" variant="secondary" disabled={busy}
                       onClick={() => {
                         const note = window.prompt("Reason?");
-                        if (note) run(() => setScreeningItemStatus({ itemId: item.id, status: "failed", note }), "fail");
+                        if (note) run(() => setScreeningItemStatus({ itemId: item.id, schoolId, status: "failed", note }), "fail");
                       }}>
                       {"Fail"}
                     </Button>
                     <Button size="sm" variant="ghost" disabled={busy}
                       onClick={() => {
                         const note = window.prompt("Waiver reason?");
-                        if (note) run(() => setScreeningItemStatus({ itemId: item.id, status: "waived", note }), "waive");
+                        if (note) run(() => setScreeningItemStatus({ itemId: item.id, schoolId, status: "waived", note }), "waive");
                       }}>
                       {"Waive"}
                     </Button>
@@ -378,7 +378,7 @@ const AdmissionsWorkspace = () => {
           <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0 }}>
             {"Return the application to the applicant for correction of one or more sections."}
           </p>
-          <CorrectionForm applicationId={app.id} disabled={busy}
+          <CorrectionForm applicationId={app.id} schoolId={schoolId} disabled={busy}
             onDone={load} onError={setError} />
         </Card>
 
@@ -399,7 +399,7 @@ const AdmissionsWorkspace = () => {
               )}
             </div>
           ) : (
-            <AssignReviewForm applicationId={app.id} members={members}
+            <AssignReviewForm applicationId={app.id} schoolId={schoolId} members={members}
               disabled={busy} onDone={load} onError={setError} />
           )}
           {reviews.filter((r) => r.completed_at).map((r) => (
@@ -417,7 +417,7 @@ const AdmissionsWorkspace = () => {
         {config?.require_interview ? (
           <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Interview"}</h3>
-            <InterviewForm applicationId={app.id} members={members} disabled={busy}
+            <InterviewForm applicationId={app.id} schoolId={schoolId} members={members} disabled={busy}
               onDone={load} onError={setError} />
             {interviews.map((iv) => (
               <div key={iv.id} className="past-review">
@@ -435,7 +435,7 @@ const AdmissionsWorkspace = () => {
                       onClick={() => {
                         const outcome = window.prompt("Outcome (pass, fail, inconclusive)?");
                         if (outcome) run(() => recordInterviewOutcome({
-                          interviewId: iv.id, status: "completed", outcome
+                          interviewId: iv.id, schoolId, status: "completed", outcome
                         }), "record outcome");
                       }}>
                       {"Record outcome"}
@@ -452,7 +452,7 @@ const AdmissionsWorkspace = () => {
         <Card style={{ marginBottom: 16 }}>
           <h3 style={{ marginTop: 0 }}>{"Final decision"}</h3>
           {canFinalise ? (
-            <DecisionForm application={app} disabled={busy}
+            <DecisionForm application={app} schoolId={schoolId} disabled={busy}
               onDone={load} onError={setError} />
           ) : (
             <Notice tone="muted">
@@ -488,13 +488,13 @@ const AdmissionsWorkspace = () => {
                   </Notice>
                   <div className="btn-row">
                     <Button size="sm" disabled={busy}
-                      onClick={() => run(() => recordOfferResponse({ offerId: offer.id, response: "accepted" }), "record acceptance")}>
+                      onClick={() => run(() => recordOfferResponse({ offerId: offer.id, response: "accepted", schoolId }), "record acceptance")}>
                       {"Record acceptance"}
                     </Button>
                     <Button size="sm" variant="secondary" disabled={busy}
                       onClick={() => {
                         const note = window.prompt("Reason for declining? (optional)");
-                        if (note !== null) run(() => recordOfferResponse({ offerId: offer.id, response: "declined", note: note || undefined }), "record decline");
+                        if (note !== null) run(() => recordOfferResponse({ offerId: offer.id, response: "declined", note: note || undefined, schoolId }), "record decline");
                       }}>
                       {"Record decline"}
                     </Button>
@@ -531,7 +531,7 @@ const AdmissionsWorkspace = () => {
                           }>{p.status === "submitted" ? "being checked" : p.status}</Badge>
                           {p.status === "submitted" ? (
                             <Button size="sm" variant="secondary" disabled={busy}
-                              onClick={() => run(() => verifyAcceptancePayment({ paymentId: p.id }), "verify payment")}>
+                              onClick={() => run(() => verifyAcceptancePayment({ paymentId: p.id, schoolId }), "verify payment")}>
                               {"Verify payment"}
                             </Button>
                           ) : null}
@@ -603,17 +603,17 @@ const AdmissionsWorkspace = () => {
                         item.status === "in_progress" ? "brand" : "warn"
                       }>{item.status}</Badge>
                       <Button size="sm" variant="secondary" disabled={busy}
-                        onClick={() => run(() => setClearanceStatus({ checklistId: item.id, status: "in_progress" }), "start")}>
+                        onClick={() => run(() => setClearanceStatus({ checklistId: item.id, schoolId, status: "in_progress" }), "start")}>
                         {"In progress"}
                       </Button>
                       <Button size="sm" variant="secondary" disabled={busy}
-                        onClick={() => run(() => setClearanceStatus({ checklistId: item.id, status: "cleared" }), "clear")}>
+                        onClick={() => run(() => setClearanceStatus({ checklistId: item.id, schoolId, status: "cleared" }), "clear")}>
                         {"Clear"}
                       </Button>
                       <Button size="sm" variant="secondary" disabled={busy}
                         onClick={() => {
                           const note = window.prompt("Why is this being rejected?");
-                          if (note) run(() => setClearanceStatus({ checklistId: item.id, status: "rejected", note }), "reject");
+                          if (note) run(() => setClearanceStatus({ checklistId: item.id, schoolId, status: "rejected", note }), "reject");
                         }}>
                         {"Reject"}
                       </Button>
@@ -621,7 +621,7 @@ const AdmissionsWorkspace = () => {
                         <Button size="sm" variant="ghost" disabled={busy}
                           onClick={() => {
                             const note = window.prompt("Waiver reason?");
-                            if (note) run(() => setClearanceStatus({ checklistId: item.id, status: "waived", note }), "waive");
+                            if (note) run(() => setClearanceStatus({ checklistId: item.id, schoolId, status: "waived", note }), "waive");
                           }}>
                           {"Waive"}
                         </Button>
@@ -634,7 +634,7 @@ const AdmissionsWorkspace = () => {
 
             <div style={{ borderTop: "1px solid var(--line)", marginTop: 14, paddingTop: 14 }}>
               <h4 style={{ marginTop: 0, marginBottom: 6 }}>{"Original documents seen in person"}</h4>
-              <OriginalVerificationForm applicationId={app.id} disabled={busy}
+              <OriginalVerificationForm applicationId={app.id} schoolId={schoolId} disabled={busy}
                 onDone={load} onError={setError} />
               {originalVerifications.length === 0 ? (
                 <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 8 }}>
@@ -725,7 +725,7 @@ const AdmissionsWorkspace = () => {
 // Small child forms live inline for locality — kept short so the workspace
 // reads as one file rather than five.
 
-const CorrectionForm = ({ applicationId, disabled, onDone, onError }) => {
+const CorrectionForm = ({ applicationId, schoolId, disabled, onDone, onError }) => {
   const [sections, setSections] = useState({
     personal: false, education: false, exams: false,
     next_of_kin: false, referees: false, documents: false,
@@ -738,7 +738,7 @@ const CorrectionForm = ({ applicationId, disabled, onDone, onError }) => {
     if (!reason.trim()) return onError("Give the applicant a reason.");
     try {
       await requestApplicationCorrection({
-        applicationId, sections: list, reason: reason.trim(),
+        applicationId, sections: list, reason: reason.trim(), schoolId,
       });
       setReason(""); setSections({});
       onDone();
@@ -768,7 +768,7 @@ const CorrectionForm = ({ applicationId, disabled, onDone, onError }) => {
   );
 };
 
-const AssignReviewForm = ({ applicationId, members, disabled, onDone, onError }) => {
+const AssignReviewForm = ({ applicationId, schoolId, members, disabled, onDone, onError }) => {
   const [reviewerId, setReviewerId] = useState("");
   const eligible = members.filter((m) =>
     ["owner", "admin", "principal", "admissions"].includes(m.role));
@@ -776,7 +776,7 @@ const AssignReviewForm = ({ applicationId, members, disabled, onDone, onError })
     e.preventDefault();
     if (!reviewerId) return onError("Choose a reviewer.");
     try {
-      await assignReview({ applicationId, reviewerId });
+      await assignReview({ applicationId, reviewerId, schoolId });
       onDone();
     } catch (err) {
       onError(err.message || "Could not assign the review.");
@@ -843,7 +843,7 @@ const ReviewForm = ({ applicationId, disabled, onDone, onError }) => {
   );
 };
 
-const InterviewForm = ({ applicationId, members, disabled, onDone, onError }) => {
+const InterviewForm = ({ applicationId, schoolId, members, disabled, onDone, onError }) => {
   const [when, setWhen] = useState("");
   const [location, setLocation] = useState("");
   const [meetingLink, setMeetingLink] = useState("");
@@ -855,7 +855,7 @@ const InterviewForm = ({ applicationId, members, disabled, onDone, onError }) =>
     if (!when) return onError("Choose a date and time.");
     try {
       await scheduleInterview({
-        applicationId, when: new Date(when).toISOString(),
+        applicationId, schoolId, when: new Date(when).toISOString(),
         location, meetingLink, interviewerId: interviewerId || null,
       });
       setWhen(""); setLocation(""); setMeetingLink(""); setInterviewerId("");
@@ -891,7 +891,7 @@ const InterviewForm = ({ applicationId, members, disabled, onDone, onError }) =>
   );
 };
 
-const OriginalVerificationForm = ({ applicationId, disabled, onDone, onError }) => {
+const OriginalVerificationForm = ({ applicationId, schoolId, disabled, onDone, onError }) => {
   const [documentKind, setDocumentKind] = useState("");
   const [remarks, setRemarks] = useState("");
   const submit = async (e) => {
@@ -899,7 +899,7 @@ const OriginalVerificationForm = ({ applicationId, disabled, onDone, onError }) 
     if (!documentKind.trim()) return onError("Say which document was seen.");
     try {
       await recordOriginalVerification({
-        applicationId, documentKind: documentKind.trim(), remarks: remarks.trim() || null,
+        applicationId, schoolId, documentKind: documentKind.trim(), remarks: remarks.trim() || null,
       });
       setDocumentKind(""); setRemarks("");
       onDone();
@@ -936,11 +936,11 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
       setOwnAccount(null);
       return;
     }
-    fetchApplicantAccount(application.applicant_id)
+    fetchApplicantAccount(application.applicant_id, schoolId)
       .then((row) => { if (active) setOwnAccount(row); })
       .catch(() => { if (active) setOwnAccount(null); });
     return () => { active = false; };
-  }, [application.applicant_id]);
+  }, [application.applicant_id, schoolId]);
 
   const students = members.filter((m) => m.role === "student");
   const [mode, setMode] = useState("create");
@@ -954,7 +954,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
     setBusy(true);
     onError("");
     try {
-      await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null });
+      await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null, schoolId });
       onDone();
     } catch (err) {
       onError(err.message || "Could not register that applicant.");
@@ -1003,7 +1003,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
         return;
       }
 
-      await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null });
+      await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null, schoolId });
 
       // The parent hides this whole form the moment status flips to
       // 'enrolled' (onDone() reloads it) — showing the one-time password
@@ -1114,7 +1114,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
   );
 };
 
-const DecisionForm = ({ application, disabled, onDone, onError }) => {
+const DecisionForm = ({ application, schoolId, disabled, onDone, onError }) => {
   const [decision, setDecision] = useState("");
   const [note, setNote] = useState("");
   const [expires, setExpires] = useState("");
@@ -1125,6 +1125,7 @@ const DecisionForm = ({ application, disabled, onDone, onError }) => {
     try {
       await decideApplication({
         id: application.id,
+        schoolId,
         status: decision,
         note,
         offerExpires: expires ? new Date(expires).toISOString() : null,

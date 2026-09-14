@@ -44,7 +44,7 @@ const GuardiansPanel = () => {
       const parents = rows.filter((r) => r.role === "parent");
       const pairs = await Promise.all(
         parents.map((p) =>
-          fetchChildren(p.profiles.id)
+          fetchChildren(p.profiles.id, schoolId)
             .then((kids) => [p.profiles.id, kids])
             .catch(() => [p.profiles.id, []])
         )
@@ -107,7 +107,7 @@ const GuardiansPanel = () => {
     }
     setBusy(true);
     try {
-      await unlinkGuardian(link.id);
+      await unlinkGuardian(link.id, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not remove that link.");

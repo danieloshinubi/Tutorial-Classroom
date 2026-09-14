@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
+import { useSchool } from "../../context/SchoolContext";
 import { fetchMyInvoices, fetchPaymentByReference } from "../../lib/api";
 import { Page, Card, Button, Notice, Empty } from "../../Components/UI";
 
@@ -14,6 +15,7 @@ import { Page, Card, Button, Notice, Empty } from "../../Components/UI";
 // So all this does is wait a moment and re-read the balance from the
 // database. If the webhook has landed, the new figure is simply there.
 const PaymentReturn = () => {
+  const { schoolId } = useSchool();
   const [params] = useSearchParams();
   const reference = params.get("reference") || params.get("trxref");
 
@@ -22,10 +24,11 @@ const PaymentReturn = () => {
   const [attempt, setAttempt] = useState(0);
 
   const check = useCallback(async () => {
+    if (!schoolId) return;
     try {
       const [rows, payment] = await Promise.all([
-        fetchMyInvoices(),
-        fetchPaymentByReference(reference).catch(() => null),
+        fetchMyInvoices(schoolId),
+        fetchPaymentByReference(reference, schoolId).catch(() => null),
       ]);
       setInvoices(rows);
       const settled = payment?.status === "approved";
@@ -39,7 +42,7 @@ const PaymentReturn = () => {
     } catch {
       setState("pending");
     }
-  }, [reference, attempt]);
+  }, [reference, attempt, schoolId]);
 
   useEffect(() => {
     check();

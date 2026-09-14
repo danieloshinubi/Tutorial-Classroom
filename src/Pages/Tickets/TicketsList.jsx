@@ -247,7 +247,7 @@ const TicketsList = () => {
   const handleQuickUpdate = async (ticket, changes) => {
     setTickets((rows) => rows.map((r) => (r.id === ticket.id ? { ...r, ...changes } : r)));
     try {
-      await updateTicket({ id: ticket.id, ...changes });
+      await updateTicket({ id: ticket.id, schoolId, ...changes });
     } catch {
       load();
     }

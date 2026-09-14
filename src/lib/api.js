@@ -28,10 +28,11 @@ export const fetchCourses = async ({ schoolId, sessionId = null } = {}) => {
   return data;
 };
 
-export const fetchAllCourses = async () => {
+export const fetchAllCourses = async (schoolId) => {
   const { data, error } = await supabase
     .from("courses")
     .select(`id, code, title, level_year, archived, owner_id, owner:profiles!courses_owner_id_fkey ( ${PROFILE_FIELDS} )`)
+    .eq("school_id", schoolId)
     .order("level_year")
     .order("code");
   if (error) throw error;
@@ -73,10 +74,15 @@ export const fetchCourseSessions = async ({ schoolId, code }) => {
   return data;
 };
 
-export const fetchCoursesOwnedBy = async (userId) => {
+// Scoped by school_id, not just owner_id — RLS only checks that the caller
+// is a member of SOME school that owns a row, not that it's the tenant
+// currently open. Someone who teaches at two schools would otherwise see
+// both schools' courses merged into whichever one they happen to be on.
+export const fetchCoursesOwnedBy = async ({ schoolId, userId }) => {
   const { data, error } = await supabase
     .from("courses")
     .select("id, code, title, level_year, archived, session_id, sessions ( id, name, is_current )")
+    .eq("school_id", schoolId)
     .eq("owner_id", userId)
     .order("code");
   if (error) throw error;
@@ -93,11 +99,17 @@ export const createCourse = async (course) => {
   return data;
 };
 
-export const updateCourse = async (id, changes) => {
+// schoolId cross-checked against the row, not just the id — otherwise a
+// caller who somehow ends up with another tenant's course id (e.g. a stale
+// link, or an id typed into the URL) could update/read/delete it as long as
+// RLS's ownership/admin check happens to pass for THAT school, regardless of
+// which tenant is currently open.
+export const updateCourse = async (id, changes, schoolId) => {
   const { data, error } = await supabase
     .from("courses")
     .update(changes)
     .eq("id", id)
+    .eq("school_id", schoolId)
     .select("id, code, title, description, level_year, archived, owner_id")
     .single();
   if (error) throw error;
@@ -111,20 +123,25 @@ export const updateCourse = async (id, changes) => {
 // session_id arrived as undefined, became "" in the form, and were written
 // back as null over perfectly good data. An edit form has to load every
 // column it is going to save.
-export const fetchCourseById = async (id) => {
+export const fetchCourseById = async (id, schoolId) => {
   const { data, error } = await supabase
     .from("courses")
     .select(
       "id, code, title, description, level_year, session_id, archived, owner_id, join_policy, school_id"
     )
     .eq("id", id)
+    .eq("school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
 };
 
-export const deleteCourse = async (id) => {
-  const { error } = await supabase.from("courses").delete().eq("id", id);
+export const deleteCourse = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("courses")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -134,22 +151,27 @@ export const deleteCourse = async (id) => {
 
 // Only approved places count as "your courses" — a pending request is not
 // membership yet, and is surfaced separately.
-export const fetchMyCourses = async (userId) => {
+// enrollments has no school_id of its own — scoped through its course, with
+// !inner so the courses.school_id filter actually restricts which enrollment
+// rows come back (see fetchCoursesOwnedBy above for why this matters).
+export const fetchMyCourses = async ({ schoolId, userId }) => {
   const { data, error } = await supabase
     .from("enrollments")
-    .select("course_id, status, courses ( id, code, title, level_year, archived, sessions ( name ) )")
+    .select("course_id, status, courses!inner ( id, code, title, level_year, archived, school_id, sessions ( name ) )")
     .eq("user_id", userId)
-    .eq("status", "approved");
+    .eq("status", "approved")
+    .eq("courses.school_id", schoolId);
   if (error) throw error;
   return data.map((row) => row.courses).filter(Boolean);
 };
 
-export const fetchMyPendingRequests = async (userId) => {
+export const fetchMyPendingRequests = async ({ schoolId, userId }) => {
   const { data, error } = await supabase
     .from("enrollments")
-    .select("course_id, requested_at, courses ( id, code, title, level_year )")
+    .select("course_id, requested_at, courses!inner ( id, code, title, level_year, school_id )")
     .eq("user_id", userId)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .eq("courses.school_id", schoolId);
   if (error) throw error;
   return data.filter((row) => row.courses);
 };
@@ -172,7 +194,19 @@ export const enroll = async ({ userId, courseId }) => {
   if (error) throw error;
 };
 
-export const unenroll = async ({ userId, courseId }) => {
+// enrollments has no school_id of its own, and PostgREST does not honor an
+// embedded-resource filter as a row-selector on DELETE — so the cross-check
+// has to be a separate lookup against courses, which does carry it directly.
+export const unenroll = async ({ userId, courseId, schoolId }) => {
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("id", courseId)
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (courseError) throw courseError;
+  if (!course) throw new Error("This course does not belong to the current school.");
+
   const { error } = await supabase
     .from("enrollments")
     .delete()
@@ -181,11 +215,12 @@ export const unenroll = async ({ userId, courseId }) => {
   if (error) throw error;
 };
 
-export const fetchRoster = async (courseId) => {
+export const fetchRoster = async (courseId, schoolId) => {
   const { data, error } = await supabase
     .from("enrollments")
-    .select(`created_at, profiles!enrollments_user_id_fkey ( ${PROFILE_FIELDS} )`)
-    .eq("course_id", courseId);
+    .select(`created_at, profiles!enrollments_user_id_fkey ( ${PROFILE_FIELDS} ), courses!inner ( school_id )`)
+    .eq("course_id", courseId)
+    .eq("courses.school_id", schoolId);
   if (error) throw error;
   return data.map((row) => row.profiles).filter(Boolean);
 };
@@ -194,19 +229,34 @@ export const fetchRoster = async (courseId) => {
 /* materials                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export const fetchMaterials = async (courseId) => {
+export const fetchMaterials = async (courseId, schoolId) => {
   const { data, error } = await supabase
     .from("materials")
     .select(
-      "id, title, description, url, created_at, file_path, file_name, file_size, mime_type"
+      "id, title, description, url, created_at, file_path, file_name, file_size, mime_type, courses!inner ( school_id )"
     )
     .eq("course_id", courseId)
+    .eq("courses.school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
 };
 
-export const createMaterial = async (material) => {
+// materials has no school_id of its own, so the check has to go through the
+// target course before inserting — otherwise a course_id from another
+// tenant would be accepted as long as RLS's ownership check happens to pass
+// for that other school.
+export const createMaterial = async (material, schoolId) => {
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("id", material.course_id)
+    .eq("school_id", schoolId)
+    .single();
+  if (courseError || !course) {
+    throw new Error("That course is not part of your current school.");
+  }
+
   const { data, error } = await supabase
     .from("materials")
     .insert(material)
@@ -216,8 +266,15 @@ export const createMaterial = async (material) => {
   return data;
 };
 
-export const deleteMaterial = async (id) => {
-  const { error } = await supabase.from("materials").delete().eq("id", id);
+// courseId here is always one the caller already validated against the
+// current tenant (it comes from fetchCourseByCode({ schoolId, code }) two
+// hops up), so reusing it as a filter is enough — no extra join needed.
+export const deleteMaterial = async (id, courseId) => {
+  const { error } = await supabase
+    .from("materials")
+    .delete()
+    .eq("id", id)
+    .eq("course_id", courseId);
   if (error) throw error;
 };
 
@@ -247,17 +304,30 @@ export const fetchUpcomingAssignments = async (courseId) => {
   return data;
 };
 
-export const fetchAssignment = async (id) => {
+export const fetchAssignment = async ({ schoolId, id }) => {
   const { data, error } = await supabase
     .from("assignments")
-    .select("id, course_id, title, description, points, due_at, file_path, file_name, file_size, mime_type, link_url, courses ( id, code, title, level_year, owner_id )")
+    .select("id, course_id, title, description, points, due_at, file_path, file_name, file_size, mime_type, link_url, courses!inner ( id, code, title, level_year, owner_id, school_id )")
     .eq("id", id)
+    .eq("courses.school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
 };
 
-export const createAssignment = async (assignment) => {
+// assignments has no school_id of its own, so the target course is checked
+// first — otherwise a course_id from another tenant would be accepted as
+// long as RLS's ownership check happens to pass for that other school.
+export const createAssignment = async ({ schoolId, ...assignment }) => {
+  const { data: course, error: courseError } = await supabase
+    .from("courses")
+    .select("id")
+    .eq("id", assignment.course_id)
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (courseError) throw courseError;
+  if (!course) throw new Error("Course not found in this school");
+
   const { data, error } = await supabase
     .from("assignments")
     .insert(assignment)
@@ -267,7 +337,16 @@ export const createAssignment = async (assignment) => {
   return data;
 };
 
-export const deleteAssignment = async (id) => {
+export const deleteAssignment = async ({ id, schoolId }) => {
+  const { data: owned, error: checkError } = await supabase
+    .from("assignments")
+    .select("id, courses!inner ( school_id )")
+    .eq("id", id)
+    .eq("courses.school_id", schoolId)
+    .maybeSingle();
+  if (checkError) throw checkError;
+  if (!owned) throw new Error("Assignment not found in this school.");
+
   const { error } = await supabase.from("assignments").delete().eq("id", id);
   if (error) throw error;
 };
@@ -289,7 +368,16 @@ export const fetchMySubmission = async ({ assignmentId, userId }) => {
 
 // One row per student per assignment, so a resubmission updates in place and
 // clears any previous grade rather than stacking up duplicates.
-export const submitWork = async ({ assignmentId, userId, body, url, filePath, fileName, fileSize }) => {
+export const submitWork = async ({ assignmentId, userId, schoolId, body, url, filePath, fileName, fileSize }) => {
+  const { data: scoped, error: scopeError } = await supabase
+    .from("assignments")
+    .select("id, courses!inner ( school_id )")
+    .eq("id", assignmentId)
+    .eq("courses.school_id", schoolId)
+    .maybeSingle();
+  if (scopeError) throw scopeError;
+  if (!scoped) throw new Error("That assignment does not belong to this school.");
+
   const { data, error } = await supabase
     .from("submissions")
     .upsert(
@@ -315,17 +403,31 @@ export const submitWork = async ({ assignmentId, userId, body, url, filePath, fi
   return data;
 };
 
-export const fetchSubmissionsForAssignment = async (assignmentId) => {
+export const fetchSubmissionsForAssignment = async ({ assignmentId, schoolId }) => {
   const { data, error } = await supabase
     .from("submissions")
-    .select(`id, body, url, file_path, file_name, file_size, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, url, file_path, file_name, file_size, submitted_at, grade, feedback, graded_at, profiles!submissions_user_id_fkey ( ${PROFILE_FIELDS} ), assignments!inner ( course_id, courses!inner ( school_id ) )`)
     .eq("assignment_id", assignmentId)
+    .eq("assignments.courses.school_id", schoolId)
     .order("submitted_at");
   if (error) throw error;
   return data;
 };
 
-export const gradeSubmission = async ({ id, grade, feedback, graderId }) => {
+// Verify this submission's assignment belongs to a course in the current
+// tenant before mutating it — RLS's can_manage_assignment/can_manage_course
+// checks are keyed to whichever school actually owns the row, not the
+// tenant being browsed.
+export const gradeSubmission = async ({ id, schoolId, grade, feedback, graderId }) => {
+  const { data: owner, error: ownerError } = await supabase
+    .from("submissions")
+    .select("id, assignments!inner(course_id, courses!inner(school_id))")
+    .eq("id", id)
+    .eq("assignments.courses.school_id", schoolId)
+    .maybeSingle();
+  if (ownerError) throw ownerError;
+  if (!owner) throw new Error("Submission not found in this school.");
+
   const { data, error } = await supabase
     .from("submissions")
     .update({
@@ -345,23 +447,32 @@ export const gradeSubmission = async ({ id, grade, feedback, graderId }) => {
 /* people                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export const fetchTutors = async () => {
+// profiles has no school_id of its own — scoped through school_members
+// (which does carry it), the same way fetchSchoolMembers already does.
+// Sorted client-side since ordering by an embedded table's column is
+// awkward over PostgREST.
+export const fetchTutors = async (schoolId) => {
   const { data, error } = await supabase
-    .from("profiles")
-    .select(`${PROFILE_FIELDS}, bio`)
-    .in("role", ["tutor", "admin"])
-    .order("first_name");
+    .from("school_members")
+    .select(`profiles!school_members_user_id_fkey!inner ( ${PROFILE_FIELDS}, bio )`)
+    .eq("school_id", schoolId)
+    .eq("is_active", true)
+    .in("profiles.role", ["tutor", "admin"]);
   if (error) throw error;
-  return data;
+  return data
+    .map((row) => row.profiles)
+    .filter(Boolean)
+    .sort((a, b) => a.first_name.localeCompare(b.first_name));
 };
 
-export const fetchAllProfiles = async () => {
+export const fetchAllProfiles = async (schoolId) => {
   const { data, error } = await supabase
-    .from("profiles")
-    .select(`${PROFILE_FIELDS}, level_year, created_at`)
-    .order("created_at", { ascending: false });
+    .from("school_members")
+    .select(`profiles!school_members_user_id_fkey!inner ( ${PROFILE_FIELDS}, level_year, created_at )`)
+    .eq("school_id", schoolId)
+    .order("created_at", { ascending: false, referencedTable: "profiles" });
   if (error) throw error;
-  return data;
+  return data.map((row) => row.profiles).filter(Boolean);
 };
 
 export const updateProfile = async (id, changes) => {
@@ -410,11 +521,12 @@ export const postMessage = async ({ courseId, userId, body }) => {
 
 // Realtime inserts arrive without the joined profile, so the caller refetches
 // the single row to get the author's name alongside the message.
-export const fetchMessageById = async (id) => {
+export const fetchMessageById = async ({ schoolId, id }) => {
   const { data, error } = await supabase
     .from("messages")
-    .select(`id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, body, created_at, edited_at, user_id, profiles ( ${PROFILE_FIELDS} ), courses!inner ( school_id )`)
     .eq("id", id)
+    .eq("courses.school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -439,21 +551,23 @@ export const subscribeToMessages = (courseId, onInsert) =>
 /* exams                                                                      */
 /* -------------------------------------------------------------------------- */
 
-export const fetchExams = async (courseId) => {
+export const fetchExams = async (courseId, schoolId) => {
   const { data, error } = await supabase
     .from("exams")
-    .select("id, title, kind, instructions, duration_mins, opens_at, closes_at, published, show_results, created_at, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations")
+    .select("id, title, kind, instructions, duration_mins, opens_at, closes_at, published, show_results, created_at, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations, courses!inner ( school_id )")
     .eq("course_id", courseId)
+    .eq("courses.school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data;
 };
 
-export const fetchExam = async (id) => {
+export const fetchExam = async ({ id, schoolId }) => {
   const { data, error } = await supabase
     .from("exams")
-    .select("id, course_id, title, kind, instructions, duration_mins, opens_at, closes_at, published, show_results, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations, grace_seconds, allow_calculator, courses ( id, code, title, level_year, owner_id )")
+    .select("id, course_id, title, kind, instructions, duration_mins, opens_at, closes_at, published, show_results, require_fullscreen, block_copy_paste, shuffle_questions, shuffle_options, max_violations, grace_seconds, allow_calculator, courses!inner ( id, code, title, level_year, owner_id, school_id )")
     .eq("id", id)
+    .eq("courses.school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -465,7 +579,19 @@ export const createExam = async (exam) => {
   return data;
 };
 
-export const updateExam = async (id, changes) => {
+// exams has no school_id of its own — verify via its course before mutating,
+// since RLS's can_manage_course() only checks that the caller manages SOME
+// course in SOME school, not that it's the one currently browsed.
+export const updateExam = async (id, changes, schoolId) => {
+  const { data: owned, error: scopeError } = await supabase
+    .from("exams")
+    .select("id, courses!inner ( school_id )")
+    .eq("id", id)
+    .eq("courses.school_id", schoolId)
+    .maybeSingle();
+  if (scopeError) throw scopeError;
+  if (!owned) throw new Error("Exam not found in this school.");
+
   const { data, error } = await supabase
     .from("exams")
     .update(changes)
@@ -476,33 +602,40 @@ export const updateExam = async (id, changes) => {
   return data;
 };
 
-export const deleteExam = async (id) => {
-  const { error } = await supabase.from("exams").delete().eq("id", id);
+export const deleteExam = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("exams")
+    .delete()
+    .eq("id", id)
+    .eq("courses.school_id", schoolId)
+    .select("id, courses!inner(school_id)");
   if (error) throw error;
 };
 
 // Deliberately omits exam_options.is_correct — students must never receive the
 // answer key. Marking happens server-side in submit_exam_attempt().
-export const fetchQuestionsForSitting = async (examId) => {
+export const fetchQuestionsForSitting = async ({ examId, schoolId }) => {
   const { data, error } = await supabase
     .from("exam_questions")
-    .select("id, kind, prompt, image_path, points, position, exam_options ( id, body, position )")
+    .select("id, kind, prompt, image_path, points, position, exam_options ( id, body, position ), exams!inner ( courses!inner ( school_id ) )")
     .eq("exam_id", examId)
+    .eq("exams.courses.school_id", schoolId)
     .order("position");
   if (error) throw error;
-  return data;
+  return data.map(({ exams, ...rest }) => rest);
 };
 
 // The authoring view, which does include the answer key. RLS restricts this to
 // staff who manage the course.
-export const fetchQuestionsForEditing = async (examId) => {
+export const fetchQuestionsForEditing = async ({ examId, schoolId }) => {
   const { data, error } = await supabase
     .from("exam_questions")
-    .select("id, kind, prompt, image_path, points, position, answer_key, exam_options ( id, body, position, is_correct )")
+    .select("id, kind, prompt, image_path, points, position, answer_key, exam_options ( id, body, position, is_correct ), exams!inner ( courses!inner ( school_id ) )")
     .eq("exam_id", examId)
+    .eq("exams.courses.school_id", schoolId)
     .order("position");
   if (error) throw error;
-  return data;
+  return data.map(({ exams, ...rest }) => rest);
 };
 
 export const createQuestion = async (question) => {
@@ -521,7 +654,16 @@ export const createOptions = async (options) => {
   if (error) throw error;
 };
 
-export const deleteQuestion = async (id) => {
+export const deleteQuestion = async (id, schoolId) => {
+  const { data: owned, error: checkError } = await supabase
+    .from("exam_questions")
+    .select("id, exams!inner ( courses!inner ( school_id ) )")
+    .eq("id", id)
+    .eq("exams.courses.school_id", schoolId)
+    .maybeSingle();
+  if (checkError) throw checkError;
+  if (!owned) throw new Error("Question not found in this school.");
+
   const { error } = await supabase.from("exam_questions").delete().eq("id", id);
   if (error) throw error;
 };
@@ -561,11 +703,12 @@ export const reportViolation = async ({ attemptId, kind, detail }) => {
   return Array.isArray(data) ? data[0] : data;
 };
 
-export const fetchExamEvents = async (attemptId) => {
+export const fetchExamEvents = async (attemptId, schoolId) => {
   const { data, error } = await supabase
     .from("exam_events")
-    .select("id, kind, detail, created_at")
+    .select("id, kind, detail, created_at, exam_attempts!inner ( exam_id, exams!inner ( course_id, courses!inner ( school_id ) ) )")
     .eq("attempt_id", attemptId)
+    .eq("exam_attempts.exams.courses.school_id", schoolId)
     .order("created_at");
   if (error) throw error;
   return data;
@@ -584,11 +727,12 @@ export const saveAnswer = async ({ attemptId, questionId, optionId, text }) => {
   if (error) throw error;
 };
 
-export const fetchAnswers = async (attemptId) => {
+export const fetchAnswers = async ({ attemptId, schoolId }) => {
   const { data, error } = await supabase
     .from("exam_answers")
-    .select("question_id, selected_option_id, answer_text, awarded_points")
-    .eq("attempt_id", attemptId);
+    .select("question_id, selected_option_id, answer_text, awarded_points, exam_attempts!inner ( exam_id, exams!inner ( course_id, courses!inner ( school_id ) ) )")
+    .eq("attempt_id", attemptId)
+    .eq("exam_attempts.exams.courses.school_id", schoolId);
   if (error) throw error;
   return data;
 };
@@ -602,21 +746,27 @@ export const submitAttempt = async (attemptId) => {
   return data;
 };
 
-export const fetchAttemptsForExam = async (examId) => {
+export const fetchAttemptsForExam = async ({ examId, schoolId }) => {
   const { data, error } = await supabase
     .from("exam_attempts")
-    .select(`id, started_at, submitted_at, auto_score, total_score, max_score, graded_at, violations, disqualified, disqualified_reason, auto_submitted, submitted_late, profiles ( ${PROFILE_FIELDS} )`)
+    .select(`id, started_at, submitted_at, auto_score, total_score, max_score, graded_at, violations, disqualified, disqualified_reason, auto_submitted, submitted_late, profiles ( ${PROFILE_FIELDS} ), exams!inner ( course_id, courses!inner ( school_id ) )`)
     .eq("exam_id", examId)
+    .eq("exams.courses.school_id", schoolId)
     .order("submitted_at", { nullsFirst: false });
   if (error) throw error;
   return data;
 };
 
-export const markAnswer = async ({ id, points }) => {
-  const { error } = await supabase
-    .from("exam_answers")
-    .update({ awarded_points: points })
-    .eq("id", id);
+// exam_answers has no school_id (two joins away), and PostgREST can't filter
+// an UPDATE's row set through an embedded resource — so the school + grader
+// + question-kind checks all move into a security-definer RPC, the same
+// pattern this file already uses for submit_exam_attempt/recalculate_attempt.
+export const markAnswer = async ({ id, points, schoolId }) => {
+  const { error } = await supabase.rpc("mark_exam_answer", {
+    target_answer: id,
+    target_school: schoolId,
+    points,
+  });
   if (error) throw error;
 };
 
@@ -628,11 +778,12 @@ export const recalculateAttempt = async (attemptId) => {
   return data;
 };
 
-export const fetchAttemptDetail = async (attemptId) => {
+export const fetchAttemptDetail = async ({ attemptId, schoolId }) => {
   const { data, error } = await supabase
     .from("exam_answers")
-    .select("id, question_id, selected_option_id, answer_text, awarded_points, exam_questions ( id, kind, prompt, points, answer_key, position )")
-    .eq("attempt_id", attemptId);
+    .select("id, question_id, selected_option_id, answer_text, awarded_points, exam_questions ( id, kind, prompt, points, answer_key, position ), exam_attempts!inner ( exams!inner ( courses!inner ( school_id ) ) )")
+    .eq("attempt_id", attemptId)
+    .eq("exam_attempts.exams.courses.school_id", schoolId);
   if (error) throw error;
   return data;
 };
@@ -672,11 +823,12 @@ export const fetchMyEnrollment = async ({ userId, courseId }) => {
   return data;
 };
 
-export const fetchParticipants = async (courseId) => {
+export const fetchParticipants = async ({ courseId, schoolId }) => {
   const { data, error } = await supabase
     .from("enrollments")
-    .select(`status, requested_at, decided_at, message, profiles!enrollments_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`status, requested_at, decided_at, message, profiles!enrollments_user_id_fkey ( ${PROFILE_FIELDS} ), courses!inner ( school_id )`)
     .eq("course_id", courseId)
+    .eq("courses.school_id", schoolId)
     .order("requested_at");
   if (error) throw error;
   return data.filter((row) => row.profiles);
@@ -704,10 +856,16 @@ export const generateDueReminders = async () => {
   if (error) throw error;
 };
 
-export const fetchNotifications = async ({ courseId } = {}) => {
+// RLS on notifications only checks auth.uid() = user_id — it has no tenant
+// awareness at all (see the 007_tenancy.sql comment above that policy, which
+// says the opposite is intended), so the school_id filter here is the only
+// thing stopping a person active in two schools from seeing both schools'
+// notifications merged into one bell.
+export const fetchNotifications = async ({ schoolId, courseId } = {}) => {
   let query = supabase
     .from("notifications")
     .select("id, course_id, kind, title, body, link, read_at, created_at")
+    .eq("school_id", schoolId)
     .order("created_at", { ascending: false })
     .limit(50);
   if (courseId) query = query.eq("course_id", courseId);
@@ -716,19 +874,21 @@ export const fetchNotifications = async ({ courseId } = {}) => {
   return data;
 };
 
-export const markNotificationRead = async (id) => {
+export const markNotificationRead = async (id, schoolId) => {
   const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const markAllNotificationsRead = async (userId) => {
+export const markAllNotificationsRead = async (userId, schoolId) => {
   const { error } = await supabase
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("user_id", userId)
+    .eq("school_id", schoolId)
     .is("read_at", null);
   if (error) throw error;
 };
@@ -753,7 +913,11 @@ export const subscribeToApplicationEvents = (applicationId, onInsert) =>
     )
     .subscribe();
 
-export const subscribeToNotifications = (userId, onInsert) =>
+// Realtime's postgres_changes filter only reliably supports one column, so
+// the school check happens client-side — same reason fetchNotifications
+// above needs its own .eq("school_id", ...): RLS/the channel filter only
+// scope to this user, not to the tenant currently being viewed.
+export const subscribeToNotifications = (userId, schoolId, onInsert) =>
   supabase
     .channel(`notifications:${userId}`)
     .on(
@@ -764,7 +928,9 @@ export const subscribeToNotifications = (userId, onInsert) =>
         table: "notifications",
         filter: `user_id=eq.${userId}`,
       },
-      (payload) => onInsert(payload.new)
+      (payload) => {
+        if (payload.new.school_id === schoolId) onInsert(payload.new);
+      }
     )
     .subscribe();
 
@@ -943,7 +1109,16 @@ export const uploadCourseFile = async ({ courseId, file, prefix = "" }) => {
 /* exam editing                                                               */
 /* -------------------------------------------------------------------------- */
 
-export const updateQuestion = async (id, changes) => {
+export const updateQuestion = async (id, changes, schoolId) => {
+  const { data: owned, error: checkError } = await supabase
+    .from("exam_questions")
+    .select("id, exams!inner ( courses!inner ( school_id ) )")
+    .eq("id", id)
+    .eq("exams.courses.school_id", schoolId)
+    .maybeSingle();
+  if (checkError) throw checkError;
+  if (!owned) throw new Error("Question not found in this school.");
+
   const { error } = await supabase
     .from("exam_questions")
     .update(changes)
@@ -951,7 +1126,16 @@ export const updateQuestion = async (id, changes) => {
   if (error) throw error;
 };
 
-export const deleteOptionsForQuestion = async (questionId) => {
+export const deleteOptionsForQuestion = async (questionId, schoolId) => {
+  const { data: owned, error: checkError } = await supabase
+    .from("exam_questions")
+    .select("id, exams!inner ( courses!inner ( school_id ) )")
+    .eq("id", questionId)
+    .eq("exams.courses.school_id", schoolId)
+    .maybeSingle();
+  if (checkError) throw checkError;
+  if (!owned) throw new Error("Question not found in this school.");
+
   const { error } = await supabase
     .from("exam_options")
     .delete()
@@ -961,11 +1145,12 @@ export const deleteOptionsForQuestion = async (questionId) => {
 
 // How many students have already sat this paper. Restructuring questions
 // after that point would discard their answers, so the editor asks first.
-export const countAttempts = async (examId) => {
+export const countAttempts = async ({ schoolId, examId }) => {
   const { count, error } = await supabase
     .from("exam_attempts")
-    .select("id", { count: "exact", head: true })
-    .eq("exam_id", examId);
+    .select("id, exams!inner ( course_id, courses!inner ( school_id ) )", { count: "exact", head: true })
+    .eq("exam_id", examId)
+    .eq("exams.courses.school_id", schoolId);
   if (error) throw error;
   return count || 0;
 };
@@ -1010,24 +1195,30 @@ export const fetchSchoolMembers = async (schoolId) => {
   return data.filter((row) => row.profiles);
 };
 
-export const updateMemberRole = async ({ memberId, role }) => {
+export const updateMemberRole = async ({ schoolId, memberId, role }) => {
   const { error } = await supabase
     .from("school_members")
     .update({ role })
-    .eq("id", memberId);
+    .eq("id", memberId)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const setMemberActive = async ({ memberId, isActive }) => {
+export const setMemberActive = async ({ schoolId, memberId, isActive }) => {
   const { error } = await supabase
     .from("school_members")
     .update({ is_active: isActive })
-    .eq("id", memberId);
+    .eq("id", memberId)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const removeMember = async (memberId) => {
-  const { error } = await supabase.from("school_members").delete().eq("id", memberId);
+export const removeMember = async ({ memberId, schoolId }) => {
+  const { error } = await supabase
+    .from("school_members")
+    .delete()
+    .eq("id", memberId)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -1212,17 +1403,19 @@ export const countCoursesOnLevel = async ({ schoolId, year }) => {
 
 // Computed in Postgres, which checks who is asking before returning anything —
 // a parent cannot fetch another child's rows by changing an id in the browser.
-export const fetchStudentReport = async (studentId) => {
+export const fetchStudentReport = async (studentId, schoolId) => {
   const { data, error } = await supabase.rpc("student_report", {
     target_student: studentId,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data || [];
 };
 
-export const fetchStudentMarks = async (studentId) => {
+export const fetchStudentMarks = async (studentId, schoolId) => {
   const { data, error } = await supabase.rpc("student_marks", {
     target_student: studentId,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data || [];
@@ -1238,20 +1431,22 @@ export const fetchReportableStudents = async (schoolId) => {
   return data || [];
 };
 
-export const fetchChildren = async (guardianId) => {
+export const fetchChildren = async (guardianId, schoolId) => {
   const { data, error } = await supabase
     .from("guardian_students")
     .select(`id, relationship, is_primary, student:profiles!guardian_students_student_id_fkey ( ${PROFILE_FIELDS} )`)
-    .eq("guardian_id", guardianId);
+    .eq("guardian_id", guardianId)
+    .eq("school_id", schoolId);
   if (error) throw error;
   return data.filter((row) => row.student);
 };
 
-export const fetchGuardiansOf = async (studentId) => {
+export const fetchGuardiansOf = async (studentId, schoolId) => {
   const { data, error } = await supabase
     .from("guardian_students")
     .select(`id, relationship, guardian:profiles!guardian_students_guardian_id_fkey ( ${PROFILE_FIELDS} )`)
-    .eq("student_id", studentId);
+    .eq("student_id", studentId)
+    .eq("school_id", schoolId);
   if (error) throw error;
   return data.filter((row) => row.guardian);
 };
@@ -1266,8 +1461,12 @@ export const linkGuardian = async ({ schoolId, guardianId, studentId, relationsh
   if (error) throw error;
 };
 
-export const unlinkGuardian = async (linkId) => {
-  const { error } = await supabase.from("guardian_students").delete().eq("id", linkId);
+export const unlinkGuardian = async (linkId, schoolId) => {
+  const { error } = await supabase
+    .from("guardian_students")
+    .delete()
+    .eq("id", linkId)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -1340,8 +1539,12 @@ export const createSession = async ({ schoolId, name, startsOn, endsOn }) => {
   return data;
 };
 
-export const deleteSession = async (id) => {
-  const { error } = await supabase.from("sessions").delete().eq("id", id);
+export const deleteSession = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("sessions")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -1372,14 +1575,21 @@ export const createTerm = async ({ schoolId, sessionId, name, position, startsOn
   return data;
 };
 
-export const deleteTerm = async (id) => {
-  const { error } = await supabase.from("terms").delete().eq("id", id);
+export const deleteTerm = async (schoolId, id) => {
+  const { error } = await supabase
+    .from("terms")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
 // One statement, so the school is never left with two current terms or none.
-export const setCurrentTerm = async (termId) => {
-  const { data, error } = await supabase.rpc("set_current_term", { target_term: termId });
+export const setCurrentTerm = async (termId, schoolId) => {
+  const { data, error } = await supabase.rpc("set_current_term", {
+    target_term: termId,
+    target_school: schoolId,
+  });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
 };
@@ -1412,33 +1622,62 @@ export const createClass = async ({ schoolId, sessionId, levelYear, name, formTe
   return data;
 };
 
-export const updateClass = async (id, changes) => {
-  const { error } = await supabase.from("classes").update(changes).eq("id", id);
+export const updateClass = async (id, schoolId, changes) => {
+  const { error } = await supabase
+    .from("classes")
+    .update(changes)
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const deleteClass = async (id) => {
-  const { error } = await supabase.from("classes").delete().eq("id", id);
+export const deleteClass = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("classes")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const fetchClassRoster = async (classId) => {
+export const fetchClassRoster = async (classId, schoolId) => {
   const { data, error } = await supabase
     .from("class_students")
-    .select(`id, added_at, student:profiles!class_students_student_id_fkey ( ${PROFILE_FIELDS} )`)
-    .eq("class_id", classId);
+    .select(`id, added_at, student:profiles!class_students_student_id_fkey ( ${PROFILE_FIELDS} ), classes!inner ( school_id )`)
+    .eq("class_id", classId)
+    .eq("classes.school_id", schoolId);
   if (error) throw error;
   return data.filter((row) => row.student);
 };
 
-export const addStudentToClass = async ({ classId, studentId }) => {
+// class_students has no school_id of its own — verify the target class
+// belongs to the caller's current school before inserting.
+export const addStudentToClass = async ({ classId, studentId, schoolId }) => {
+  const { data: classRow, error: classError } = await supabase
+    .from("classes")
+    .select("id")
+    .eq("id", classId)
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (classError) throw classError;
+  if (!classRow) throw new Error("That class does not belong to this school.");
+
   const { error } = await supabase
     .from("class_students")
     .insert({ class_id: classId, student_id: studentId });
   if (error) throw error;
 };
 
-export const removeStudentFromClass = async (rowId) => {
+export const removeStudentFromClass = async (rowId, schoolId) => {
+  const { data: owned, error: checkError } = await supabase
+    .from("class_students")
+    .select("id, classes!inner ( school_id )")
+    .eq("id", rowId)
+    .eq("classes.school_id", schoolId)
+    .maybeSingle();
+  if (checkError) throw checkError;
+  if (!owned) throw new Error("Student not found in this class.");
+
   const { error } = await supabase.from("class_students").delete().eq("id", rowId);
   if (error) throw error;
 };
@@ -1463,18 +1702,23 @@ export const createSubject = async ({ schoolId, code, name }) => {
   return data;
 };
 
-export const deleteSubject = async (id) => {
-  const { error } = await supabase.from("subjects").delete().eq("id", id);
+export const deleteSubject = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("subjects")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const fetchClassSubjects = async (classId) => {
+export const fetchClassSubjects = async (classId, schoolId) => {
   const { data, error } = await supabase
     .from("class_subjects")
     .select(`id, subject_id, teacher_id,
              subjects ( id, code, name ),
              teacher:profiles!class_subjects_teacher_id_fkey ( ${PROFILE_FIELDS} )`)
-    .eq("class_id", classId);
+    .eq("class_id", classId)
+    .eq("school_id", schoolId);
   if (error) throw error;
   return data;
 };
@@ -1489,13 +1733,21 @@ export const assignSubjectToClass = async ({ schoolId, classId, subjectId, teach
   if (error) throw error;
 };
 
-export const updateClassSubject = async (id, changes) => {
-  const { error } = await supabase.from("class_subjects").update(changes).eq("id", id);
+export const updateClassSubject = async (id, schoolId, changes) => {
+  const { error } = await supabase
+    .from("class_subjects")
+    .update(changes)
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const removeClassSubject = async (id) => {
-  const { error } = await supabase.from("class_subjects").delete().eq("id", id);
+export const removeClassSubject = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("class_subjects")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -1509,7 +1761,16 @@ export const fetchMyTeaching = async (schoolId) => {
 /* editing what has been published                                            */
 /* -------------------------------------------------------------------------- */
 
-export const updateMaterial = async (id, changes) => {
+export const updateMaterial = async (id, changes, schoolId) => {
+  const { data: owner, error: ownerError } = await supabase
+    .from("materials")
+    .select("id, courses!inner(school_id)")
+    .eq("id", id)
+    .eq("courses.school_id", schoolId)
+    .maybeSingle();
+  if (ownerError) throw ownerError;
+  if (!owner) throw new Error("Material not found in this school.");
+
   const { data, error } = await supabase
     .from("materials")
     .update(changes)
@@ -1520,11 +1781,12 @@ export const updateMaterial = async (id, changes) => {
   return data;
 };
 
-export const updateAssignment = async (id, changes) => {
+export const updateAssignment = async (id, changes, courseId) => {
   const { data, error } = await supabase
     .from("assignments")
     .update(changes)
     .eq("id", id)
+    .eq("course_id", courseId)
     .select("id, title, description, points, due_at, created_at")
     .single();
   if (error) throw error;
@@ -1544,9 +1806,15 @@ export const updateMessage = async ({ id, body }) => {
   return data;
 };
 
-export const deleteMessage = async (id) => {
-  const { error } = await supabase.from("messages").delete().eq("id", id);
+export const deleteMessage = async ({ id, schoolId }) => {
+  const { data, error } = await supabase
+    .from("messages")
+    .delete()
+    .eq("id", id)
+    .eq("courses.school_id", schoolId)
+    .select("id, courses!inner(school_id)");
   if (error) throw error;
+  if (!data || data.length === 0) throw new Error("Message not found in this school.");
 };
 
 /* -------------------------------------------------------------------------- */
@@ -1594,7 +1862,16 @@ export const updateComment = async ({ id, body }) => {
   return data;
 };
 
-export const deleteComment = async (id) => {
+export const deleteComment = async ({ id, schoolId }) => {
+  const { data: owned, error: checkError } = await supabase
+    .from("message_comments")
+    .select("id, messages!inner ( course_id, courses!inner ( school_id ) )")
+    .eq("id", id)
+    .eq("messages.courses.school_id", schoolId)
+    .maybeSingle();
+  if (checkError) throw checkError;
+  if (!owned) throw new Error("Comment not found in this school.");
+
   const { error } = await supabase.from("message_comments").delete().eq("id", id);
   if (error) throw error;
 };
@@ -1712,7 +1989,7 @@ export const fetchApplications = async ({ schoolId, status = null }) => {
   return data;
 };
 
-export const fetchApplication = async (id) => {
+export const fetchApplication = async (id, schoolId) => {
   const { data, error } = await supabase
     .from("applications")
     .select(
@@ -1724,16 +2001,18 @@ export const fetchApplication = async (id) => {
        schools ( id, name, slug, logo_url, address, phone, email )`
     )
     .eq("id", id)
+    .eq("school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
 };
 
-export const fetchApplicationEvents = async (applicationId) => {
+export const fetchApplicationEvents = async (applicationId, schoolId) => {
   const { data, error } = await supabase
     .from("application_events")
-    .select("id, status_from, status_to, actor_label, note, created_at")
+    .select("id, status_from, status_to, actor_label, note, created_at, applications!inner ( school_id )")
     .eq("application_id", applicationId)
+    .eq("applications.school_id", schoolId)
     .order("created_at");
   if (error) throw error;
   return data;
@@ -1749,10 +2028,11 @@ export const fetchAdmissionsSummary = async (schoolId) => {
 
 // The legal transitions are enforced in the database; a refusal here means
 // the move genuinely was not allowed.
-export const decideApplication = async ({ id, status, note, offerExpires, conditions }) => {
+export const decideApplication = async ({ id, schoolId, status, note, offerExpires, conditions }) => {
   const { data, error } = await supabase.rpc("decide_application", {
     target_application: id,
     new_status: status,
+    current_school: schoolId,
     note: note || null,
     offer_expires: offerExpires || null,
     conditions_in: conditions || null,
@@ -1768,21 +2048,23 @@ export const decideApplication = async ({ id, status, note, offerExpires, condit
 // Supersedes the old enrol_applicant() — see 067_student_registrations.sql.
 // Returns the new student_registrations row (including the assigned
 // registration number), not the application row.
-export const promoteApplicantToStudent = async ({ id, studentId, classId }) => {
+export const promoteApplicantToStudent = async ({ id, studentId, classId, schoolId }) => {
   const { data, error } = await supabase.rpc("promote_applicant_to_student", {
     target_application: id,
     target_student: studentId,
+    target_school: schoolId,
     target_class: classId || null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
 };
 
-export const fetchStudentRegistrationForApplication = async (applicationId) => {
+export const fetchStudentRegistrationForApplication = async (applicationId, schoolId) => {
   const { data, error } = await supabase
     .from("student_registrations")
     .select("id, registration_number, status, registered_at, class:classes(name)")
     .eq("application_id", applicationId)
+    .eq("school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -1806,11 +2088,12 @@ export const fetchStudentRegistrations = async (schoolId) => {
   return data || [];
 };
 
-export const updateStudentRegistration = async ({ id, status, notes }) => {
+export const updateStudentRegistration = async ({ id, schoolId, status, notes }) => {
   const { data, error } = await supabase
     .from("student_registrations")
     .update({ status, notes: notes ?? null, updated_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("school_id", schoolId)
     .select("*")
     .single();
   if (error) throw error;
@@ -1921,34 +2204,46 @@ export const createAdmissionProgramme = async ({ schoolId, sessionId, ...fields 
   return data;
 };
 
-export const updateAdmissionProgramme = async ({ id, ...fields }) => {
+export const updateAdmissionProgramme = async ({ id, schoolId, ...fields }) => {
   const { data, error } = await supabase
     .from("admission_programmes")
     .update(fields)
     .eq("id", id)
+    .eq("school_id", schoolId)
     .select("*")
     .single();
   if (error) throw error;
   return data;
 };
 
-export const deleteAdmissionProgramme = async (id) => {
-  const { error } = await supabase.from("admission_programmes").delete().eq("id", id);
+export const deleteAdmissionProgramme = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("admission_programmes")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const upsertDocumentRequirement = async (row) => {
+// schoolId is forced onto the payload rather than trusted from `row` — pins
+// every write to the caller's own validated current-tenant id regardless of
+// what row.school_id happened to carry.
+export const upsertDocumentRequirement = async (row, schoolId) => {
   const { data, error } = await supabase
     .from("document_requirements")
-    .upsert(row)
+    .upsert({ ...row, school_id: schoolId })
     .select("*")
     .single();
   if (error) throw error;
   return data;
 };
 
-export const deleteDocumentRequirement = async (id) => {
-  const { error } = await supabase.from("document_requirements").delete().eq("id", id);
+export const deleteDocumentRequirement = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("document_requirements")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -1981,11 +2276,12 @@ export const createApplicantAccount = async ({
 // is what makes this safe for someone other than the applicant themselves.
 // Used to enrol an accounted applicant straight into their existing login
 // rather than colliding with it by trying to create a second one.
-export const fetchApplicantAccount = async (id) => {
+export const fetchApplicantAccount = async (id, schoolId) => {
   const { data, error } = await supabase
     .from("applicant_accounts")
     .select("id, user_id, email, first_name, surname")
     .eq("id", id)
+    .eq("school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -2001,8 +2297,8 @@ export const fetchMyApplicantAccount = async (schoolId) => {
   return data;
 };
 
-export const fetchMyApplications = async () => {
-  const { data, error } = await supabase.rpc("my_applications");
+export const fetchMyApplications = async (schoolId) => {
+  const { data, error } = await supabase.rpc("my_applications", { target_school: schoolId });
   if (error) throw error;
   return data || [];
 };
@@ -2054,9 +2350,10 @@ export const markApplicationPaymentInitiated = async (applicationId) => {
 
 // Manual path — a finance officer confirms a proof upload or a teller slip.
 // The gateway path runs from the Paystack webhook and is not exposed here.
-export const verifyApplicationPayment = async ({ paymentId, note }) => {
+export const verifyApplicationPayment = async ({ paymentId, note, schoolId }) => {
   const { data, error } = await supabase.rpc("verify_application_payment", {
     target_payment: paymentId,
+    target_school: schoolId,
     note_in: note || null,
   });
   if (error) throw error;
@@ -2064,9 +2361,10 @@ export const verifyApplicationPayment = async ({ paymentId, note }) => {
 };
 
 // Same manual path, for the acceptance fee raised once an offer is accepted.
-export const verifyAcceptancePayment = async ({ paymentId, note }) => {
+export const verifyAcceptancePayment = async ({ paymentId, note, schoolId }) => {
   const { data, error } = await supabase.rpc("verify_acceptance_payment", {
     target_payment: paymentId,
+    target_school: schoolId,
     note_in: note || null,
   });
   if (error) throw error;
@@ -2077,10 +2375,12 @@ export const setApplicantDocumentStatus = async ({
   docId,
   status,
   note,
+  schoolId,
 }) => {
   const { data, error } = await supabase.rpc("set_document_status", {
     target_doc: docId,
     new_status: status,
+    target_school: schoolId,
     note_in: note || null,
   });
   if (error) throw error;
@@ -2091,6 +2391,7 @@ export const requestApplicationCorrection = async ({
   applicationId,
   sections,
   reason,
+  schoolId,
 }) => {
   const { data, error } = await supabase.rpc(
     "request_application_correction",
@@ -2098,6 +2399,7 @@ export const requestApplicationCorrection = async ({
       target_application: applicationId,
       sections_in: sections,
       reason_in: reason,
+      caller_school: schoolId,
     }
   );
   if (error) throw error;
@@ -2127,30 +2429,38 @@ export const fetchApplicationWorkflowSteps = async (applicationId) => {
 // purpose defaults to the application fee; pass 'acceptance_fee' for the
 // invoice raised once an offer is accepted — same table, same RLS, only the
 // purpose column tells them apart.
-export const fetchMyApplicationInvoice = async (applicationId, purpose = "application_fee") => {
+export const fetchMyApplicationInvoice = async (applicationId, purpose = "application_fee", schoolId) => {
   const { data, error } = await supabase
     .from("invoices")
     .select("id, reference, status, purpose, application_id, notes, due_on, issued_at")
     .eq("application_id", applicationId)
     .eq("purpose", purpose)
+    .eq("school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
 };
 
 // The applicant's own offer on this application, if one has been issued.
-// Read directly off admission_offers — RLS (is_applicant_for) is what makes
-// this safe, the same way fetchMyApplicationInvoice reads invoices directly.
-export const fetchMyOffer = async (applicationId) => {
+// admission_offers has no school_id of its own — scoped through the
+// application, with !inner so the filter actually restricts which rows
+// come back (RLS's is_applicant_for/can_do_admissions checks the row's
+// real school, not the tenant currently being browsed).
+export const fetchMyOffer = async (applicationId, schoolId) => {
   const { data, error } = await supabase
     .from("admission_offers")
-    .select("id, status, issued_at, expires_at, accepted_at, declined_at, decline_reason, conditions")
+    .select(
+      "id, status, issued_at, expires_at, accepted_at, declined_at, decline_reason, conditions, applications!inner(school_id)"
+    )
     .eq("application_id", applicationId)
+    .eq("applications.school_id", schoolId)
     .order("issued_at", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  if (!data) return null;
+  const { applications, ...offer } = data;
+  return offer;
 };
 
 export const acceptOffer = async (offerId) => {
@@ -2173,10 +2483,11 @@ export const declineOffer = async ({ offerId, reason }) => {
 // Staff recording a response on behalf of an applicant with no account of
 // their own (an anonymous /Apply submission) — refused by the database if
 // the applicant actually has one; they answer for themselves in that case.
-export const recordOfferResponse = async ({ offerId, response, note }) => {
+export const recordOfferResponse = async ({ offerId, response, note, schoolId }) => {
   const { data, error } = await supabase.rpc("record_offer_response", {
     target_offer: offerId,
     response,
+    current_school: schoolId,
     note_in: note || null,
   });
   if (error) throw error;
@@ -2205,9 +2516,10 @@ export const fetchAdmissionsQueues = async (schoolId) => {
 // documents (joined to their requirement and file), reviews, interviews,
 // timeline events, and the effective config. Reads through the server-side
 // function so an admissions officer sees every child object in one shot.
-export const fetchApplicationWorkspace = async (applicationId) => {
+export const fetchApplicationWorkspace = async (applicationId, schoolId) => {
   const { data, error } = await supabase.rpc("application_workspace", {
     target_application: applicationId,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data;
@@ -2224,9 +2536,10 @@ export const prepareClearanceItems = async (applicationId) => {
   return data || [];
 };
 
-export const setClearanceStatus = async ({ checklistId, status, note }) => {
+export const setClearanceStatus = async ({ checklistId, schoolId, status, note }) => {
   const { data, error } = await supabase.rpc("set_clearance_status", {
     target_checklist: checklistId,
+    expected_school: schoolId,
     new_status: status,
     note_in: note || null,
   });
@@ -2234,9 +2547,10 @@ export const setClearanceStatus = async ({ checklistId, status, note }) => {
   return data;
 };
 
-export const recordOriginalVerification = async ({ applicationId, documentKind, remarks }) => {
+export const recordOriginalVerification = async ({ applicationId, schoolId, documentKind, remarks }) => {
   const { data, error } = await supabase.rpc("record_original_verification", {
     target_application: applicationId,
+    target_school: schoolId,
     document_kind_in: documentKind,
     remarks_in: remarks || null,
   });
@@ -2247,11 +2561,12 @@ export const recordOriginalVerification = async ({ applicationId, documentKind, 
 // The applicant's own read of their clearance progress — RLS
 // (is_applicant_for) is what makes this safe, same precedent as
 // fetchMyOffer reading admission_offers directly.
-export const fetchMyClearance = async (applicationId) => {
+export const fetchMyClearance = async (applicationId, schoolId) => {
   const { data, error } = await supabase
     .from("clearance_checklists")
-    .select("id, status, decided_at, decision_note, department:clearance_departments(name, position)")
-    .eq("application_id", applicationId);
+    .select("id, status, decided_at, decision_note, department:clearance_departments(name, position), applications!inner(school_id)")
+    .eq("application_id", applicationId)
+    .eq("applications.school_id", schoolId);
   if (error) throw error;
   return (data || []).sort((a, b) => (a.department?.position || 0) - (b.department?.position || 0));
 };
@@ -2270,21 +2585,22 @@ export const fetchScreeningRequirements = async ({ schoolId, sessionId }) => {
   return data || [];
 };
 
-export const upsertScreeningRequirement = async (row) => {
+export const upsertScreeningRequirement = async (row, schoolId) => {
   const { data, error } = await supabase
     .from("screening_requirements")
-    .upsert(row)
+    .upsert({ ...row, school_id: schoolId })
     .select("*")
     .single();
   if (error) throw error;
   return data;
 };
 
-export const deleteScreeningRequirement = async (id) => {
+export const deleteScreeningRequirement = async (id, schoolId) => {
   const { error } = await supabase
     .from("screening_requirements")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -2310,33 +2626,36 @@ export const createClearanceDepartment = async ({ schoolId, name, position }) =>
   return data;
 };
 
-export const renameClearanceDepartment = async ({ id, name }) => {
+export const renameClearanceDepartment = async ({ id, schoolId, name }) => {
   const { data, error } = await supabase
     .from("clearance_departments")
     .update({ name, updated_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("school_id", schoolId)
     .select("*")
     .single();
   if (error) throw error;
   return data;
 };
 
-export const setClearanceDepartmentActive = async ({ id, isActive }) => {
+export const setClearanceDepartmentActive = async ({ id, isActive, schoolId }) => {
   const { data, error } = await supabase
     .from("clearance_departments")
     .update({ is_active: isActive, updated_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("school_id", schoolId)
     .select("*")
     .single();
   if (error) throw error;
   return data;
 };
 
-export const deleteClearanceDepartment = async (id) => {
+export const deleteClearanceDepartment = async ({ id, schoolId }) => {
   const { error } = await supabase
     .from("clearance_departments")
     .delete()
-    .eq("id", id);
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -2352,18 +2671,19 @@ export const countClearanceChecklistItems = async (departmentId) => {
   return count || 0;
 };
 
-export const prepareScreeningItems = async (applicationId) => {
+export const prepareScreeningItems = async (applicationId, schoolId) => {
   const { data, error } = await supabase.rpc(
     "create_application_screening_items",
-    { target_application: applicationId }
+    { target_application: applicationId, target_school: schoolId }
   );
   if (error) throw error;
   return data || [];
 };
 
-export const setScreeningItemStatus = async ({ itemId, status, note }) => {
+export const setScreeningItemStatus = async ({ itemId, schoolId, status, note }) => {
   const { data, error } = await supabase.rpc("set_screening_item_status", {
     target_item: itemId,
+    target_school: schoolId,
     new_status: status,
     note_in: note || null,
   });
@@ -2373,27 +2693,30 @@ export const setScreeningItemStatus = async ({ itemId, status, note }) => {
 
 /* documents (staff) */
 
-export const verifyDocument = async ({ docId, note }) => {
+export const verifyDocument = async ({ docId, note, schoolId }) => {
   const { data, error } = await supabase.rpc("verify_document", {
     target_doc: docId,
+    target_school: schoolId,
     note_in: note || null,
   });
   if (error) throw error;
   return data;
 };
 
-export const rejectDocument = async ({ docId, reason }) => {
+export const rejectDocument = async ({ docId, reason, schoolId }) => {
   const { data, error } = await supabase.rpc("reject_document", {
     target_doc: docId,
     reason_in: reason,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data;
 };
 
-export const waiveDocument = async ({ docId, reason }) => {
+export const waiveDocument = async ({ docId, reason, schoolId }) => {
   const { data, error } = await supabase.rpc("waive_document", {
     target_doc: docId,
+    target_school: schoolId,
     reason_in: reason,
   });
   if (error) throw error;
@@ -2402,10 +2725,11 @@ export const waiveDocument = async ({ docId, reason }) => {
 
 /* review */
 
-export const assignReview = async ({ applicationId, reviewerId }) => {
+export const assignReview = async ({ applicationId, reviewerId, schoolId }) => {
   const { data, error } = await supabase.rpc("assign_review", {
     target_application: applicationId,
     target_reviewer: reviewerId,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data;
@@ -2433,6 +2757,7 @@ export const recordReview = async ({
 
 export const scheduleInterview = async ({
   applicationId,
+  schoolId,
   when,
   location,
   meetingLink,
@@ -2441,6 +2766,7 @@ export const scheduleInterview = async ({
   const { data, error } = await supabase.rpc("schedule_interview", {
     target_application: applicationId,
     when_at: when,
+    target_school: schoolId,
     location_in: location || null,
     meeting_link_in: meetingLink || null,
     interviewer_in: interviewerId || null,
@@ -2451,6 +2777,7 @@ export const scheduleInterview = async ({
 
 export const recordInterviewOutcome = async ({
   interviewId,
+  schoolId,
   status,
   outcome,
   notes,
@@ -2458,6 +2785,7 @@ export const recordInterviewOutcome = async ({
   const { data, error } = await supabase.rpc("record_interview_outcome", {
     target_interview: interviewId,
     new_status: status,
+    target_school: schoolId,
     outcome_in: outcome || null,
     notes_in: notes || null,
   });
@@ -2469,11 +2797,12 @@ export const recordInterviewOutcome = async ({
 
 const MATERIALS_BUCKET_NAME = "course-materials";
 
-export const fetchApplicationDocuments = async (applicationId) => {
+export const fetchApplicationDocuments = async (applicationId, schoolId) => {
   const { data, error } = await supabase
     .from("application_documents")
-    .select("id, kind, file_path, file_name, file_size, mime_type, uploaded_at")
+    .select("id, kind, file_path, file_name, file_size, mime_type, uploaded_at, applications!inner ( school_id )")
     .eq("application_id", applicationId)
+    .eq("applications.school_id", schoolId)
     .order("uploaded_at");
   if (error) throw error;
   return data;
@@ -2481,6 +2810,8 @@ export const fetchApplicationDocuments = async (applicationId) => {
 
 // Path is admissions/<school_id>/<application_id>/... — the storage policy
 // reads the school out of the second segment to decide who may write here.
+// schoolId is also cross-checked against the application's real school
+// before anything is written, not just used to build the path.
 export const uploadApplicationDocument = async ({
   schoolId,
   applicationId,
@@ -2488,6 +2819,14 @@ export const uploadApplicationDocument = async ({
   kind,
   userId,
 }) => {
+  const { data: app, error: appError } = await supabase
+    .from("applications")
+    .select("id")
+    .eq("id", applicationId)
+    .eq("school_id", schoolId)
+    .single();
+  if (appError || !app) throw new Error("Application not found in this school");
+
   const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
   const path = `admissions/${schoolId}/${applicationId}/${uuidV4()}-${safeName}`;
 
@@ -2508,17 +2847,27 @@ export const uploadApplicationDocument = async ({
   if (error) throw error;
 };
 
-export const deleteApplicationDocument = async ({ id, filePath }) => {
+export const deleteApplicationDocument = async ({ id, filePath, schoolId }) => {
+  const { data: doc, error: lookupError } = await supabase
+    .from("application_documents")
+    .select("id, applications!inner(school_id)")
+    .eq("id", id)
+    .eq("applications.school_id", schoolId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (!doc) throw new Error("Document not found for this school.");
+
   await supabase.storage.from(MATERIALS_BUCKET_NAME).remove([filePath]).catch(() => {});
   const { error } = await supabase.from("application_documents").delete().eq("id", id);
   if (error) throw error;
 };
 
-export const setSessionApplicationsOpen = async ({ sessionId, open }) => {
+export const setSessionApplicationsOpen = async ({ sessionId, schoolId, open }) => {
   const { error } = await supabase
     .from("sessions")
     .update({ applications_open: open })
-    .eq("id", sessionId);
+    .eq("id", sessionId)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -2577,7 +2926,7 @@ export const createNotice = async ({
   return data;
 };
 
-export const updateNotice = async ({ id, ...fields }) => {
+export const updateNotice = async ({ id, schoolId, ...fields }) => {
   const patch = { updated_at: new Date().toISOString(), edited_at: new Date().toISOString() };
   if (fields.title !== undefined) patch.title = fields.title;
   if (fields.body !== undefined) patch.body = fields.body;
@@ -2587,19 +2936,27 @@ export const updateNotice = async ({ id, ...fields }) => {
   if (fields.eventAt !== undefined) patch.event_at = fields.eventAt || null;
   if (fields.eventPlace !== undefined) patch.event_place = fields.eventPlace || null;
 
-  const { error } = await supabase.from("notices").update(patch).eq("id", id);
+  const { error } = await supabase
+    .from("notices")
+    .update(patch)
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
 // Publishing is what sends it. Separate from the insert so a draft written on
 // Sunday is not announced until Monday.
-export const publishNotice = async (id) => {
-  const { error } = await supabase.rpc("publish_notice", { target_notice: id });
+export const publishNotice = async (id, schoolId) => {
+  const { error } = await supabase.rpc("publish_notice", { target_notice: id, target_school: schoolId });
   if (error) throw error;
 };
 
-export const deleteNotice = async (id) => {
-  const { error } = await supabase.from("notices").delete().eq("id", id);
+export const deleteNotice = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("notices")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
@@ -2621,7 +2978,18 @@ export const fetchNoticeReplies = async (noticeIds) => {
   return byNotice;
 };
 
-export const replyToNotice = async ({ noticeId, userId, body }) => {
+// notice_replies has no school_id of its own, so the parent notice's school
+// is checked first.
+export const replyToNotice = async ({ noticeId, schoolId, userId, body }) => {
+  const { data: notice, error: noticeErr } = await supabase
+    .from("notices")
+    .select("id")
+    .eq("id", noticeId)
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (noticeErr) throw noticeErr;
+  if (!notice) throw new Error("Notice not found in this school.");
+
   const { data, error } = await supabase
     .from("notice_replies")
     .insert({ notice_id: noticeId, user_id: userId, body })
@@ -2631,7 +2999,16 @@ export const replyToNotice = async ({ noticeId, userId, body }) => {
   return data;
 };
 
-export const deleteNoticeReply = async (id) => {
+export const deleteNoticeReply = async (id, schoolId) => {
+  const { data: reply, error: fetchError } = await supabase
+    .from("notice_replies")
+    .select("id, notices!inner(school_id)")
+    .eq("id", id)
+    .single();
+  if (fetchError) throw fetchError;
+  if (reply.notices.school_id !== schoolId) {
+    throw new Error("This reply does not belong to the current school.");
+  }
   const { error } = await supabase.from("notice_replies").delete().eq("id", id);
   if (error) throw error;
 };
@@ -2649,21 +3026,23 @@ export const PAYMENT_METHODS = [
 
 // Row level security decides whose invoices come back: a parent gets their
 // children's, a student their own, the bursary the whole school.
-export const fetchMyInvoices = async () => {
+export const fetchMyInvoices = async (schoolId) => {
   const { data, error } = await supabase
     .from("invoice_balances")
     .select("*")
+    .eq("school_id", schoolId)
     .order("due_on", { ascending: true, nullsFirst: false });
   if (error) throw error;
   return data;
 };
 
-export const fetchInvoiceItems = async (invoiceIds) => {
+export const fetchInvoiceItems = async (invoiceIds, schoolId) => {
   if (!invoiceIds || invoiceIds.length === 0) return {};
   const { data, error } = await supabase
     .from("invoice_items")
-    .select("id, invoice_id, name, amount, position")
+    .select("id, invoice_id, name, amount, position, invoices!inner ( school_id )")
     .in("invoice_id", invoiceIds)
+    .eq("invoices.school_id", schoolId)
     .order("position");
   if (error) throw error;
 
@@ -2674,13 +3053,14 @@ export const fetchInvoiceItems = async (invoiceIds) => {
   return byInvoice;
 };
 
-export const fetchPaymentsFor = async (invoiceIds) => {
+export const fetchPaymentsFor = async (invoiceIds, schoolId) => {
   if (!invoiceIds || invoiceIds.length === 0) return {};
   const { data, error } = await supabase
     .from("payments")
     .select(
       "id, invoice_id, amount, method, status, reference, paid_on, note, proof_path, submitted_at, decided_at, decision_note"
     )
+    .eq("school_id", schoolId)
     .in("invoice_id", invoiceIds)
     .order("paid_on", { ascending: false });
   if (error) throw error;
@@ -2762,17 +3142,19 @@ export const withdrawPayment = async (id) => {
 // percentage of anything examined — those wait for the school to release
 // results. Both are guarded by can_view_student() in Postgres, so a parent
 // cannot reach another family's child by changing an id in the URL.
-export const fetchChildCourses = async (studentId) => {
+export const fetchChildCourses = async (studentId, schoolId) => {
   const { data, error } = await supabase.rpc("child_courses", {
     target_student: studentId,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data || [];
 };
 
-export const fetchChildTeachers = async (studentId) => {
+export const fetchChildTeachers = async (studentId, schoolId) => {
   const { data, error } = await supabase.rpc("child_teachers", {
     target_student: studentId,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data || [];
@@ -2838,12 +3220,27 @@ export const createFeeStructure = async ({
   return data;
 };
 
-export const deleteFeeStructure = async (id) => {
-  const { error } = await supabase.from("fee_structures").delete().eq("id", id);
+export const deleteFeeStructure = async (id, schoolId) => {
+  const { error } = await supabase
+    .from("fee_structures")
+    .delete()
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
-export const addFeeItem = async ({ structureId, name, amount, isOptional, position }) => {
+// fee_items has no school_id of its own — verify the target structure
+// belongs to the caller's current school before inserting.
+export const addFeeItem = async ({ schoolId, structureId, name, amount, isOptional, position }) => {
+  const { data: structure, error: structureError } = await supabase
+    .from("fee_structures")
+    .select("id")
+    .eq("id", structureId)
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (structureError) throw structureError;
+  if (!structure) throw new Error("That fee structure does not belong to this school.");
+
   const { data, error } = await supabase
     .from("fee_items")
     .insert({
@@ -2859,7 +3256,16 @@ export const addFeeItem = async ({ structureId, name, amount, isOptional, positi
   return data;
 };
 
-export const updateFeeItem = async ({ id, name, amount, isOptional }) => {
+export const updateFeeItem = async ({ id, schoolId, name, amount, isOptional }) => {
+  const { data: owned, error: ownerError } = await supabase
+    .from("fee_items")
+    .select("id, fee_structures!inner(school_id)")
+    .eq("id", id)
+    .eq("fee_structures.school_id", schoolId)
+    .maybeSingle();
+  if (ownerError) throw ownerError;
+  if (!owned) throw new Error("Fee item not found for this school");
+
   const patch = {};
   if (name !== undefined) patch.name = name;
   if (amount !== undefined) patch.amount = amount;
@@ -2868,7 +3274,16 @@ export const updateFeeItem = async ({ id, name, amount, isOptional }) => {
   if (error) throw error;
 };
 
-export const deleteFeeItem = async (id) => {
+export const deleteFeeItem = async (id, schoolId) => {
+  const { data: item, error: lookupError } = await supabase
+    .from("fee_items")
+    .select("id, fee_structures!inner ( school_id )")
+    .eq("id", id)
+    .eq("fee_structures.school_id", schoolId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (!item) throw new Error("Fee item not found for this school");
+
   const { error } = await supabase.from("fee_items").delete().eq("id", id);
   if (error) throw error;
 };
@@ -3049,12 +3464,13 @@ export const startOnlinePayment = async ({ invoiceId }) => {
 // Did the webhook land? A family may read payments on their own invoices, so
 // finding the row by its gateway reference is the honest way to tell — rather
 // than trusting a status in the URL, which anybody can type.
-export const fetchPaymentByReference = async (reference) => {
-  if (!reference) return null;
+export const fetchPaymentByReference = async (reference, schoolId) => {
+  if (!reference || !schoolId) return null;
   const { data, error } = await supabase
     .from("payments")
     .select("id, invoice_id, amount, status, gateway, gateway_ref, decided_at")
     .eq("gateway_ref", reference)
+    .eq("school_id", schoolId)
     .maybeSingle();
   if (error) throw error;
   return data;
@@ -3093,22 +3509,24 @@ const groupReactions = (rows, key, userId) => {
   return byTarget;
 };
 
-export const fetchMessageReactions = async (messageIds, userId) => {
+export const fetchMessageReactions = async (messageIds, courseId, userId) => {
   if (!messageIds || messageIds.length === 0) return {};
   const { data, error } = await supabase
     .from("message_reactions")
-    .select("message_id, emoji, user_id")
+    .select("message_id, emoji, user_id, messages!inner(course_id)")
+    .eq("messages.course_id", courseId)
     .in("message_id", messageIds);
   if (error) throw error;
   return groupReactions(data, "message_id", userId);
 };
 
-export const fetchNoticeReactions = async (noticeIds, userId) => {
+export const fetchNoticeReactions = async (noticeIds, userId, schoolId) => {
   if (!noticeIds || noticeIds.length === 0) return {};
   const { data, error } = await supabase
     .from("notice_reactions")
-    .select("notice_id, emoji, user_id")
-    .in("notice_id", noticeIds);
+    .select("notice_id, emoji, user_id, notices!inner(school_id)")
+    .in("notice_id", noticeIds)
+    .eq("notices.school_id", schoolId);
   if (error) throw error;
   return groupReactions(data, "notice_id", userId);
 };
@@ -3221,8 +3639,13 @@ export const fetchTickets = async ({ schoolId, status = "unresolved", groupId, a
   return data || [];
 };
 
-export const fetchTicket = async (id) => {
-  const { data, error } = await supabase.from("tickets").select(TICKET_SELECT).eq("id", id).single();
+export const fetchTicket = async (id, schoolId) => {
+  const { data, error } = await supabase
+    .from("tickets")
+    .select(TICKET_SELECT)
+    .eq("id", id)
+    .eq("school_id", schoolId)
+    .single();
   if (error) throw error;
   return data;
 };
@@ -3244,10 +3667,11 @@ export const createTicket = async ({
 };
 
 export const updateTicket = async ({
-  id, status, priority, groupId, assignedTo, tags, clearGroup, clearAssignee,
+  id, schoolId, status, priority, groupId, assignedTo, tags, clearGroup, clearAssignee,
 }) => {
   const { data, error } = await supabase.rpc("update_ticket", {
     target_ticket: id,
+    target_school: schoolId,
     status_in: status ?? null,
     priority_in: priority ?? null,
     group_id_in: groupId ?? null,
@@ -3273,23 +3697,25 @@ const TICKET_MESSAGE_SELECT = `
   author:profiles ( id, first_name, surname, username, email )
 `;
 
-export const fetchTicketMessages = async (ticketId, { includeNotes = true } = {}) => {
+export const fetchTicketMessages = async (ticketId, { schoolId, includeNotes = true } = {}) => {
   let q = supabase
     .from("ticket_messages")
-    .select(TICKET_MESSAGE_SELECT)
-    .eq("ticket_id", ticketId);
+    .select(`${TICKET_MESSAGE_SELECT}, tickets!inner ( school_id )`)
+    .eq("ticket_id", ticketId)
+    .eq("tickets.school_id", schoolId);
   if (!includeNotes) q = q.eq("kind", "reply");
   q = q.order("created_at", { ascending: true });
   const { data, error } = await q;
   if (error) throw error;
-  return data || [];
+  return (data || []).map(({ tickets, ...m }) => m);
 };
 
-export const addTicketMessage = async ({ ticketId, kind, body }) => {
+export const addTicketMessage = async ({ ticketId, kind, body, schoolId }) => {
   const { data, error } = await supabase.rpc("add_ticket_message", {
     target_ticket: ticketId,
     kind_in: kind,
     body_in: body,
+    target_school: schoolId,
   });
   if (error) throw error;
   return data;
@@ -3318,8 +3744,8 @@ export const createTicketGroup = async ({ schoolId, name }) => {
 // Who moved this ticket between departments, and when — a narrow read
 // scoped by the same can_access_ticket() check as everything else on a
 // ticket, not a grant onto the (owner/admin-only) audit log itself.
-export const fetchTicketGroupHistory = async (ticketId) => {
-  const { data, error } = await supabase.rpc("ticket_group_history", { target_ticket: ticketId });
+export const fetchTicketGroupHistory = async (ticketId, schoolId) => {
+  const { data, error } = await supabase.rpc("ticket_group_history", { target_ticket: ticketId, target_school: schoolId });
   if (error) throw error;
   return data || [];
 };
@@ -3338,15 +3764,19 @@ export const fetchTicketMailboxes = async (schoolId) => {
   return data || [];
 };
 
-export const setMailboxActive = async ({ id, isActive }) => {
-  const { error } = await supabase.from("ticket_mailboxes").update({ is_active: isActive }).eq("id", id);
+export const setMailboxActive = async ({ id, isActive, schoolId }) => {
+  const { error } = await supabase
+    .from("ticket_mailboxes")
+    .update({ is_active: isActive })
+    .eq("id", id)
+    .eq("school_id", schoolId);
   if (error) throw error;
 };
 
 // Cleans up the mailbox's vault secret(s) too — see
 // classroom.delete_ticket_mailbox in 080_ticket_mailboxes.sql.
-export const deleteTicketMailbox = async (id) => {
-  const { error } = await supabase.rpc("delete_ticket_mailbox", { target_mailbox: id });
+export const deleteTicketMailbox = async (id, schoolId) => {
+  const { error } = await supabase.rpc("delete_ticket_mailbox", { target_mailbox: id, target_school: schoolId });
   if (error) throw error;
 };
 
@@ -3377,12 +3807,12 @@ export const connectTicketMailbox = async (payload) => {
 
 // Sends a real outbound email from an email-channel ticket, then records
 // the attempt (sent or failed) as a ticket_messages row.
-export const sendTicketEmailReply = async ({ ticketId, body, to, cc, bcc }) => {
+export const sendTicketEmailReply = async ({ ticketId, schoolId, body, to, cc, bcc }) => {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Sign in first.");
 
   const { data, error } = await supabase.functions.invoke("ticket-mail-send", {
-    body: { ticketId, body, to, cc, bcc },
+    body: { ticketId, schoolId, body, to, cc, bcc },
     headers: { Authorization: `Bearer ${session.access_token}` },
   });
 

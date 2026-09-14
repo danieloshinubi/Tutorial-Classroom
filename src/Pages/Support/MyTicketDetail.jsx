@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 import { fetchTicket, fetchTicketMessages, addTicketMessage } from "../../lib/api";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
 import { Page, Card, Button, Badge, Notice, Empty, displayName, formatDate } from "../../Components/UI";
@@ -25,6 +26,7 @@ const STATUS_LABEL = { open: "Open", pending: "Pending", resolved: "Resolved", c
 const MyTicketDetail = () => {
   const { ticketId } = useParams();
   const { user } = useAuth();
+  const { schoolId } = useSchool();
 
   const [ticket, setTicket] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -34,12 +36,13 @@ const MyTicketDetail = () => {
   const [sending, setSending] = useState(false);
 
   const load = useCallback(async () => {
+    if (!schoolId) return;
     setLoading(true);
     setError("");
     try {
       const [t, msgs] = await Promise.all([
-        fetchTicket(ticketId),
-        fetchTicketMessages(ticketId, { includeNotes: false }),
+        fetchTicket(ticketId, schoolId),
+        fetchTicketMessages(ticketId, { schoolId, includeNotes: false }),
       ]);
       setTicket(t);
       setMessages(msgs);
@@ -48,7 +51,7 @@ const MyTicketDetail = () => {
     } finally {
       setLoading(false);
     }
-  }, [ticketId]);
+  }, [ticketId, schoolId]);
 
   useEffect(() => {
     load();
@@ -60,11 +63,11 @@ const MyTicketDetail = () => {
     setSending(true);
     setError("");
     try {
-      await addTicketMessage({ ticketId, kind: "reply", body: draft.trim() });
+      await addTicketMessage({ ticketId, kind: "reply", body: draft.trim(), schoolId });
       setDraft("");
       const [t, msgs] = await Promise.all([
-        fetchTicket(ticketId),
-        fetchTicketMessages(ticketId, { includeNotes: false }),
+        fetchTicket(ticketId, schoolId),
+        fetchTicketMessages(ticketId, { schoolId, includeNotes: false }),
       ]);
       setTicket(t);
       setMessages(msgs);

@@ -41,8 +41,8 @@ const ParentDashboard = () => {
     setLoading(true);
     try {
       const [kids, bills, news] = await Promise.all([
-        fetchChildren(user.id).catch(() => []),
-        fetchMyInvoices().catch(() => []),
+        fetchChildren(user.id, schoolId).catch(() => []),
+        fetchMyInvoices(schoolId).catch(() => []),
         fetchNotices(schoolId).catch(() => []),
       ]);
       setChildren(kids);
@@ -90,6 +90,7 @@ const ParentDashboard = () => {
             key={row.id}
             child={row.student}
             relationship={row.relationship}
+            schoolId={schoolId}
           />
         ))}
       </section>

@@ -98,7 +98,7 @@ const AcademicPanel = () => {
     setBusy(true);
     setError("");
     try {
-      await setCurrentTerm(row.id);
+      await setCurrentTerm(row.id, schoolId);
       setNotice(`${row.name} is now the current term.`);
       load();
     } catch (err) {
@@ -112,7 +112,7 @@ const AcademicPanel = () => {
     if (!window.confirm(`Delete ${row.name}? Anything reported against it goes too.`)) return;
     setBusy(true);
     try {
-      await deleteTerm(row.id);
+      await deleteTerm(schoolId, row.id);
       load();
     } catch (err) {
       setError(err.message || "Could not delete that term.");
@@ -134,7 +134,7 @@ const AcademicPanel = () => {
     }
     setBusy(true);
     try {
-      await deleteSession(row.id);
+      await deleteSession(row.id, schoolId);
       load();
     } catch (err) {
       setError(err.message || "Could not delete that session.");
