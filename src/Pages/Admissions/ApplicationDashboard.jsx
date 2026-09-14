@@ -51,6 +51,18 @@ const regionOptionsFor = (countryName) => {
   return country[2].map(([name]) => ({ value: name, label: name }));
 };
 
+// Start/end year of a school stint — a plain text box invites "202" or
+// "20204", and this app already has a real calendar picker for actual
+// dates, so a school year (a bare number, no month/day) gets the same
+// "pick, don't type" treatment via a year list instead. Most recent first,
+// since that's the common case; one year ahead covers someone entering a
+// programme that starts before this calendar year ends.
+const CURRENT_YEAR = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: CURRENT_YEAR - 1959 }, (_, i) => {
+  const year = CURRENT_YEAR + 1 - i;
+  return { value: String(year), label: String(year) };
+});
+
 // Humanises applications.status for this screen specifically. api.js's own
 // STATUS_LABEL/STATUS_TONE cover only a subset of the enum — an accounted
 // application can sit in draft/in_progress/waitlisted/deferred/under_review
@@ -188,6 +200,14 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
                     disabled={disabled || !draft[field.dependsOn]}
                     placeholder={draft[field.dependsOn] ? "Select a state / region" : "Choose a country first"}
                     options={regionOptionsFor(draft[field.dependsOn])}
+                    onChange={updateValue(field.name)}
+                  />
+                ) : field.type === "year" ? (
+                  <Select
+                    value={draft[field.name] || ""}
+                    disabled={disabled}
+                    placeholder="Select a year"
+                    options={YEAR_OPTIONS}
                     onChange={updateValue(field.name)}
                   />
                 ) : (
@@ -850,9 +870,9 @@ const ApplicationDashboard = () => {
             onSave={saveSection("education")}
             fields={[
               { name: "school_name", label: "School name" },
-              { name: "country", label: "Country" },
-              { name: "start_year", label: "Start year" },
-              { name: "end_year", label: "End year" },
+              { name: "country", label: "Country", type: "country" },
+              { name: "start_year", label: "Start year", type: "year" },
+              { name: "end_year", label: "End year", type: "year" },
               { name: "qualification", label: "Qualification" },
             ]}
           />
@@ -867,7 +887,7 @@ const ApplicationDashboard = () => {
             fields={[
               { name: "exam_type", label: "Exam" },
               { name: "exam_number", label: "Exam number" },
-              { name: "exam_year", label: "Exam year" },
+              { name: "exam_year", label: "Exam year", type: "year" },
               { name: "subjects", label: "Subjects and grades", type: "textarea", hint: "One per line, e.g. Mathematics — B3" },
             ]}
           />
