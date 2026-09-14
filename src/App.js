@@ -21,6 +21,7 @@ import Dashboard from "./Pages/Dashboard/Dashboard";
 import Courses from "./Pages/Courses/Courses";
 import Apply from "./Pages/Admissions/Apply";
 import ApplyAccount from "./Pages/Admissions/ApplyAccount";
+import ApplyClaim from "./Pages/Admissions/ApplyClaim";
 import ApplicationStatus from "./Pages/Admissions/ApplicationStatus";
 import Applications from "./Pages/Admissions/Applications";
 import ApplyStart from "./Pages/Admissions/ApplyStart";
@@ -108,6 +109,9 @@ function App() {
               off to /Apply/Start. Deliberately its own page rather than the
               general /Signup, which has no way to land back here. */}
           <Route path="/Apply/Account" element={<ApplyAccount />} />
+          {/* Links an application submitted through /Apply (no account) to a
+              signed-in one — from "Check an application"'s new prompts. */}
+          <Route path="/Apply/Claim" element={<ApplyClaim />} />
 
           {/* Signed in — any role */}
           <Route element={<ProtectedRoute />}>

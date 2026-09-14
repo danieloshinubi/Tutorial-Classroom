@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "react-icons-kit";
 import { chevronDown } from "react-icons-kit/feather/chevronDown";
 import { chevronLeft } from "react-icons-kit/feather/chevronLeft";
@@ -27,7 +27,12 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false 
   const pageRef = useRef(null);
   const topRef = useRef(null);
 
-  useEffect(() => {
+  // A layout effect, not a plain effect — a sticky descendant nested inside
+  // its own layout container (a grid column, e.g. .panel-aside) can get its
+  // browser-internal sticky constraints wrong if this variable is still
+  // unset for that first painted frame and only arrives a tick later.
+  // Publishing before paint means it's never unset for a real frame.
+  useLayoutEffect(() => {
     const top = topRef.current;
     const page = pageRef.current;
     if (!top || !page || typeof ResizeObserver === "undefined") return undefined;
@@ -38,6 +43,29 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false 
     publish();
     const observer = new ResizeObserver(publish);
     observer.observe(top);
+    return () => observer.disconnect();
+  });
+
+  // A page can have a second sticky layer of its own, below the header — a
+  // filter row, an "add" form (the .panel-top class) — and a table further
+  // down needs to know how tall THAT is too, so its own sticky header
+  // stacks beneath both instead of sliding underneath the panel. Same
+  // measure-and-publish approach, just aimed at whichever .panel-top this
+  // page happens to render, if any.
+  useLayoutEffect(() => {
+    const page = pageRef.current;
+    if (!page || typeof ResizeObserver === "undefined") return undefined;
+    const panel = page.querySelector(".panel-top");
+    if (!panel) {
+      page.style.setProperty("--panel-top-h", "0px");
+      return undefined;
+    }
+    const publish = () => {
+      page.style.setProperty("--panel-top-h", `${panel.offsetHeight}px`);
+    };
+    publish();
+    const observer = new ResizeObserver(publish);
+    observer.observe(panel);
     return () => observer.disconnect();
   });
 
@@ -307,6 +335,20 @@ const isSameDay = (a, b) =>
 
 const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
 
+// A 12-year page, floored to a stable multiple of 12 so paging back and
+// forth always lands on the same blocks (2020-2031, 2032-2043, ...)
+// instead of a page whose range depends on whatever year it happened to
+// start from.
+const yearBlockStart = (year) => Math.floor(year / 12) * 12;
+const buildYearGrid = (blockStart) => Array.from({ length: 12 }, (_, i) => blockStart + i);
+
+// Re-stamps a date onto a different year, clamping the day so e.g. Feb 29
+// on a leap year lands on Feb 28 rather than rolling into March.
+const withYear = (date, year) => {
+  const daysInMonth = new Date(year, date.getMonth() + 1, 0).getDate();
+  return new Date(year, date.getMonth(), Math.min(date.getDate(), daysInMonth));
+};
+
 const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 // Six-week-max grid, always a whole number of weeks — the same "no half rows"
@@ -369,6 +411,12 @@ const BaseDatePicker = ({
   const [initialHh, initialMm] = timePart ? timePart.split(":").map(Number) : [null, null];
 
   const [open, setOpen] = useState(false);
+  // "days" is the normal month grid; "years" is the quick-jump grid opened
+  // by clicking the month/year label, for a birthdate or a school session
+  // that's several years back — stepping month-by-month to get there is
+  // exactly the friction this mode skips.
+  const [pickerMode, setPickerMode] = useState("days");
+  const [yearsStart, setYearsStart] = useState(() => yearBlockStart((selected || new Date()).getFullYear()));
   const [viewDate, setViewDate] = useState(() => startOfMonth(selected || new Date()));
   const [focusedDate, setFocusedDate] = useState(() => selected || new Date());
   // Only meaningful when withTime — the draft day + time-of-day being built
@@ -392,20 +440,35 @@ const BaseDatePicker = ({
 
   // Keeps real DOM focus following the roving tabIndex day cell, so arrow-
   // key navigation and Tab both land in the same place a mouse click would.
+  // Only meaningful in the day grid — the year grid has no roving focus.
   useEffect(() => {
-    if (!open) return;
+    if (!open || pickerMode !== "days") return;
     const el = gridRef.current?.querySelector(`[data-date="${localDateToIso(focusedDate)}"]`);
     el?.focus();
-  }, [open, focusedDate, viewDate]);
+  }, [open, pickerMode, focusedDate, viewDate]);
 
   const openPanel = () => {
     const base = selected || focusedDate || new Date();
+    setPickerMode("days");
     setViewDate(startOfMonth(base));
     setFocusedDate(base);
     setDraftDate(base);
     setHours(initialHh != null ? initialHh : new Date().getHours());
     setMinutes(initialMm != null ? initialMm : 0);
     setOpen(true);
+  };
+
+  const openYearPicker = () => {
+    setYearsStart(yearBlockStart(viewDate.getFullYear()));
+    setPickerMode("years");
+  };
+
+  const pickYear = (year) => {
+    const next = withYear(focusedDate, year);
+    setViewDate(startOfMonth(next));
+    setFocusedDate(next);
+    if (withTime) setDraftDate(next);
+    setPickerMode("days");
   };
 
   const close = () => {
@@ -462,6 +525,13 @@ const BaseDatePicker = ({
       if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
         e.preventDefault();
         openPanel();
+      }
+      return;
+    }
+    if (pickerMode === "years") {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPickerMode("days");
       }
       return;
     }
@@ -538,42 +608,80 @@ const BaseDatePicker = ({
       {open ? (
         <div className="uidate-panel" role="dialog" aria-label={withTime ? "Choose a date and time" : "Choose a date"}>
           <div className="uidate-nav">
-            <button type="button" className="uidate-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Previous month">
+            <button
+              type="button"
+              className="uidate-nav-btn"
+              onClick={() => (pickerMode === "years" ? setYearsStart((y) => y - 12) : shiftMonth(-1))}
+              aria-label={pickerMode === "years" ? "Previous years" : "Previous month"}
+            >
               <Icon icon={chevronLeft} size={15} />
             </button>
-            <span className="uidate-nav-label">
-              {viewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-            </span>
-            <button type="button" className="uidate-nav-btn" onClick={() => shiftMonth(1)} aria-label="Next month">
+            {pickerMode === "years" ? (
+              <button type="button" className="uidate-nav-label uidate-nav-label-btn" onClick={() => setPickerMode("days")}>
+                {`${yearsStart}–${yearsStart + 11}`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="uidate-nav-label uidate-nav-label-btn"
+                onClick={openYearPicker}
+                title="Jump to a year"
+              >
+                {viewDate.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+              </button>
+            )}
+            <button
+              type="button"
+              className="uidate-nav-btn"
+              onClick={() => (pickerMode === "years" ? setYearsStart((y) => y + 12) : shiftMonth(1))}
+              aria-label={pickerMode === "years" ? "Next years" : "Next month"}
+            >
               <Icon icon={chevronRight} size={15} />
             </button>
           </div>
 
-          <div className="uidate-weekdays">
-            {WEEKDAY_LABELS.map((w) => <span key={w}>{w}</span>)}
-          </div>
-
-          <div className="uidate-grid" ref={gridRef} onKeyDown={handleKeyDown}>
-            {cells.map(({ date, outside }) => {
-              const iso = localDateToIso(date);
-              const isFocused = isSameDay(date, focusedDate);
-              return (
+          {pickerMode === "years" ? (
+            <div className="uidate-yeargrid">
+              {buildYearGrid(yearsStart).map((year) => (
                 <button
-                  key={iso}
+                  key={year}
                   type="button"
-                  data-date={iso}
-                  tabIndex={isFocused ? 0 : -1}
-                  className={`uidate-day${outside ? " outside" : ""}${isSameDay(date, highlightDate) ? " selected" : ""}${isSameDay(date, today) ? " today" : ""}`}
-                  onClick={() => pickDay(date)}
-                  onFocus={() => setFocusedDate(date)}
+                  className={`uidate-year${year === viewDate.getFullYear() ? " selected" : ""}${year === today.getFullYear() ? " today" : ""}`}
+                  onClick={() => pickYear(year)}
                 >
-                  {date.getDate()}
+                  {year}
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="uidate-weekdays">
+                {WEEKDAY_LABELS.map((w) => <span key={w}>{w}</span>)}
+              </div>
 
-          {withTime ? (
+              <div className="uidate-grid" ref={gridRef} onKeyDown={handleKeyDown}>
+                {cells.map(({ date, outside }) => {
+                  const iso = localDateToIso(date);
+                  const isFocused = isSameDay(date, focusedDate);
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      data-date={iso}
+                      tabIndex={isFocused ? 0 : -1}
+                      className={`uidate-day${outside ? " outside" : ""}${isSameDay(date, highlightDate) ? " selected" : ""}${isSameDay(date, today) ? " today" : ""}`}
+                      onClick={() => pickDay(date)}
+                      onFocus={() => setFocusedDate(date)}
+                    >
+                      {date.getDate()}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {pickerMode === "days" && withTime ? (
             <div className="uidate-time">
               <span className="uidate-time-label">{"Time"}</span>
               <div className="uidate-time-inputs">
@@ -600,6 +708,7 @@ const BaseDatePicker = ({
             </div>
           ) : null}
 
+          {pickerMode === "days" ? (
           <div className="uidate-footer">
             {withTime ? (
               <>
@@ -619,6 +728,7 @@ const BaseDatePicker = ({
               </>
             )}
           </div>
+          ) : null}
         </div>
       ) : null}
     </div>

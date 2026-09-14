@@ -1,7 +1,19 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { trackApplication, STATUS_LABEL } from "../../lib/api";
-import { Field, Button, Notice, Badge, formatDate } from "../../Components/UI";
+import { Field, Button, Notice, Badge, Card, formatDate } from "../../Components/UI";
+
+// Section keys the staff "Request correction" checklist uses
+// (AdmissionsWorkspace.jsx) — plain English for a family reading this, not
+// the internal key.
+const SECTION_LABEL = {
+  personal: "Personal details",
+  education: "Education history",
+  exams: "Exam results",
+  next_of_kin: "Next of kin",
+  referees: "Referees",
+  documents: "Documents",
+};
 
 // What each state means to a family, in their words rather than the system's.
 const EXPLAIN = {
@@ -139,6 +151,37 @@ const ApplicationStatus = () => {
               ) : null}
             </dl>
           </div>
+        ) : null}
+
+        {result && result.form_state === "action_required" ? (
+          <Card style={{ maxWidth: 520, marginTop: 16, borderColor: "var(--danger)" }}>
+            <h3 style={{ marginTop: 0, color: "var(--danger)" }}>{"Action needed"}</h3>
+            <p style={{ color: "var(--ink-2)" }}>{result.correction_reason}</p>
+            {result.correction_sections?.length ? (
+              <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>
+                {`Sections to fix: ${result.correction_sections.map((s) => SECTION_LABEL[s] || s).join(", ")}`}
+              </p>
+            ) : null}
+            <Link
+              to={`/Apply/Claim?reference=${encodeURIComponent(result.reference)}&email=${encodeURIComponent(email.trim())}`}
+            >
+              <Button size="sm">{"Sign in or create an account to fix this"}</Button>
+            </Link>
+          </Card>
+        ) : null}
+
+        {result && result.form_state !== "action_required" ? (
+          <Card style={{ maxWidth: 520, marginTop: 16 }}>
+            <strong>{"Manage this application online"}</strong>
+            <p style={{ margin: "6px 0 12px", color: "var(--ink-2)", fontSize: 14 }}>
+              {"Create an account (or sign in, if you already have one) to see full details, get notified the moment anything changes, and update this application yourself."}
+            </p>
+            <Link
+              to={`/Apply/Claim?reference=${encodeURIComponent(result.reference)}&email=${encodeURIComponent(email.trim())}`}
+            >
+              <Button size="sm" variant="secondary">{"Create an account or sign in"}</Button>
+            </Link>
+          </Card>
         ) : null}
 
         <p style={{ marginTop: 24, fontSize: 14 }}>

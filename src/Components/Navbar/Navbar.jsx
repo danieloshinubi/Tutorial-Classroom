@@ -127,29 +127,34 @@ const Navbar = () => {
               ))}
             </div>
           ))}
-
-          <div className="side-group side-others">
-            {collapsed ? <div className="side-rule" /> : (
-              <div className="side-group-name">{"Others"}</div>
-            )}
-            <NavLink
-              to="/Profile"
-              title="Account settings"
-              className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
-            >
-              <Icon icon={userIcon} size={17} />
-              {collapsed ? null : <span>{"Account settings"}</span>}
-            </NavLink>
-            <a
-              href="mailto:support@schoolivio.com"
-              className="side-link"
-              title="Support"
-            >
-              <Icon icon={helpCircle} size={17} />
-              {collapsed ? null : <span>{"Support"}</span>}
-            </a>
-          </div>
         </nav>
+
+        {/* Outside .side-nav's own scroll region on purpose — Account
+            settings/Support used to sit inside that scrolling <nav>, so a
+            school with enough modules to need scrolling would scroll them
+            out of view. As a direct flex sibling of .side-nav they always
+            stay visible at the foot of the sidebar. */}
+        <div className="side-group side-others">
+          {collapsed ? <div className="side-rule" /> : (
+            <div className="side-group-name">{"Others"}</div>
+          )}
+          <NavLink
+            to="/Profile"
+            title="Account settings"
+            className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
+          >
+            <Icon icon={userIcon} size={17} />
+            {collapsed ? null : <span>{"Account settings"}</span>}
+          </NavLink>
+          <a
+            href="mailto:support@schoolivio.com"
+            className="side-link"
+            title="Support"
+          >
+            <Icon icon={helpCircle} size={17} />
+            {collapsed ? null : <span>{"Support"}</span>}
+          </a>
+        </div>
       </aside>
 
       <header className="topbar">

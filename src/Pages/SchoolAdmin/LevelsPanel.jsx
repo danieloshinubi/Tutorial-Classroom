@@ -158,14 +158,13 @@ const LevelsPanel = () => {
 
   return (
     <>
-      <p style={{ color: "var(--ink-2)", maxWidth: "62ch" }}>
-        {"How your school groups its courses — year groups like \"JSS 1\", or streams and departments like \"Science\", \"Arts\" or \"Computer Science\". Name them whatever you actually call them. Only administration adds and removes these; teachers pick from the list when they create a course."}
-      </p>
-
       <Notice tone="error">{error}</Notice>
       <Notice tone="success">{notice}</Notice>
 
       <div className="panel-top">
+      <p style={{ color: "var(--ink-2)", maxWidth: "62ch" }}>
+        {"How your school groups its courses — year groups like \"JSS 1\", or streams and departments like \"Science\", \"Arts\" or \"Computer Science\". Name them whatever you actually call them. Only administration adds and removes these; teachers pick from the list when they create a course."}
+      </p>
       <Card style={{ maxWidth: 620 }}>
         <h3 style={{ marginTop: 0 }}>{"Add a class level"}</h3>
         <form onSubmit={handleAdd}>

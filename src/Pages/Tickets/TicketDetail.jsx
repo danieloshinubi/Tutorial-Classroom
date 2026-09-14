@@ -272,18 +272,21 @@ const TicketDetail = () => {
   return (
     <div className="shell">
       <Navbar />
-      <Page wide>
-        <div className="tix-crumb">
-          <Link to="/Tickets">{"All unresolved tickets"}</Link>
-          <span>{" › "}</span>
-          <span>{`#${ticket.number}`}</span>
-          {/* Plain app tokens here, not --tix-* — this sits above .tix-shell,
-              same reason .tix-crumb itself already does. */}
-          <button type="button" className="tix-history-btn" onClick={toggleHistory}>
-            {showHistory ? "Hide transfer history" : "Transfer history"}
-          </button>
-        </div>
-
+      <Page
+        wide
+        toolbar={
+          <div className="tix-crumb" style={{ marginBottom: 0 }}>
+            <Link to="/Tickets">{"All unresolved tickets"}</Link>
+            <span>{" › "}</span>
+            <span>{`#${ticket.number}`}</span>
+            {/* Plain app tokens here, not --tix-* — this sits above .tix-shell,
+                same reason .tix-crumb itself already does. */}
+            <button type="button" className="tix-history-btn" onClick={toggleHistory}>
+              {showHistory ? "Hide transfer history" : "Transfer history"}
+            </button>
+          </div>
+        }
+      >
         {showHistory ? (
           <div className="tix-history">
             {historyLoading ? <p className="tix-history-hint">{"Loading..."}</p> : null}

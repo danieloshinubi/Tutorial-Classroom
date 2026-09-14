@@ -147,25 +147,27 @@ const AcademicPanel = () => {
 
   return (
     <>
-      <p style={{ color: "var(--ink-2)", maxWidth: "64ch" }}>
-        {"Your academic calendar. Results, fees and attendance are all reported against a term, so set these up before anything else."}
-      </p>
-
       <Notice tone="error">{error}</Notice>
       <Notice tone="success">{notice}</Notice>
 
-      {current ? (
-        <Card style={{ marginBottom: 20, background: "var(--brand-soft)", borderColor: "transparent" }}>
-          <strong>{`Current term: ${current.name}`}</strong>
-          <span style={{ color: "var(--ink-2)" }}>
-            {current.sessions ? ` · ${current.sessions.name}` : ""}
-          </span>
-        </Card>
-      ) : sessions.length ? (
-        <Notice tone="error">
-          {"No current term is set. Choose one below — reports and fees need to know which term they belong to."}
-        </Notice>
-      ) : null}
+      <div className="panel-top">
+        <p style={{ color: "var(--ink-2)", maxWidth: "64ch" }}>
+          {"Your academic calendar. Results, fees and attendance are all reported against a term, so set these up before anything else."}
+        </p>
+
+        {current ? (
+          <Card style={{ marginBottom: 0, background: "var(--brand-soft)", borderColor: "transparent" }}>
+            <strong>{`Current term: ${current.name}`}</strong>
+            <span style={{ color: "var(--ink-2)" }}>
+              {current.sessions ? ` · ${current.sessions.name}` : ""}
+            </span>
+          </Card>
+        ) : sessions.length ? (
+          <Notice tone="error">
+            {"No current term is set. Choose one below — reports and fees need to know which term they belong to."}
+          </Notice>
+        ) : null}
+      </div>
 
       <div className="split" style={{ alignItems: "start" }}>
         <div>

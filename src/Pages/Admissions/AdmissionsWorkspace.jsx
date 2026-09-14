@@ -7,6 +7,7 @@ import {
   fetchApplicationWorkspace,
   fetchApplication,
   prepareScreeningItems,
+  prepareDocumentItems,
   setScreeningItemStatus,
   verifyDocument,
   rejectDocument,
@@ -63,6 +64,17 @@ const AdmissionsWorkspace = () => {
   const [busy, setBusy] = useState(false);
   const [letterApp, setLetterApp] = useState(null);
   const [letterLoading, setLetterLoading] = useState(false);
+  // create_application_screening_items() is a no-op when this school hasn't
+  // configured any screening steps — it succeeds and returns the (empty)
+  // list rather than erroring, so pressing the button then looks like
+  // nothing happened. This distinguishes "nothing configured" from "not
+  // tried yet" so the empty state can point at Admissions settings instead
+  // of just repeating "press the button above."
+  const [screeningConfigMissing, setScreeningConfigMissing] = useState(false);
+  // Same story as screeningConfigMissing, for the document checklist —
+  // create_application_document_items() is the equally-missing-until-now
+  // counterpart to create_application_screening_items().
+  const [documentConfigMissing, setDocumentConfigMissing] = useState(false);
   const live = useLiveApplicationUpdates(applicationId);
 
   const load = useCallback(async () => {
@@ -261,9 +273,28 @@ const AdmissionsWorkspace = () => {
 
         {/* Documents panel */}
         <Card style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>{"Documents"}</h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0 }}>{"Documents"}</h3>
+            <Button size="sm" variant="secondary" disabled={busy}
+              onClick={() => run(async () => {
+                const items = await prepareDocumentItems(app.id, schoolId);
+                setDocumentConfigMissing(items.length === 0);
+              }, "prepare documents")}>
+              {"Prepare items from config"}
+            </Button>
+          </div>
           {documents.length === 0 ? (
-            <Empty>{"No documents required for this application yet."}</Empty>
+            documentConfigMissing ? (
+              <Empty>
+                {"That didn't add anything — this school has no document requirements configured for this session yet. "}
+                <Link to="/School?tab=admissions&subtab=documents" target="_blank" rel="noreferrer noopener">
+                  {"Add some under Admissions settings"}
+                </Link>
+                {", then press the button again."}
+              </Empty>
+            ) : (
+              <Empty>{"No documents yet. Press “Prepare items from config” to pull in this school's document requirements."}</Empty>
+            )
           ) : (
             <ul className="doc-list">
               {documents.map((d) => (
@@ -325,12 +356,25 @@ const AdmissionsWorkspace = () => {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>{"Screening"}</h3>
             <Button size="sm" variant="secondary" disabled={busy}
-              onClick={() => run(() => prepareScreeningItems(app.id, schoolId), "prepare screening")}>
+              onClick={() => run(async () => {
+                const items = await prepareScreeningItems(app.id, schoolId);
+                setScreeningConfigMissing(items.length === 0);
+              }, "prepare screening")}>
               {"Prepare items from config"}
             </Button>
           </div>
           {screening.length === 0 ? (
-            <Empty>{"No screening items yet. Configure requirements or press the button above."}</Empty>
+            screeningConfigMissing ? (
+              <Empty>
+                {"That didn't add anything — this school has no screening steps configured for this session yet. "}
+                <Link to="/School?tab=admissions&subtab=screening" target="_blank" rel="noreferrer noopener">
+                  {"Add some under Admissions settings"}
+                </Link>
+                {", then press the button again."}
+              </Empty>
+            ) : (
+              <Empty>{"No screening items yet. Press “Prepare items from config” to pull in this school's screening steps."}</Empty>
+            )
           ) : (
             <ul className="screen-list">
               {screening.map((item) => (

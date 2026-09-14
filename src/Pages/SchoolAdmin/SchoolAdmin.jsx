@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
@@ -1057,9 +1058,43 @@ const MailboxesPanel = () => {
   );
 };
 
+const TABS = ["people", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "settings"];
+
 const SchoolAdmin = () => {
   const { school } = useSchool();
-  const [tab, setTab] = useState("people");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const requested = searchParams.get("tab");
+    return TABS.includes(requested) ? requested : "people";
+  });
+
+  // A link elsewhere in the app (e.g. "prepare items from config" finding
+  // nothing configured) can point straight at a tab here via ?tab=... —
+  // this keeps that landing tab in sync if the query string changes after
+  // mount too, not just on the initial load.
+  useEffect(() => {
+    const requested = searchParams.get("tab");
+    if (requested && TABS.includes(requested) && requested !== tab) {
+      setTab(requested);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const changeTab = (id) => {
+    setTab(id);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", id);
+        // A subtab param only means something on the admissions tab — drop
+        // it once we're not there, so it doesn't silently reapply to the
+        // wrong subtab if the admin comes back to admissions later.
+        if (id !== "admissions") next.delete("subtab");
+        return next;
+      },
+      { replace: true }
+    );
+  };
 
   return (
     <div className="shell">
@@ -1081,7 +1116,7 @@ const SchoolAdmin = () => {
               { id: "settings", label: "School settings" },
             ]}
             active={tab}
-            onChange={setTab}
+            onChange={changeTab}
           />
         }
       >

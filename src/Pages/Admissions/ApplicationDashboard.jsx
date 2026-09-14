@@ -17,6 +17,8 @@ import {
   acceptOffer,
   declineOffer,
   fetchMyClearance,
+  fetchMyApplicationDocuments,
+  uploadMyApplicationDocument,
 } from "../../lib/api";
 import {
   Page,
@@ -194,6 +196,7 @@ const ApplicationDashboard = () => {
   const [offer, setOffer] = useState(null);
   const [acceptanceInvoice, setAcceptanceInvoice] = useState(null);
   const [clearance, setClearance] = useState([]);
+  const [documents, setDocuments] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -201,6 +204,8 @@ const ApplicationDashboard = () => {
   const [declaration, setDeclaration] = useState(false);
   const [decliningOffer, setDecliningOffer] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
+  const [uploadingDocId, setUploadingDocId] = useState(null);
+  const [docError, setDocError] = useState("");
   const live = useLiveApplicationUpdates(applicationId);
 
   const load = useCallback(async () => {
@@ -219,16 +224,18 @@ const ApplicationDashboard = () => {
       setApplication(app);
       setSteps(workflow);
 
-      const [cfg, inv, ev, off] = await Promise.all([
+      const [cfg, inv, ev, off, docs] = await Promise.all([
         fetchAdmissionConfig({ schoolId: app.school_id, sessionId: app.session_id }),
         fetchMyApplicationInvoice(app.id, "application_fee", school?.id).catch(() => null),
         fetchApplicationEvents(app.id, app.school_id).catch(() => []),
         fetchMyOffer(app.id, school?.id).catch(() => null),
+        fetchMyApplicationDocuments(app.id).catch(() => []),
       ]);
       setConfig(cfg);
       setInvoice(inv);
       setEvents(ev);
       setOffer(off);
+      setDocuments(docs);
       setAcceptanceInvoice(
         off?.status === "accepted"
           ? await fetchMyApplicationInvoice(app.id, "acceptance_fee", school?.id).catch(() => null)
@@ -388,6 +395,26 @@ const ApplicationDashboard = () => {
     }
   };
 
+  const uploadDoc = (doc) => async (file) => {
+    if (!file) return;
+    setUploadingDocId(doc.id);
+    setDocError("");
+    try {
+      await uploadMyApplicationDocument({
+        schoolId: application.school_id,
+        applicationId: application.id,
+        requirementId: doc.id,
+        file,
+        kind: doc.requirement?.kind,
+      });
+      setDocuments(await fetchMyApplicationDocuments(application.id).catch(() => documents));
+    } catch (err) {
+      setDocError(err.message || "Could not upload that file.");
+    } finally {
+      setUploadingDocId(null);
+    }
+  };
+
   const resubmit = async () => {
     setSubmitting(true);
     setError("");
@@ -520,6 +547,61 @@ const ApplicationDashboard = () => {
             <Button onClick={resubmit} disabled={submitting}>
               {submitting ? "Resubmitting..." : "Resubmit application"}
             </Button>
+          </Card>
+        ) : null}
+
+        {documents.length > 0 ? (
+          <Card style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>{"Documents"}</h3>
+            <Notice tone="error">{docError}</Notice>
+            <ul className="doc-list">
+              {documents.map((d) => {
+                const canUpload = ["not_uploaded", "rejected", "resubmission_required"].includes(d.status);
+                const uploading = uploadingDocId === d.id;
+                return (
+                  <li key={d.id} className="doc-row">
+                    <div>
+                      <strong>{d.requirement?.label || "Document"}</strong>
+                      {d.requirement?.is_required ? (
+                        <span className="doc-req"> · required</span>
+                      ) : (
+                        <span className="doc-req"> · optional</span>
+                      )}
+                      {d.decision_note ? <div className="doc-note">{d.decision_note}</div> : null}
+                      {d.file?.file_name ? (
+                        <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 4 }}>
+                          {d.file.file_name}
+                        </div>
+                      ) : null}
+                    </div>
+                    <div className="doc-actions">
+                      <Badge tone={
+                        d.status === "verified" ? "success" :
+                        d.status === "rejected" ? "danger" :
+                        d.status === "waived" ? "muted" :
+                        (d.status === "uploaded" || d.status === "under_review") ? "brand" : "warn"
+                      }>{d.status.replace(/_/g, " ")}</Badge>
+                      {canUpload ? (
+                        <label className="btn btn-secondary btn-sm" style={{ cursor: uploading ? "not-allowed" : "pointer" }}>
+                          {uploading ? "Uploading..." : d.status === "not_uploaded" ? "Upload" : "Re-upload"}
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/*"
+                            style={{ display: "none" }}
+                            disabled={uploading}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) uploadDoc(d)(file);
+                            }}
+                          />
+                        </label>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </Card>
         ) : null}
 

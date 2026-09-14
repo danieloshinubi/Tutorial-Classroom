@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useSchool } from "../../context/SchoolContext";
 import {
   fetchSessions,
@@ -463,11 +464,37 @@ const ChecklistPanel = ({
 };
 
 /* --------------------------------------------------------------------- shell ---- */
+const SUB_TABS = ["config", "programmes", "screening", "documents", "clearance"];
+
 const AdmissionsSettingsPanel = () => {
   const { schoolId } = useSchool();
   const [sessions, setSessions] = useState([]);
   const [sessionId, setSessionId] = useState("");
-  const [subTab, setSubTab] = useState("config");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [subTab, setSubTab] = useState(() => {
+    const requested = searchParams.get("subtab");
+    return SUB_TABS.includes(requested) ? requested : "config";
+  });
+
+  useEffect(() => {
+    const requested = searchParams.get("subtab");
+    if (requested && SUB_TABS.includes(requested) && requested !== subTab) {
+      setSubTab(requested);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const changeSubTab = (id) => {
+    setSubTab(id);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("subtab", id);
+        return next;
+      },
+      { replace: true }
+    );
+  };
 
   useEffect(() => {
     if (!schoolId) return;
@@ -506,7 +533,7 @@ const AdmissionsSettingsPanel = () => {
           { id: "clearance", label: "Clearance departments" },
         ]}
         active={subTab}
-        onChange={setSubTab}
+        onChange={changeSubTab}
       />
 
       <div style={{ marginTop: 16 }}>

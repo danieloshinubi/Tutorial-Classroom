@@ -137,8 +137,11 @@ const AdmissionsQueues = () => {
         <Notice tone="error">{error}</Notice>
 
         {/* Whether the school is taking applications at all — the first
-            thing to check when the queue is unexpectedly empty. */}
-        <Card style={{ marginBottom: 20 }}>
+            thing to check when the queue is unexpectedly empty. Pinned
+            below the header so it stays in view while scrolling through
+            the queues and the full application roster underneath it. */}
+        <div className="panel-top">
+        <Card style={{ marginBottom: 0 }}>
           <div className="page-head" style={{ marginBottom: 0 }}>
             <div>
               <strong>
@@ -200,6 +203,7 @@ const AdmissionsQueues = () => {
             </Notice>
           ) : null}
         </Card>
+        </div>
 
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 

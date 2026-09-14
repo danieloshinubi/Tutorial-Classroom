@@ -151,15 +151,17 @@ const Reports = () => {
 
         {students.length > 0 ? (
           <section className="section">
-            <div className="page-head" style={{ marginBottom: 12 }}>
-              <h2>{isAdmin ? "All students" : "Your students"}</h2>
-              <input
-                className="input"
-                style={{ maxWidth: 260 }}
-                placeholder="Search students"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
+            <div className="panel-top">
+              <div className="page-head" style={{ marginBottom: 0 }}>
+                <h2>{isAdmin ? "All students" : "Your students"}</h2>
+                <input
+                  className="input"
+                  style={{ maxWidth: 260 }}
+                  placeholder="Search students"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
             </div>
 
             {filtered.length === 0 ? <Empty>{"Nobody matches."}</Empty> : null}

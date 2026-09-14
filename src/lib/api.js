@@ -1971,6 +1971,20 @@ export const trackApplication = async ({ reference, email }) => {
   return Array.isArray(data) ? data[0] || null : data;
 };
 
+// Links an application that was submitted without an account (the public
+// /Apply form) to the signed-in caller, using the same reference+email pair
+// trackApplication() already asked for. From then on it behaves exactly
+// like any other accounted application — fetchMyApplications() lists it,
+// the dashboard lets its flagged sections be edited and resubmitted.
+export const claimApplication = async ({ reference, email }) => {
+  const { data, error } = await supabase.rpc("claim_application", {
+    target_reference: reference,
+    target_email: email,
+  });
+  if (error) throw error;
+  return data;
+};
+
 export const fetchApplications = async ({ schoolId, status = null }) => {
   let query = supabase
     .from("applications")
@@ -2301,6 +2315,53 @@ export const fetchMyApplications = async (schoolId) => {
   const { data, error } = await supabase.rpc("my_applications", { target_school: schoolId });
   if (error) throw error;
   return data || [];
+};
+
+// The applicant's own document checklist — same shape application_
+// workspace() gives staff, minus the staff-only gate.
+export const fetchMyApplicationDocuments = async (applicationId) => {
+  const { data, error } = await supabase.rpc("my_application_documents", {
+    target_application: applicationId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+// Uploads straight to storage under the same admissions/<school>/<application>/
+// prefix the anonymous pre-submission form already writes to (051's bucket
+// policy only checks the school segment, not who's asking), then registers
+// it against this checklist entry — application_documents has no
+// direct-insert policy, so the RPC is the only legal way to link it.
+export const uploadMyApplicationDocument = async ({
+  schoolId,
+  applicationId,
+  requirementId,
+  file,
+  kind,
+}) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `admissions/${schoolId}/${applicationId}/${uuidV4()}-${safeName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("course-materials")
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await supabase.rpc("record_applicant_document_upload", {
+    target_school: schoolId,
+    target_application: applicationId,
+    target_requirement: requirementId,
+    file_path_in: path,
+    file_name_in: file.name,
+    file_size_in: file.size,
+    mime_type_in: file.type || null,
+    kind_in: kind || "other",
+  });
+  if (error) {
+    await supabase.storage.from("course-materials").remove([path]).catch(() => {});
+    throw error;
+  }
+  return data;
 };
 
 export const startApplication = async ({ sessionId, programmeId }) => {
@@ -2674,6 +2735,16 @@ export const countClearanceChecklistItems = async (departmentId) => {
 export const prepareScreeningItems = async (applicationId, schoolId) => {
   const { data, error } = await supabase.rpc(
     "create_application_screening_items",
+    { target_application: applicationId, target_school: schoolId }
+  );
+  if (error) throw error;
+  return data || [];
+};
+
+// Same idea as prepareScreeningItems, for the document checklist.
+export const prepareDocumentItems = async (applicationId, schoolId) => {
+  const { data, error } = await supabase.rpc(
+    "create_application_document_items",
     { target_application: applicationId, target_school: schoolId }
   );
   if (error) throw error;

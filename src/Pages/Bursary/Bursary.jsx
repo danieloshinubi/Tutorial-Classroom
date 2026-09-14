@@ -502,7 +502,8 @@ const Invoices = ({ invoices, people, money, onChange, onError }) => {
 
   return (
     <>
-      <div className="page-head" style={{ margin: "8px 0 16px" }}>
+      <div className="panel-top">
+      <div className="page-head" style={{ margin: 0 }}>
         <Tabs
           tabs={[
             { id: "all", label: `All (${invoices.length})` },
@@ -514,6 +515,7 @@ const Invoices = ({ invoices, people, money, onChange, onError }) => {
           onChange={setFilter}
         />
         {drafts.length ? <Button onClick={issueAll}>{"Issue all drafts"}</Button> : null}
+      </div>
       </div>
 
       {shown.length === 0 ? (
