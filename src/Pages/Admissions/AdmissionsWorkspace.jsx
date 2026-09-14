@@ -46,6 +46,55 @@ import {
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import AdmissionLetter from "./AdmissionLetter";
 
+// Same field keys and labels ApplicationDashboard.jsx's own Section
+// components use for personal_info/education_history/exam_results/
+// next_of_kin/referees — staff read the exact fields the applicant filled
+// in, under the same names, rather than a second, drifting copy of them.
+const FORM_SECTIONS = [
+  {
+    key: "personal_info",
+    title: "Personal information",
+    fields: [
+      ["first_name", "First name"], ["middle_name", "Middle name"], ["surname", "Surname"],
+      ["date_of_birth", "Date of birth"], ["gender", "Gender"], ["nationality", "Nationality"],
+      ["state_of_origin", "State of origin"], ["address", "Home address"],
+      ["phone", "Phone"], ["email", "Email"],
+    ],
+  },
+  {
+    key: "education_history",
+    title: "Education history",
+    fields: [
+      ["school_name", "School name"], ["country", "Country"],
+      ["start_year", "Start year"], ["end_year", "End year"], ["qualification", "Qualification"],
+    ],
+  },
+  {
+    key: "exam_results",
+    title: "Examination results",
+    fields: [
+      ["exam_type", "Exam"], ["exam_number", "Exam number"],
+      ["exam_year", "Exam year"], ["subjects", "Subjects and grades"],
+    ],
+  },
+  {
+    key: "next_of_kin",
+    title: "Next of kin",
+    fields: [
+      ["name", "Full name"], ["relationship", "Relationship"],
+      ["phone", "Phone"], ["email", "Email"], ["address", "Address"],
+    ],
+  },
+  {
+    key: "referees",
+    title: "Referees",
+    fields: [
+      ["referee_1_name", "Referee 1 — name"], ["referee_1_email", "Referee 1 — email"],
+      ["referee_2_name", "Referee 2 — name"], ["referee_2_email", "Referee 2 — email"],
+    ],
+  },
+];
+
 // Phase 2 staff workspace. Reads application_workspace() in one call and
 // exposes each domain (screening, documents, review, interview, decision)
 // as its own panel. Every write goes through the SECURITY DEFINER function
@@ -230,6 +279,25 @@ const AdmissionsWorkspace = () => {
               app.decision_state === "reject" ? "danger" :
               app.decision_state === "waitlist" ? "warn" : "muted")}
           </div>
+        </Card>
+
+        {/* Application form — what the applicant actually filled in. Read
+            straight off application_workspace()'s own row, which already
+            carries every one of these columns; nothing here is fetched
+            separately. */}
+        <Card style={{ marginBottom: 16 }}>
+          <h3 style={{ marginTop: 0 }}>{"Application form"}</h3>
+          <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0, marginBottom: 16 }}>
+            {"What the applicant submitted — read-only here. Use “Request correction” below to send a section back to them."}
+          </p>
+          {FORM_SECTIONS.map((section) => (
+            <FormFieldsSection
+              key={section.key}
+              title={section.title}
+              fields={section.fields}
+              value={app[section.key]}
+            />
+          ))}
         </Card>
 
         {/* Application fee — the first payment gate, raised the moment the
@@ -768,6 +836,33 @@ const AdmissionsWorkspace = () => {
 
 // Small child forms live inline for locality — kept short so the workspace
 // reads as one file rather than five.
+
+// One FORM_SECTIONS entry, read-only — staff read what the applicant wrote
+// here; "Request correction" below is how they send something back, not
+// this. Blank fields are skipped rather than shown empty, so a
+// half-finished form doesn't read as ten missing answers.
+const FormFieldsSection = ({ title, fields, value }) => {
+  const entries = fields.filter(([key]) => String(value?.[key] ?? "").trim());
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", color: "var(--ink-3)", marginBottom: 8 }}>
+        {title}
+      </div>
+      {entries.length === 0 ? (
+        <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-3)" }}>{"Nothing entered yet."}</p>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: "10px 20px" }}>
+          {entries.map(([key, label]) => (
+            <div key={key}>
+              <div style={{ fontSize: 11.5, color: "var(--ink-3)" }}>{label}</div>
+              <div style={{ fontSize: 14, whiteSpace: "pre-wrap" }}>{String(value[key])}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const CorrectionForm = ({ applicationId, schoolId, disabled, onDone, onError }) => {
   const [sections, setSections] = useState({

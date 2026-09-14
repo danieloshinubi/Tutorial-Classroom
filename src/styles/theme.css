@@ -1252,12 +1252,12 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .auth-badge img { width: 34px; height: 34px; border-radius: 10px; object-fit: cover; }
 
-/* Under the password field, centred so it reads as a discreet offer rather
-   than a left-aligned prompt fighting the primary action below it. */
+/* Under the password field, left-aligned with room below it so it doesn't
+   crowd into the Sign in button underneath. */
 .forgot-row {
   display: flex;
-  justify-content: center;
-  padding: 6px 0 2px;
+  justify-content: flex-start;
+  padding: 6px 0 18px;
 }
 .forgot-row a {
   color: var(--danger);
