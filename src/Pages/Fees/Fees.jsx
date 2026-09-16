@@ -125,12 +125,16 @@ const Fees = () => {
     load();
   }, [load]);
 
-  // A parent with three children needs to know which bill is whose.
+  // A parent with three children needs to know which bill is whose. An
+  // application/acceptance-fee invoice has no student_id at all (see
+  // Bursary.jsx's own nameOf) — invoice_balances carries the applicant's
+  // name separately on exactly those rows.
   const nameOf = useCallback(
-    (studentId) => {
-      if (studentId === user?.id) return "You";
-      const child = children.find((c) => c.student?.id === studentId);
-      return child ? displayName(child.student) : "Student";
+    (invoice) => {
+      if (invoice.student_id === user?.id) return "You";
+      const child = children.find((c) => c.student?.id === invoice.student_id);
+      if (child) return displayName(child.student);
+      return invoice.applicant_name || "Student";
     },
     [children, user]
   );
@@ -194,7 +198,7 @@ const Fees = () => {
           <InvoiceCard
             key={invoice.invoice_id}
             invoice={invoice}
-            who={nameOf(invoice.student_id)}
+            who={nameOf(invoice)}
             term={termLabel(invoice.term_id)}
             items={items[invoice.invoice_id] || []}
             payments={payments[invoice.invoice_id] || []}
@@ -560,7 +564,13 @@ const InvoiceCard = ({
                             {"View receipt"}
                           </Button>
                         ) : null}
-                        {payment.status === "submitted" ? (
+                        {/* A gateway-sourced submitted row (require_confirmation
+                            on) is not a family's own declaration — it's the
+                            record of money the gateway already reports as
+                            taken, and RLS itself now refuses this for one
+                            (119_unify_payment_confirmation.sql); this just
+                            keeps the button from appearing only to fail. */}
+                        {payment.status === "submitted" && !payment.gateway_ref ? (
                           <Button
                             size="sm"
                             variant="ghost"

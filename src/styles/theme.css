@@ -459,7 +459,7 @@ a { color: var(--brand); }
   gap: 12px;
   margin-top: 14px;
 }
-.page-toolbar .tabs { margin-bottom: 0; }
+.page-toolbar .tabs-wrap { margin-bottom: 0; }
 .page-toolbar .filters {
   display: flex;
   flex-wrap: wrap;
@@ -1006,13 +1006,50 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
   background: var(--surface);
 }
 
+.tabs-wrap {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 20px;
+}
 .tabs {
   display: flex;
   gap: 2px;
   overflow-x: auto;
   border-bottom: 1px solid var(--line);
-  margin-bottom: 20px;
+  flex: 1;
+  min-width: 0;
+  /* The row itself still scrolls with wheel/touch/drag — only the browser's
+     own scrollbar chrome is hidden, since the fade + arrow buttons below are
+     the affordance now. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs-wrap.can-scroll-left .tabs {
+  mask-image: linear-gradient(to right, transparent, black 28px);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 28px);
+}
+.tabs-wrap.can-scroll-right .tabs {
+  mask-image: linear-gradient(to left, transparent, black 28px);
+  -webkit-mask-image: linear-gradient(to left, transparent, black 28px);
+}
+.tabs-wrap.can-scroll-left.can-scroll-right .tabs {
+  mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent);
+}
+.tabs-scroll-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.tabs-scroll-btn:hover { color: var(--ink); background: var(--bg); }
 .tab {
   border: none;
   background: none;

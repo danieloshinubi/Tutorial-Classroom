@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { allCountries } from "country-region-data";
 import { ApplicantShell } from "../../Components/ApplicantShell";
 import { supabase } from "../../lib/supabaseClient";
@@ -12,6 +12,11 @@ import {
   saveApplicationSection,
   submitMyApplication,
   markApplicationPaymentInitiated,
+  cancelApplicationPayment,
+  startOnlinePayment,
+  declareAdmissionsPayment,
+  uploadPaymentProof,
+  PAYMENT_METHODS,
   resubmitApplicationCorrection,
   fetchApplicationEvents,
   fetchMyOffer,
@@ -338,9 +343,99 @@ const AppStep = ({ step }) => {
   );
 };
 
+const PAYMENT_METHOD_OPTIONS = PAYMENT_METHODS.map(([value, label]) => ({ value, label }));
+
+// The admissions equivalent of Fees.jsx's own "I already paid" disclosure —
+// trimmed, since there's no partial-payment concept on a fixed fee: the
+// amount is the invoice's own, not something the applicant types in.
+const DeclareAdmissionsPayment = ({ invoice, amount, schoolId, onDeclared }) => {
+  const [open, setOpen] = useState(false);
+  const [method, setMethod] = useState("transfer");
+  const [reference, setReference] = useState("");
+  const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
+  const [file, setFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      let proofPath = null;
+      if (file) {
+        proofPath = await uploadPaymentProof({ schoolId, invoiceId: invoice.id, file });
+      }
+      await declareAdmissionsPayment({
+        invoiceId: invoice.id,
+        amount,
+        method,
+        reference: reference.trim(),
+        paidOn,
+        proofPath,
+      });
+      setOpen(false);
+      setReference("");
+      setFile(null);
+      await onDeclared();
+    } catch (err) {
+      setError(err.message || "Could not send that.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <Button variant="secondary" onClick={() => setOpen(true)}>
+        {"Paid by transfer instead?"}
+      </Button>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} style={{ marginTop: 12, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+      <p style={{ color: "var(--ink-2)", fontSize: 13.5, marginTop: 0 }}>
+        {"Tell the school about a payment you have already made. It is checked against the account before it counts."}
+      </p>
+      <div className="split">
+        <Field label="How you paid">
+          <Select value={method} onChange={setMethod} options={PAYMENT_METHOD_OPTIONS} />
+        </Field>
+        <Field label="When">
+          <DatePicker value={paidOn} onChange={setPaidOn} />
+        </Field>
+      </div>
+      <Field label="Teller or transfer reference" hint="Optional, but it speeds the check up.">
+        <input
+          className="input"
+          value={reference}
+          placeholder="GTB/8891"
+          onChange={(e) => setReference(e.target.value)}
+        />
+      </Field>
+      <Field label="Receipt" hint="A photograph of the teller, or the transfer screenshot.">
+        <input
+          type="file"
+          accept="image/*,application/pdf"
+          onChange={(e) => setFile(e.target.files?.[0] || null)}
+        />
+      </Field>
+      <Notice tone="error">{error}</Notice>
+      <div className="btn-row">
+        <Button type="submit" disabled={busy}>
+          {busy ? "Sending..." : "Send to the bursary"}
+        </Button>
+        <Button type="button" variant="ghost" disabled={busy} onClick={() => setOpen(false)}>
+          {"Cancel"}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
 const ApplicationDashboard = () => {
   const { applicationId } = useParams();
-  const navigate = useNavigate();
 
   // Not useSchool() — that resolves the school through a membership-gated
   // policy, and an applicant is never a school_members row. This is the
@@ -482,19 +577,47 @@ const ApplicationDashboard = () => {
   // an editable section that would fail on save.
   const feeLocked = feeVisible && application?.payment_state !== "verified";
 
-  const goToFee = async () => {
-    if (!application) return;
-    // Move the row to processing before handing off, so a reload cannot
-    // present the Pay again button while the gateway confirms. The same
-    // function and the same payment_state column are reused for the
-    // acceptance fee below — pay_application_fee_initiated only ever
-    // touches applications.payment_state, so it has no idea which fee it is.
+  const [payingOnline, setPayingOnline] = useState(false);
+
+  // Straight to Paystack — not /Fees, which is the member-only family
+  // portal and hangs forever for an applicant (no school_id: they are not
+  // a school_members row). The same function and the same payment_state
+  // column are reused for the acceptance fee below — pay_application_fee_
+  // initiated only ever touches applications.payment_state, so it has no
+  // idea which fee it is; targetInvoice is what tells payable_now/pay-init
+  // which one to actually charge.
+  const payFee = async (targetInvoice) => {
+    if (!application || !targetInvoice || payingOnline) return;
+    setError("");
+    setPayingOnline(true);
     try {
       await markApplicationPaymentInitiated(application.id);
-    } catch {
-      /* not fatal — the fees page runs the same guard */
+      const { authorizationUrl } = await startOnlinePayment({ invoiceId: targetInvoice.id });
+      window.location.href = authorizationUrl;
+    } catch (err) {
+      setError(err.message || "Could not start that payment.");
+      // The attempt never reached the gateway — leaving payment_state at
+      // "processing" here is exactly how it gets stuck forever. Revert so
+      // the button goes back to "Pay" rather than a dead "View payment".
+      try {
+        setApplication(await cancelApplicationPayment(application.id));
+      } catch {
+        /* best effort — "Cancel and try again" below still works */
+      }
+      setPayingOnline(false);
     }
-    navigate(`/Fees?application=${application.id}`);
+  };
+
+  // For when the applicant comes back later still stuck in "processing" —
+  // abandoned the gateway's own page, closed the tab, the bank declined.
+  const cancelPayment = async () => {
+    if (!application) return;
+    setError("");
+    try {
+      setApplication(await cancelApplicationPayment(application.id));
+    } catch (err) {
+      setError(err.message || "Could not cancel that payment attempt.");
+    }
   };
 
   const acceptTheOffer = async () => {
@@ -836,16 +959,37 @@ const ApplicationDashboard = () => {
                 <p style={{ margin: "6px 0" }}>{`Invoice ${acceptanceInvoice.reference}`}</p>
                 {application.payment_state === "processing" ? (
                   <Notice tone="brand">
-                    {"We are confirming your payment with the bank. You do not need to pay again."}
+                    {"We are confirming your payment with the bank. If you didn't finish paying, use Retry or Cancel below."}
                   </Notice>
                 ) : null}
                 {application.payment_state === "verified" ? (
                   <Notice tone="success">{"Your acceptance fee has been received."}</Notice>
                 ) : (
-                  <Button onClick={goToFee}>
-                    {application.payment_state === "processing" ? "View payment" : "Pay acceptance fee"}
-                  </Button>
+                  <div className="btn-row">
+                    <Button disabled={payingOnline} onClick={() => payFee(acceptanceInvoice)}>
+                      {payingOnline
+                        ? "Opening..."
+                        : application.payment_state === "processing"
+                        ? "Retry payment"
+                        : "Pay acceptance fee"}
+                    </Button>
+                    {application.payment_state === "processing" ? (
+                      <Button variant="secondary" onClick={cancelPayment}>
+                        {"Cancel and try again"}
+                      </Button>
+                    ) : null}
+                  </div>
                 )}
+                {application.payment_state !== "verified" ? (
+                  <div style={{ marginTop: 10 }}>
+                    <DeclareAdmissionsPayment
+                      invoice={acceptanceInvoice}
+                      amount={config?.acceptance_fee_amount || 0}
+                      schoolId={application.school_id}
+                      onDeclared={load}
+                    />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </Card>
@@ -893,16 +1037,37 @@ const ApplicationDashboard = () => {
             ) : null}
             {application.payment_state === "processing" ? (
               <Notice tone="brand">
-                {"We are confirming your payment with the bank. You do not need to pay again."}
+                {"We are confirming your payment with the bank. If you didn't finish paying, use Retry or Cancel below."}
               </Notice>
             ) : null}
             {application.payment_state === "verified" ? (
               <Notice tone="success">{"Your fee has been received. The form is unlocked."}</Notice>
             ) : null}
             {application.payment_state !== "verified" ? (
-              <Button onClick={goToFee}>
-                {application.payment_state === "processing" ? "View payment" : "Pay application fee"}
-              </Button>
+              <div className="btn-row">
+                <Button disabled={payingOnline} onClick={() => payFee(invoice)}>
+                  {payingOnline
+                    ? "Opening..."
+                    : application.payment_state === "processing"
+                    ? "Retry payment"
+                    : "Pay application fee"}
+                </Button>
+                {application.payment_state === "processing" ? (
+                  <Button variant="secondary" onClick={cancelPayment}>
+                    {"Cancel and try again"}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {application.payment_state !== "verified" && invoice ? (
+              <div style={{ marginTop: 10 }}>
+                <DeclareAdmissionsPayment
+                  invoice={invoice}
+                  amount={config?.application_fee_amount || 0}
+                  schoolId={application.school_id}
+                  onDeclared={load}
+                />
+              </div>
             ) : null}
           </Card>
         ) : null}

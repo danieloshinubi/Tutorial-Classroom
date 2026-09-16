@@ -8,6 +8,7 @@ import GuardiansPanel from "./GuardiansPanel";
 import AcademicPanel from "./AcademicPanel";
 import ClassesPanel from "./ClassesPanel";
 import AdmissionsSettingsPanel from "./AdmissionsSettingsPanel";
+import PaymentGatewaySettingsPanel from "./PaymentGatewaySettingsPanel";
 import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
 import {
   fetchSchoolMembers,
@@ -1142,7 +1143,7 @@ const MailboxesPanel = () => {
   );
 };
 
-const TABS = ["people", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "settings"];
+const TABS = ["people", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "settings"];
 
 const SchoolAdmin = () => {
   const { school } = useSchool();
@@ -1197,6 +1198,7 @@ const SchoolAdmin = () => {
               { id: "students", label: "Students" },
               { id: "guardians", label: "Parents & children" },
               { id: "mailboxes", label: "Mailboxes" },
+              { id: "payments", label: "Payments" },
               { id: "settings", label: "School settings" },
             ]}
             active={tab}
@@ -1213,6 +1215,7 @@ const SchoolAdmin = () => {
         {tab === "students" ? <StudentRegistrationsPanel /> : null}
         {tab === "guardians" ? <GuardiansPanel /> : null}
         {tab === "mailboxes" ? <MailboxesPanel /> : null}
+        {tab === "payments" ? <PaymentGatewaySettingsPanel /> : null}
         {tab === "settings" ? <SettingsPanel /> : null}
       </Page>
     </div>

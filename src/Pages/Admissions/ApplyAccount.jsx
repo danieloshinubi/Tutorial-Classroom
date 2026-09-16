@@ -170,7 +170,12 @@ const ApplyAccount = () => {
             <Button type="submit" disabled={submitting}>
               {submitting ? "Creating account..." : "Create account and continue"}
             </Button>
-            <Link to="/Login" style={{ fontSize: 14 }}>
+            {/* Login.jsx redirects to location.state.from.pathname after a
+                successful sign-in, defaulting to /Dashboard otherwise — the
+                member-only home an applicant (no school_members row) can't
+                use. Naming /Applications here sends a returning applicant
+                back to their own portal instead. */}
+            <Link to="/Login" state={{ from: { pathname: "/Applications" } }} style={{ fontSize: 14 }}>
               {"Already have an account? Sign in"}
             </Link>
           </div>

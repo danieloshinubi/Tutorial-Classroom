@@ -6,6 +6,7 @@ import {
   fetchTerms,
   fetchClasses,
   fetchSchoolMembers,
+  fetchPaymentQueueContext,
   fetchFeeStructures,
   fetchFeeItems,
   createFeeStructure,
@@ -43,6 +44,7 @@ import {
 import { StatRow } from "../../Components/Charts";
 
 const METHOD_LABEL = Object.fromEntries(PAYMENT_METHODS);
+const PURPOSE_LABEL = { term_fee: "Term fee", application_fee: "Application fee", acceptance_fee: "Acceptance fee", other: "Other" };
 
 const useMoney = (currency) =>
   useMemo(() => {
@@ -461,10 +463,16 @@ const Structures = ({
 const Invoices = ({ invoices, people, money, onChange, onError }) => {
   const [filter, setFilter] = useState("all");
 
+  // An application/acceptance-fee invoice has no student_id at all (the
+  // applicant is not a student yet) — invoice_balances carries the
+  // applicant's name separately on exactly those rows (applicant_name),
+  // which is what a bare student_id lookup would otherwise render as the
+  // literal word "Student".
   const nameOf = useCallback(
-    (id) => {
-      const person = people.find((p) => p.user_id === id || p.id === id);
-      return person ? displayName(person.profiles || person) : "Student";
+    (invoice) => {
+      const person = people.find((p) => p.user_id === invoice.student_id || p.id === invoice.student_id);
+      if (person) return displayName(person.profiles || person);
+      return invoice.applicant_name || "Student";
     },
     [people]
   );
@@ -540,7 +548,7 @@ const Invoices = ({ invoices, people, money, onChange, onError }) => {
                   <InvoiceRow
                     key={i.invoice_id}
                     invoice={i}
-                    who={nameOf(i.student_id)}
+                    who={nameOf(i)}
                     money={money}
                     onChange={onChange}
                     onError={onError}
@@ -701,13 +709,13 @@ const InvoiceRow = ({ invoice, who, money, onChange, onError }) => {
 
 /* ------------------------------------------------------------------ queue */
 
-const Queue = ({ queue, invoices, money, onChange, onError }) => {
+const Queue = ({ queue, queueContext, money, onChange, onError }) => {
   const [note, setNote] = useState({});
   const [busy, setBusy] = useState(null);
   const preview = useDocumentPreview();
 
-  const refOf = (invoiceId) =>
-    invoices.find((i) => i.invoice_id === invoiceId)?.reference || "—";
+  const contextOf = (invoiceId) => queueContext[invoiceId] || {};
+  const refOf = (invoiceId) => contextOf(invoiceId).reference || "—";
 
   const decide = async (payment, approve) => {
     const text = (note[payment.id] || "").trim();
@@ -746,10 +754,17 @@ const Queue = ({ queue, invoices, money, onChange, onError }) => {
         {"Payments families say they have made. None of these has come off a balance yet — that happens when you approve one."}
       </p>
 
-      {queue.map((p) => (
+      {queue.map((p) => {
+        const ctx = contextOf(p.invoice_id);
+        const isAdmissions = ctx.purpose === "application_fee" || ctx.purpose === "acceptance_fee";
+        return (
         <Card key={p.id} style={{ marginBottom: 14 }}>
           <div className="page-head" style={{ marginBottom: 8 }}>
             <div>
+              <div className="btn-row" style={{ marginBottom: 4, flexWrap: "wrap" }}>
+                {ctx.purpose ? <Badge tone={isAdmissions ? "brand" : undefined}>{PURPOSE_LABEL[ctx.purpose] || ctx.purpose}</Badge> : null}
+                {isAdmissions && ctx.applicant_name ? <Badge>{ctx.applicant_name}</Badge> : null}
+              </div>
               <h3 style={{ margin: 0 }}>{money(p.amount)}</h3>
               <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
                 {`${refOf(p.invoice_id)} · ${METHOD_LABEL[p.method] || p.method}`}
@@ -794,7 +809,8 @@ const Queue = ({ queue, invoices, money, onChange, onError }) => {
             </Button>
           </div>
         </Card>
-      ))}
+        );
+      })}
       {preview.node}
     </>
   );
@@ -816,6 +832,7 @@ const Bursary = () => {
   const [items, setItems] = useState({});
   const [invoices, setInvoices] = useState([]);
   const [queue, setQueue] = useState([]);
+  const [queueContext, setQueueContext] = useState({});
   const [debtors, setDebtors] = useState([]);
   const [summary, setSummary] = useState(null);
 
@@ -844,6 +861,10 @@ const Bursary = () => {
       setItems(await fetchFeeItems(s.map((r) => r.id)).catch(() => ({})));
       setInvoices(inv);
       setQueue(q);
+      // Independent of the term filter above — an admissions invoice
+      // always has term_id null, so reusing `inv` here would show "—" for
+      // one of these whenever a term is selected.
+      setQueueContext(await fetchPaymentQueueContext(q.map((p) => p.invoice_id)).catch(() => ({})));
       setDebtors(d);
       setSummary(sum);
     } catch (err) {
@@ -935,7 +956,7 @@ const Bursary = () => {
         {!loading && tab === "queue" ? (
           <Queue
             queue={queue}
-            invoices={invoices}
+            queueContext={queueContext}
             money={money}
             onChange={refresh}
             onError={setError}

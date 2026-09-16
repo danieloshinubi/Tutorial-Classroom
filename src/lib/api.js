@@ -2632,6 +2632,45 @@ export const markApplicationPaymentInitiated = async (applicationId) => {
   return data;
 };
 
+// Steps a stuck "processing" attempt back to "unpaid" — either automatically,
+// right after pay-init itself fails to reach the gateway, or from the
+// applicant's own "Cancel and try again" button if they abandoned checkout
+// (closed the tab, the bank declined, etc.) and came back later.
+export const cancelApplicationPayment = async (applicationId) => {
+  const { data, error } = await supabase.rpc("cancel_application_payment_attempt", {
+    target_application: applicationId,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// "I paid by transfer instead" — the admissions equivalent of Fees.jsx's
+// declarePayment, except this one is a real RPC rather than a raw insert:
+// it also has to move payment_state to processing, which a client insert
+// cannot do atomically. Lands in the same Bursary "Payment queue" a term
+// fee's declared payment does.
+export const declareAdmissionsPayment = async ({
+  invoiceId,
+  amount,
+  method,
+  reference,
+  paidOn,
+  note,
+  proofPath,
+}) => {
+  const { data, error } = await supabase.rpc("declare_admissions_payment", {
+    target_invoice: invoiceId,
+    amount,
+    method: method || "transfer",
+    reference: reference || null,
+    paid_on: paidOn || new Date().toISOString().slice(0, 10),
+    note: note || null,
+    proof_path: proofPath || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
 // Manual path — a finance officer confirms a proof upload or a teller slip.
 // The gateway path runs from the Paystack webhook and is not exposed here.
 export const verifyApplicationPayment = async ({ paymentId, note, schoolId }) => {
@@ -3352,7 +3391,7 @@ export const fetchPaymentsFor = async (invoiceIds, schoolId) => {
   const { data, error } = await supabase
     .from("payments")
     .select(
-      "id, invoice_id, amount, method, status, reference, paid_on, note, proof_path, submitted_at, decided_at, decision_note"
+      "id, invoice_id, amount, method, status, reference, paid_on, note, proof_path, submitted_at, decided_at, decision_note, gateway_ref"
     )
     .eq("school_id", schoolId)
     .in("invoice_id", invoiceIds)
@@ -3644,6 +3683,22 @@ export const fetchPaymentQueue = async (schoolId) => {
     .order("submitted_at", { ascending: true });
   if (error) throw error;
   return data;
+};
+
+// Reference/purpose/applicant-name for exactly the invoices behind the
+// current queue — fetched independently of whatever term filter the
+// Invoices tab has selected. fetchSchoolInvoices is .eq("term_id", ...)
+// filtered when a term is picked, and an admissions invoice always has
+// term_id = null, so reusing that already-loaded list here would silently
+// show "—" for a queued admissions payment whenever a term is selected.
+export const fetchPaymentQueueContext = async (invoiceIds) => {
+  if (!invoiceIds || invoiceIds.length === 0) return {};
+  const { data, error } = await supabase
+    .from("invoice_balances")
+    .select("invoice_id, reference, purpose, applicant_name")
+    .in("invoice_id", invoiceIds);
+  if (error) throw error;
+  return Object.fromEntries(data.map((r) => [r.invoice_id, r]));
 };
 
 export const fetchRecentPayments = async ({ schoolId, limit = 50 }) => {
@@ -4094,6 +4149,62 @@ export const connectTicketMailbox = async (payload) => {
       detail = "";
     }
     throw new Error(detail || error.message || "Could not connect that mailbox.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+};
+
+/* -------------------------------------------------------------------------- */
+/* payment gateways                                                           */
+/* -------------------------------------------------------------------------- */
+
+// The school's one gateway row — RLS-gated read, no RPC needed.
+export const fetchPaymentGateway = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payment_gateways")
+    .select("*")
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+// The confirmation toggle alone — a direct update under the narrow RLS
+// policy that lets owner/admin flip it without a service-role round trip.
+export const updatePaymentGatewaySetting = async ({ schoolId, requireConfirmation, isActive }) => {
+  const patch = {};
+  if (requireConfirmation !== undefined) patch.require_confirmation = requireConfirmation;
+  if (isActive !== undefined) patch.is_active = isActive;
+  const { data, error } = await supabase
+    .from("payment_gateways")
+    .update(patch)
+    .eq("school_id", schoolId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+// Choosing/switching provider or mode, or connecting BYO credentials —
+// always through the Edge Function, never a raw table write, exactly like
+// connectTicketMailbox above.
+export const connectPaymentGateway = async (payload) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("payment-gateway-connect", {
+    body: payload,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not save that gateway.");
   }
   if (data?.error) throw new Error(data.error);
   return data;

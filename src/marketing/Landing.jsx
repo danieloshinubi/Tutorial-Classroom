@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient";
 import { Mark } from "../Components/Logo";
 
 // The hero's little "app window" — clickable modules on the left, content on
@@ -304,11 +305,35 @@ const CONFIG_TOGGLES = [
 const Nav = () => {
   const [loginOpen, setLoginOpen] = useState(false);
   const [slug, setSlug] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [notFound, setNotFound] = useState("");
 
-  const goToLogin = (e) => {
+  const goToLogin = async (e) => {
     e.preventDefault();
-    if (!slug.trim()) return;
+    if (!slug.trim() || checking) return;
     const clean = slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (!clean) return;
+
+    setChecking(true);
+    setNotFound("");
+    // A wrong subdomain used to redirect straight there anyway — a visitor
+    // only found out it was wrong once they tried to sign in and RLS turned
+    // up nothing, which reads as "you don't have access" rather than "that
+    // school doesn't exist". public_school() is already public precisely so
+    // a login page can name its school before anyone signs in; checking it
+    // here first means a typo never leaves the marketing site at all.
+    const { data, error } = await supabase.rpc("public_school", { target_slug: clean });
+    setChecking(false);
+
+    if (error) {
+      setNotFound("Could not check that right now — please try again.");
+      return;
+    }
+    if (!data?.length) {
+      setNotFound(`We couldn't find a school at "${clean}.schoolivio.com" — check the web address your school gave you.`);
+      return;
+    }
+
     const { protocol, hostname, port } = window.location;
     const parts = hostname.toLowerCase().split(".");
     const base = hostname.endsWith("localhost") || hostname === "localhost"
@@ -360,17 +385,28 @@ const Nav = () => {
 
         <span className="mkt-nav-actions">
           {loginOpen ? (
-            <form onSubmit={goToLogin} className="mkt-nav-slug-form">
-              <input
-                autoFocus
-                placeholder="your-school"
-                value={slug}
-                onChange={(e) => setSlug(e.target.value)}
-                className="mkt-nav-slug-input"
-              />
-              <span className="mkt-nav-slug-suffix">{".schoolivio.com"}</span>
-              <button type="submit" className="mkt-btn mkt-btn-ghost-light mkt-btn-sm">{"Go"}</button>
-            </form>
+            <div className="mkt-nav-slug-wrap">
+              <form onSubmit={goToLogin} className="mkt-nav-slug-form">
+                <input
+                  autoFocus
+                  placeholder="your-school"
+                  value={slug}
+                  onChange={(e) => {
+                    setSlug(e.target.value);
+                    if (notFound) setNotFound("");
+                  }}
+                  className="mkt-nav-slug-input"
+                  aria-invalid={notFound ? "true" : undefined}
+                />
+                <span className="mkt-nav-slug-suffix">{".schoolivio.com"}</span>
+                <button type="submit" className="mkt-btn mkt-btn-ghost-light mkt-btn-sm" disabled={checking}>
+                  {checking ? "Checking…" : "Go"}
+                </button>
+              </form>
+              {notFound ? (
+                <p className="mkt-nav-slug-error" role="alert">{notFound}</p>
+              ) : null}
+            </div>
           ) : (
             <a href="#login" className="mkt-nav-textlink"
               onClick={(e) => { e.preventDefault(); setLoginOpen(true); }}>

@@ -760,20 +760,79 @@ export const Notice = ({ tone = "muted", children }) =>
 
 export const Empty = ({ children }) => <div className="empty">{children}</div>;
 
-export const Tabs = ({ tabs, active, onChange }) => (
-  <div className="tabs">
-    {tabs.map((tab) => (
-      <button
-        key={tab.id}
-        type="button"
-        className={`tab${active === tab.id ? " active" : ""}`}
-        onClick={() => onChange(tab.id)}
-      >
-        {tab.label}
-      </button>
-    ))}
-  </div>
-);
+// A row of tabs that can outgrow its width — School Administration alone has
+// nine of them. Rather than leave the browser's own scrollbar as the only
+// sign there's more, this tracks which edge still has something to scroll to
+// and fades that edge + offers a click target there, the way a horizontally-
+// scrolling row should read instead of looking like it got cut off.
+export const Tabs = ({ tabs, active, onChange }) => {
+  const trackRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateEdges = () => {
+    const el = trackRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  };
+
+  useLayoutEffect(() => {
+    updateEdges();
+  }, [tabs]);
+
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return undefined;
+    updateEdges();
+    el.addEventListener("scroll", updateEdges, { passive: true });
+    window.addEventListener("resize", updateEdges);
+    return () => {
+      el.removeEventListener("scroll", updateEdges);
+      window.removeEventListener("resize", updateEdges);
+    };
+  }, []);
+
+  // The active tab can change from outside a click — a ?tab= query param, a
+  // link from elsewhere in the app — so keep it in view then too, not only
+  // when the user themselves clicked something already visible.
+  useEffect(() => {
+    trackRef.current?.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [active]);
+
+  const scrollBy = (direction) => {
+    trackRef.current?.scrollBy({ left: direction * Math.round(trackRef.current.clientWidth * 0.6), behavior: "smooth" });
+  };
+
+  return (
+    <div
+      className={`tabs-wrap${canScrollLeft ? " can-scroll-left" : ""}${canScrollRight ? " can-scroll-right" : ""}`}
+    >
+      {canScrollLeft ? (
+        <button type="button" className="tabs-scroll-btn left" onClick={() => scrollBy(-1)} aria-label="Scroll tabs left">
+          <Icon icon={chevronLeft} size={15} />
+        </button>
+      ) : null}
+      <div className="tabs" ref={trackRef}>
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`tab${active === tab.id ? " active" : ""}`}
+            onClick={() => onChange(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {canScrollRight ? (
+        <button type="button" className="tabs-scroll-btn right" onClick={() => scrollBy(1)} aria-label="Scroll tabs right">
+          <Icon icon={chevronRight} size={15} />
+        </button>
+      ) : null}
+    </div>
+  );
+};
 
 // Gives each course a stable colour from its code, so tiles look varied
 // without being random on every render.
