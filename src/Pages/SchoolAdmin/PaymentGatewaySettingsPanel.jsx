@@ -5,7 +5,7 @@ import {
   updatePaymentGatewaySetting,
   connectPaymentGateway,
 } from "../../lib/api";
-import { Card, Field, Button, Notice, Empty, Tabs } from "../../Components/UI";
+import { Card, Field, Button, Notice, Empty, Tabs, Select } from "../../Components/UI";
 
 // Only Paystack has a working checkout/webhook adapter today (see
 // supabase/functions/_shared/gateways/registry.ts) — this list is what
@@ -185,15 +185,11 @@ const PaymentGatewaySettingsPanel = () => {
           {mode === "byo" ? (
             <>
               <Field label="Provider">
-                <select
-                  className="input"
+                <Select
                   value={provider}
-                  onChange={(e) => { setProvider(e.target.value); setCredentials({}); }}
-                >
-                  {Object.entries(IMPLEMENTED_PROVIDERS).map(([key, p]) => (
-                    <option key={key} value={key}>{p.label}</option>
-                  ))}
-                </select>
+                  onChange={(value) => { setProvider(value); setCredentials({}); }}
+                  options={Object.entries(IMPLEMENTED_PROVIDERS).map(([key, p]) => ({ value: key, label: p.label }))}
+                />
               </Field>
               {activeProvider.fields.map((f) => (
                 <Field key={f.key} label={f.label}>

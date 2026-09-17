@@ -1214,6 +1214,14 @@ table.data tr:last-child td { border-bottom: none; }
   width: 100%;
   padding-right: 44px;
 }
+/* Edge/Chromium on Windows draws its own native reveal-password eye inside
+   a password field, right on top of the app's own custom one below —
+   two eye icons stacked in the same corner. This field already has its
+   own show/hide button, so the browser's built-in one is switched off. */
+.input-icon .input[type="password"]::-ms-reveal,
+.input-icon .input[type="password"]::-ms-clear {
+  display: none;
+}
 .input-icon .eye {
   position: absolute;
   right: 6px;
@@ -1424,8 +1432,11 @@ table.data tr:last-child td { border-bottom: none; }
   line-height: 1.28;
   max-width: 20ch;
 }
-/* The second half in a lighter tone, so the sentence has a shape. */
-.auth-pitch span { color: #b79bf0; }
+/* The second half in a lighter tone, so the sentence has a shape — the
+   tenant's own theme color's light variant, not a hardcoded Schoolivio
+   purple, so a rebranded school's sign-in page reads as one color story
+   throughout, not its own accent everywhere else with a stray purple here. */
+.auth-pitch span { color: var(--brand-light); }
 
 .auth-art { position: relative; display: grid; place-items: center; margin: 4px 0; }
 .auth-orbit { width: min(330px, 62vh); height: auto; color: #ffffff; }
@@ -1445,7 +1456,9 @@ table.data tr:last-child td { border-bottom: none; }
   max-width: 42ch;
   font-size: 13.5px;
   line-height: 1.65;
-  color: #d9cff5;
+  /* Same reasoning as .auth-pitch span above — a pale tint of the tenant's
+     own theme color, not a fixed Schoolivio lavender. */
+  color: var(--brand-lighter);
 }
 .auth-dots { display: flex; gap: 7px; margin-top: 18px; }
 .auth-dots button {

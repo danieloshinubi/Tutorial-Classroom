@@ -24,6 +24,7 @@ import {
   Field,
   Button,
   Select,
+  DatePicker,
   DateTimePicker,
   Notice,
   Empty,
@@ -234,10 +235,10 @@ const AttendanceRecords = ({ schoolId }) => {
     <Card>
       <div className="btn-row" style={{ marginBottom: 16, flexWrap: "wrap" }}>
         <Field label="From">
-          <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <DatePicker value={from} onChange={setFrom} />
         </Field>
         <Field label="To">
-          <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker value={to} onChange={setTo} />
         </Field>
         <div style={{ alignSelf: "flex-end" }}>
           <ExportButton columns={RECORD_EXPORT_COLUMNS} rows={records} filename={`class-attendance-${from}-to-${to}.csv`} />
@@ -317,10 +318,10 @@ const SchoolAttendance = ({ schoolId }) => {
       </p>
       <div className="btn-row" style={{ marginBottom: 16, flexWrap: "wrap" }}>
         <Field label="From">
-          <input type="date" className="input" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <DatePicker value={from} onChange={setFrom} />
         </Field>
         <Field label="To">
-          <input type="date" className="input" value={to} onChange={(e) => setTo(e.target.value)} />
+          <DatePicker value={to} onChange={setTo} />
         </Field>
         <div style={{ alignSelf: "flex-end" }}>
           <ExportButton columns={SCHOOL_EXPORT_COLUMNS} rows={records} filename={`school-attendance-${from}-to-${to}.csv`} />

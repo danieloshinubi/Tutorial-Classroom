@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { resolveSlug } from "../lib/tenant";
 import { applyTenantBranding } from "../lib/branding";
-import Logo, { Mark } from "./Logo";
+import { Mark } from "./Logo";
 
 // What the platform ties together, drawn as an orbit around the school.
 //
@@ -153,7 +153,25 @@ const AuthLayout = ({ title, subtitle, children, footer }) => {
       <div className="auth-card">
         <main className="auth-main">
           <div className="auth-corner">
-            <Logo size={26} />
+            {/* Same icon-swap the sidebar already does (Navbar.jsx's
+                .side-brand) — a school's own logo belongs on its own
+                sign-in page, not just the badge further down. */}
+            <span className="logo">
+              {school?.logo_url ? (
+                <img
+                  src={school.logo_url}
+                  alt=""
+                  width={26}
+                  height={26}
+                  style={{ borderRadius: 6, objectFit: "contain" }}
+                />
+              ) : (
+                <Mark size={26} />
+              )}
+              <span className="logo-text">
+                <span className="logo-name">{"Schoolivio"}</span>
+              </span>
+            </span>
           </div>
 
           <div className="auth-form">
