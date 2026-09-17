@@ -10,6 +10,7 @@ import {
   updateTicket,
 } from "../../lib/api";
 import { Page, Button, Notice, Empty, Select, displayName, initials } from "../../Components/UI";
+import { useLiveTicketsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -205,6 +206,8 @@ const TicketsList = () => {
   const [search, setSearch] = useState("");
   const [newGroupName, setNewGroupName] = useState("");
 
+  const live = useLiveTicketsListUpdates(schoolId);
+
   const load = useCallback(() => {
     if (!schoolId) return;
     setLoading(true);
@@ -262,6 +265,11 @@ const TicketsList = () => {
         action={<Button onClick={() => setShowNew((v) => !v)}>{showNew ? "Cancel" : "New ticket"}</Button>}
         wide
       >
+        <LiveUpdateBanner
+          count={live.count}
+          onReload={() => { live.reset(); load(); }}
+          label={`${live.count} new update${live.count === 1 ? "" : "s"} on tickets`}
+        />
         <Notice tone="error">{error}</Notice>
 
         {showNew ? (

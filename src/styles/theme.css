@@ -3292,9 +3292,10 @@ table.data tr:last-child td { border-bottom: none; }
 .docprev-fallback { text-align: center; color: #fff; }
 
 /* ==========================================================================
-   Live-update banner (Components/LiveUpdateBanner.jsx) — a page viewing one
-   application's live state prompts to reload rather than refreshing itself
-   silently underneath whatever the viewer is doing.
+   Live-update banner (Components/LiveUpdateBanner.jsx) — a page watching for
+   changes someone else made (a ticket, an application, a whole queue)
+   prompts to reload rather than refreshing itself silently underneath
+   whatever the viewer is doing.
    ========================================================================== */
 .live-update-banner {
   position: sticky;
@@ -3304,7 +3305,7 @@ table.data tr:last-child td { border-bottom: none; }
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 10px 16px;
+  padding: 10px 10px 10px 16px;
   margin-bottom: 16px;
   border-radius: var(--r);
   background: var(--brand-dark);
@@ -3313,18 +3314,44 @@ table.data tr:last-child td { border-bottom: none; }
   box-shadow: var(--shadow-1);
   animation: live-update-in 0.2s ease-out;
 }
-.live-update-banner .btn-primary {
+/* A white pill, icon-left, sitting on the banner's own solid colour —
+   the reload action itself is the whole point of this component, so it
+   gets its own shape rather than borrowing .btn-primary's rectangle. */
+.live-update-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  border-radius: 999px;
+  padding: 7px 16px 7px 12px;
   background: #fff;
   color: var(--brand-dark);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.1s ease;
 }
-/* Without this, :hover's own .btn-primary rule (one selector-part more
-   specific: element+pseudo-class+:not()) wins over the plain two-class
-   selector above and reverts the background to the same brand-dark as
-   this banner's own background — text and fill then match exactly, so
-   the whole button visually vanishes the moment the pointer reaches it. */
-.live-update-banner .btn-primary:hover:not(:disabled) {
-  background: #fff;
-  filter: brightness(0.95);
+.live-update-btn:hover {
+  filter: brightness(0.96);
+}
+.live-update-btn:active {
+  transform: scale(0.97);
+}
+.live-update-icon {
+  display: inline-flex;
+  transform-origin: center;
+}
+/* Spins for a fixed stretch on click — an acknowledgment that the tap
+   registered, not a loading spinner wired to a promise, since most
+   reloads here resolve in a handful of milliseconds and a spin tied
+   directly to that would just flicker. */
+.live-update-icon.spinning {
+  animation: live-update-spin 0.6s linear;
+}
+@keyframes live-update-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 @keyframes live-update-in {
   from { opacity: 0; transform: translateY(-6px); }

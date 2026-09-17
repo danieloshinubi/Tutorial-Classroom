@@ -913,6 +913,52 @@ export const subscribeToApplicationEvents = (applicationId, onInsert) =>
     )
     .subscribe();
 
+// Same "something changed here" signal as subscribeToApplicationEvents,
+// but for the three surfaces staff watch for OTHER people's changes
+// rather than one entity's own timeline: the Tickets list, the Admissions
+// queue, and one ticket's own message thread. All three need
+// classroom.tickets / classroom.ticket_messages / classroom.applications
+// added to the supabase_realtime publication (see
+// 122_tickets_and_applications_realtime.sql) — without that, Realtime
+// never delivers these events no matter how correct the subscription is.
+export const subscribeToTicketsList = (schoolId, onChange) =>
+  supabase
+    .channel(`tickets_list:${schoolId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "classroom", table: "tickets", filter: `school_id=eq.${schoolId}` },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
+export const subscribeToApplicationsList = (schoolId, onChange) =>
+  supabase
+    .channel(`applications_list:${schoolId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "classroom", table: "applications", filter: `school_id=eq.${schoolId}` },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
+// One channel, two listeners: a new message on this ticket's thread, or a
+// status/priority/assignment change on the ticket row itself — either one
+// is "reload me" from the viewer's point of view.
+export const subscribeToTicketThread = (ticketId, onChange) =>
+  supabase
+    .channel(`ticket_thread:${ticketId}`)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "classroom", table: "ticket_messages", filter: `ticket_id=eq.${ticketId}` },
+      (payload) => onChange(payload)
+    )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "classroom", table: "tickets", filter: `id=eq.${ticketId}` },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
 // Realtime's postgres_changes filter only reliably supports one column, so
 // the school check happens client-side — same reason fetchNotifications
 // above needs its own .eq("school_id", ...): RLS/the channel filter only

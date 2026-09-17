@@ -23,6 +23,7 @@ import {
   Select,
   formatDate,
 } from "../../Components/UI";
+import { useLiveApplicationsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 
 // The staff dashboard. Every queue the admissions team acts on — payment,
 // documents, screening, action-required, review, interview, decision,
@@ -61,6 +62,8 @@ const AdmissionsQueues = () => {
 
   const [rosterStatus, setRosterStatus] = useState("open");
   const [rosterQuery, setRosterQuery] = useState("");
+
+  const live = useLiveApplicationsListUpdates(schoolId);
 
   const load = useCallback(async () => {
     if (!schoolId) return;
@@ -134,6 +137,11 @@ const AdmissionsQueues = () => {
           </a>
         }
       >
+        <LiveUpdateBanner
+          count={live.count}
+          onReload={() => { live.reset(); load(); }}
+          label={`${live.count} new update${live.count === 1 ? "" : "s"} on admissions`}
+        />
         <Notice tone="error">{error}</Notice>
 
         {/* Whether the school is taking applications at all — the first

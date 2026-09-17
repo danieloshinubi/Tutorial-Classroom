@@ -16,6 +16,7 @@ import {
   fetchTicketGroupHistory,
 } from "../../lib/api";
 import { Page, Notice, Empty, Select, displayName, initials, formatDate } from "../../Components/UI";
+import { useLiveTicketThreadUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 
 const PRIORITY = ["low", "medium", "high", "urgent"];
 const PRIORITY_LABEL = { low: "Low", medium: "Medium", high: "High", urgent: "Urgent" };
@@ -81,6 +82,8 @@ const TicketDetail = () => {
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
+
+  const live = useLiveTicketThreadUpdates(ticketId);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -287,6 +290,12 @@ const TicketDetail = () => {
           </div>
         }
       >
+        <LiveUpdateBanner
+          count={live.count}
+          onReload={() => { live.reset(); load(); }}
+          label={`${live.count} new update${live.count === 1 ? "" : "s"} on this ticket`}
+        />
+
         {showHistory ? (
           <div className="tix-history">
             {historyLoading ? <p className="tix-history-hint">{"Loading..."}</p> : null}
