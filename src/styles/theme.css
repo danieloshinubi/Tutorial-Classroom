@@ -2614,6 +2614,25 @@ table.data tr:last-child td { border-bottom: none; }
   border-bottom: 1px solid var(--line);
 }
 .doc-row:last-child, .screen-row:last-child { border-bottom: none; }
+/* Reads exactly like the plain <strong> label it replaces until the pointer
+   or keyboard focus arrives — an uploaded document opens in the same
+   in-page preview used for course materials and receipts, so the label
+   itself should behave like the thing that opens it. */
+.doc-title-link {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.doc-title-link:hover, .doc-title-link:focus-visible {
+  color: var(--brand);
+  text-decoration: underline;
+}
 .doc-req { color: var(--ink-3); font-size: 12.5px; }
 .doc-note { color: var(--ink-2); font-size: 13px; margin-top: 3px; }
 .doc-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

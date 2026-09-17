@@ -44,6 +44,7 @@ import {
   DateTimePicker,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+import { useDocumentPreview } from "../../Components/DocumentPreview";
 import AdmissionLetter from "./AdmissionLetter";
 
 // Same field keys and labels ApplicationDashboard.jsx's own Section
@@ -125,6 +126,7 @@ const AdmissionsWorkspace = () => {
   // counterpart to create_application_screening_items().
   const [documentConfigMissing, setDocumentConfigMissing] = useState(false);
   const live = useLiveApplicationUpdates(applicationId);
+  const preview = useDocumentPreview();
 
   const load = useCallback(async () => {
     if (!applicationId) return;
@@ -351,6 +353,7 @@ const AdmissionsWorkspace = () => {
               {"Prepare items from config"}
             </Button>
           </div>
+          {preview.error ? <Notice tone="error">{preview.error}</Notice> : null}
           {documents.length === 0 ? (
             documentConfigMissing ? (
               <Empty>
@@ -368,7 +371,14 @@ const AdmissionsWorkspace = () => {
               {documents.map((d) => (
                 <li key={d.id} className="doc-row">
                   <div>
-                    <strong>{d.requirement?.label || "Unnamed document"}</strong>
+                    {d.file?.file_path ? (
+                      <button type="button" className="doc-title-link"
+                        onClick={() => preview.open(d.file.file_path, d.requirement?.label)}>
+                        {d.requirement?.label || "Unnamed document"}
+                      </button>
+                    ) : (
+                      <strong>{d.requirement?.label || "Unnamed document"}</strong>
+                    )}
                     {d.requirement?.is_required ? (
                       <span className="doc-req"> · required</span>
                     ) : (
@@ -830,6 +840,7 @@ const AdmissionsWorkspace = () => {
           </ul>
         </Card>
       </Page>
+      {preview.node}
     </div>
   );
 };
