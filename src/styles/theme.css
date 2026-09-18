@@ -1797,6 +1797,7 @@ table.data tr:last-child td { border-bottom: none; }
 .letter-table th { width: 180px; background: #f5f7f6; font-weight: 600; }
 .letter-sign { margin-top: 40px; }
 .letter-rule { width: 210px; border-bottom: 1px solid #14161a; margin: 34px 0 6px; }
+.letter-signature { display: block; height: 56px; max-width: 210px; object-fit: contain; object-position: left bottom; margin: 20px 0 6px; }
 .letter-role { margin: 0 !important; font-size: 13.5px; color: #4a5160; }
 .letter-foot {
   margin-top: 40px; padding-top: 14px;

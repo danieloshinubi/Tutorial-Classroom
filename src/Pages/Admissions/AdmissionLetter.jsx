@@ -117,8 +117,23 @@ const AdmissionLetter = ({ application: app, className, onClose }) => {
 
         <div className="letter-sign">
           <p>{"Yours faithfully,"}</p>
-          <div className="letter-rule" />
-          <p className="letter-role">{"For the Principal"}</p>
+          {school.signature_url ? (
+            <img src={school.signature_url} alt="" className="letter-signature" />
+          ) : (
+            <div className="letter-rule" />
+          )}
+          {school.signatory_name || school.signatory_title ? (
+            <>
+              {school.signatory_name ? (
+                <p className="letter-role">{school.signatory_name}</p>
+              ) : null}
+              {school.signatory_title ? (
+                <p className="letter-role">{school.signatory_title}</p>
+              ) : null}
+            </>
+          ) : (
+            <p className="letter-role">{"For the Principal"}</p>
+          )}
           <p className="letter-role">{school.name}</p>
         </div>
 

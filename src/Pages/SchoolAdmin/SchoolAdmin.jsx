@@ -21,6 +21,8 @@ import {
   resetMemberPassword,
   uploadSchoolLogo,
   removeSchoolLogo,
+  uploadSchoolSignature,
+  removeSchoolSignature,
   uploadAvatar,
   removeAvatar,
   fetchTicketMailboxes,
@@ -628,6 +630,9 @@ const SettingsPanel = () => {
     address: "",
     logo_url: "",
     theme_color: "",
+    signature_url: "",
+    signatory_name: "",
+    signatory_title: "",
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -642,6 +647,9 @@ const SettingsPanel = () => {
       address: school.address || "",
       logo_url: school.logo_url || "",
       theme_color: school.theme_color || "",
+      signature_url: school.signature_url || "",
+      signatory_name: school.signatory_name || "",
+      signatory_title: school.signatory_title || "",
     });
   }, [school]);
 
@@ -686,6 +694,9 @@ const SettingsPanel = () => {
         address: form.address.trim() || null,
         logo_url: form.logo_url.trim() || null,
         theme_color: themeColor || null,
+        signature_url: form.signature_url.trim() || null,
+        signatory_name: form.signatory_name.trim() || null,
+        signatory_title: form.signatory_title.trim() || null,
       });
       await reload();
       setNotice("School details saved.");
@@ -734,6 +745,29 @@ const SettingsPanel = () => {
               setForm((current) => ({ ...current, logo_url: "" }));
             }}
           />
+        </Field>
+        <Field
+          label="Authorised signature"
+          hint="Appears on official documents issued through the portal, starting with the admission letter, under the signatory's name and title below."
+        >
+          <ImageUpload
+            value={form.signature_url}
+            shape="square"
+            onUpload={async (file) => {
+              const url = await uploadSchoolSignature({ schoolId: school.id, file });
+              setForm((current) => ({ ...current, signature_url: url }));
+            }}
+            onRemove={async () => {
+              await removeSchoolSignature(form.signature_url);
+              setForm((current) => ({ ...current, signature_url: "" }));
+            }}
+          />
+        </Field>
+        <Field label="Signatory name" hint="The person whose signature this is, e.g. “Adaeze Okafor”.">
+          <input className="input" value={form.signatory_name} onChange={update("signatory_name")} />
+        </Field>
+        <Field label="Signatory title" hint="Their role, e.g. “Principal” or “Head of Admissions”.">
+          <input className="input" value={form.signatory_title} onChange={update("signatory_title")} />
         </Field>
         <Field
           label="Theme colour"

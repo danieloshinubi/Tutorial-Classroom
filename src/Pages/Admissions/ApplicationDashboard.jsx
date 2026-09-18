@@ -26,6 +26,7 @@ import {
   fetchMyApplicationDocuments,
   uploadMyApplicationDocument,
   fetchMyApplicationScreening,
+  fetchMyApplicationLetter,
 } from "../../lib/api";
 import {
   Page,
@@ -40,6 +41,7 @@ import {
   Select,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+import AdmissionLetter from "./AdmissionLetter";
 
 // country-region-data ships each country as a [name, isoCode, regions] tuple
 // (regions themselves [name, isoCode] pairs) rather than the {countryName,
@@ -469,6 +471,8 @@ const ApplicationDashboard = () => {
   const [declineReason, setDeclineReason] = useState("");
   const [uploadingDocId, setUploadingDocId] = useState(null);
   const [docError, setDocError] = useState("");
+  const [letterApp, setLetterApp] = useState(null);
+  const [letterLoading, setLetterLoading] = useState(false);
   const live = useLiveApplicationUpdates(applicationId);
 
   const load = useCallback(async () => {
@@ -708,6 +712,18 @@ const ApplicationDashboard = () => {
     }
   };
 
+  const openLetter = async () => {
+    setLetterLoading(true);
+    setError("");
+    try {
+      setLetterApp(await fetchMyApplicationLetter(application.id));
+    } catch (err) {
+      setError(err.message || "Could not open the admission letter.");
+    } finally {
+      setLetterLoading(false);
+    }
+  };
+
   const resubmit = async () => {
     setSubmitting(true);
     setError("");
@@ -749,6 +765,16 @@ const ApplicationDashboard = () => {
           </Link>
         </Page>
       </>
+    );
+  }
+
+  if (letterApp) {
+    return (
+      <AdmissionLetter
+        application={letterApp}
+        className={letterApp.classes?.name}
+        onClose={() => setLetterApp(null)}
+      />
     );
   }
 
@@ -813,6 +839,11 @@ const ApplicationDashboard = () => {
               <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
                 {`Submitted ${formatDate(application.submitted_at, { withTime: false })}`}
               </span>
+            ) : null}
+            {["offered", "accepted", "enrolled"].includes(application.status) ? (
+              <Button size="sm" variant="secondary" disabled={letterLoading} onClick={openLetter}>
+                {letterLoading ? "Opening..." : "View admission letter"}
+              </Button>
             ) : null}
           </div>
         </div>

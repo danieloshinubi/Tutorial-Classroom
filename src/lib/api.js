@@ -1122,6 +1122,25 @@ export const removeSchoolLogo = async (logoUrl) => {
   if (path) await supabase.storage.from(PUBLIC_MEDIA_BUCKET).remove([path]).catch(() => {});
 };
 
+// Same shape as the logo, for the signature image that goes on official
+// documents like the admission letter — signatures/<school_id>/<random>-
+// <name>, guarded by the same storage policy (132_school_admission_
+// signature.sql reads segment [2] via classroom.is_school_admin).
+export const uploadSchoolSignature = async ({ schoolId, file }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `signatures/${schoolId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from(PUBLIC_MEDIA_BUCKET)
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return publicMediaUrl(path);
+};
+
+export const removeSchoolSignature = async (signatureUrl) => {
+  const path = pathFromPublicUrl(signatureUrl);
+  if (path) await supabase.storage.from(PUBLIC_MEDIA_BUCKET).remove([path]).catch(() => {});
+};
+
 // Path convention avatars/<user_id>/<random>-<name> — the storage policy
 // (073) allows the person themselves, or an admin of any school they
 // belong to (the same reach the People panel's "Edit" already has).
@@ -2612,6 +2631,17 @@ export const fetchMyApplicationScreening = async (applicationId) => {
   });
   if (error) throw error;
   return data || [];
+};
+
+// The applicant's own read of their admission letter — same joined shape
+// fetchApplication() gives staff, gated server-side to only offered/
+// accepted/enrolled applications (133_applicant_admission_letter.sql).
+export const fetchMyApplicationLetter = async (applicationId) => {
+  const { data, error } = await supabase.rpc("my_application_letter", {
+    target_application: applicationId,
+  });
+  if (error) throw error;
+  return data;
 };
 
 // Uploads straight to storage under the same admissions/<school>/<application>/
