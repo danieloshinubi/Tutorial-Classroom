@@ -54,25 +54,21 @@ const Notifications = () => {
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  const unread = items.filter((item) => !item.read_at).length;
+  // fetchNotifications only ever returns unread rows, so every item here is
+  // pending by definition — the count is just the list length.
+  const unread = items.length;
 
   const openItem = async (item) => {
     setOpen(false);
-    if (!item.read_at) {
-      setItems((current) =>
-        current.map((row) =>
-          row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row
-        )
-      );
-      markNotificationRead(item.id, schoolId).catch(() => load());
-    }
+    // Attended to — drop it rather than leaving it sitting there read but
+    // still listed.
+    setItems((current) => current.filter((row) => row.id !== item.id));
+    markNotificationRead(item.id, schoolId).catch(() => load());
     if (item.link) navigate(item.link);
   };
 
   const readAll = async () => {
-    setItems((current) =>
-      current.map((row) => ({ ...row, read_at: row.read_at || new Date().toISOString() }))
-    );
+    setItems([]);
     markAllNotificationsRead(user.id, schoolId).catch(() => load());
   };
 
@@ -161,7 +157,7 @@ const Notifications = () => {
                 <button
                   key={item.id}
                   type="button"
-                  className={`notif-item${item.read_at ? "" : " unread"}`}
+                  className="notif-item unread"
                   onClick={() => openItem(item)}
                 >
                   {/* An unread dot on the left, so the row that needs a look

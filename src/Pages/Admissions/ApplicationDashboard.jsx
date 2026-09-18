@@ -25,6 +25,7 @@ import {
   fetchMyClearance,
   fetchMyApplicationDocuments,
   uploadMyApplicationDocument,
+  fetchMyApplicationScreening,
 } from "../../lib/api";
 import {
   Page,
@@ -458,6 +459,7 @@ const ApplicationDashboard = () => {
   const [acceptanceInvoice, setAcceptanceInvoice] = useState(null);
   const [clearance, setClearance] = useState([]);
   const [documents, setDocuments] = useState([]);
+  const [screening, setScreening] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -485,18 +487,20 @@ const ApplicationDashboard = () => {
       setApplication(app);
       setSteps(workflow);
 
-      const [cfg, inv, ev, off, docs] = await Promise.all([
+      const [cfg, inv, ev, off, docs, screen] = await Promise.all([
         fetchAdmissionConfig({ schoolId: app.school_id, sessionId: app.session_id }),
         fetchMyApplicationInvoice(app.id, "application_fee", school?.id).catch(() => null),
         fetchApplicationEvents(app.id, app.school_id).catch(() => []),
         fetchMyOffer(app.id, school?.id).catch(() => null),
         fetchMyApplicationDocuments(app.id).catch(() => []),
+        fetchMyApplicationScreening(app.id).catch(() => []),
       ]);
       setConfig(cfg);
       setInvoice(inv);
       setEvents(ev);
       setOffer(off);
       setDocuments(docs);
+      setScreening(screen);
       setAcceptanceInvoice(
         off?.status === "accepted"
           ? await fetchMyApplicationInvoice(app.id, "acceptance_fee", school?.id).catch(() => null)
@@ -813,6 +817,65 @@ const ApplicationDashboard = () => {
           </div>
         </div>
 
+        {/* Application fee — deliberately the first card after the hero,
+            not tucked below documents/offer/clearance, so paying (when the
+            school requires it) reads as step one rather than something an
+            applicant might stumble onto later. The database backs this up
+            independently: save_application_section/submit_my_application
+            refuse to unlock the rest of the form until this is verified
+            (075_application_section_fee_gate.sql), and staff can't even
+            start screening until it clears (124_application_fee_gates_
+            and_bursary_alert.sql). */}
+        {feeVisible ? (
+          <Card style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+              <h3 style={{ margin: 0 }}>{"Application fee"}</h3>
+              <Badge tone={feeBadge}>{application.payment_state}</Badge>
+            </div>
+            {invoice ? (
+              <p style={{ marginBottom: 8 }}>
+                {`Invoice ${invoice.reference} · ${config?.currency || "NGN"} ${(
+                  config?.application_fee_amount || 0
+                ).toLocaleString()}`}
+              </p>
+            ) : null}
+            {application.payment_state === "processing" ? (
+              <Notice tone="brand">
+                {"We are confirming your payment with the bank. If you didn't finish paying, use Retry or Cancel below."}
+              </Notice>
+            ) : null}
+            {application.payment_state === "verified" ? (
+              <Notice tone="success">{"Your fee has been received. The form is unlocked."}</Notice>
+            ) : null}
+            {application.payment_state !== "verified" ? (
+              <div className="btn-row">
+                <Button disabled={payingOnline} onClick={() => payFee(invoice)}>
+                  {payingOnline
+                    ? "Opening..."
+                    : application.payment_state === "processing"
+                    ? "Retry payment"
+                    : "Pay application fee"}
+                </Button>
+                {application.payment_state === "processing" ? (
+                  <Button variant="secondary" onClick={cancelPayment}>
+                    {"Cancel and try again"}
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+            {application.payment_state !== "verified" && invoice ? (
+              <div style={{ marginTop: 10 }}>
+                <DeclareAdmissionsPayment
+                  invoice={invoice}
+                  amount={config?.application_fee_amount || 0}
+                  schoolId={application.school_id}
+                  onDeclared={load}
+                />
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
+
         {/* The workflow tracker — steps come from the database, so a session
             with no fees, no interview and no referees doesn't show them. */}
         <Card style={{ marginBottom: 16 }}>
@@ -890,6 +953,44 @@ const ApplicationDashboard = () => {
                   </li>
                 );
               })}
+            </ul>
+          </Card>
+        ) : null}
+
+        {/* The same per-step breakdown staff see under "Screening" —
+            previously invisible here entirely, leaving an applicant with
+            nothing but the Progress tracker's generic "Under review" dot
+            even while sitting through named steps (an interview, an exam)
+            they had no way to see the outcome of. Read-only: staff decide
+            each step from the Admissions workspace, not here. */}
+        {screening.length > 0 ? (
+          <Card style={{ marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0 }}>{"Screening"}</h3>
+            <ul className="doc-list">
+              {screening.map((s) => (
+                <li key={s.id} className="doc-row">
+                  <div>
+                    <strong>{s.label || "Screening step"}</strong>
+                    {s.is_required ? (
+                      <span className="doc-req"> · required</span>
+                    ) : (
+                      <span className="doc-req"> · optional</span>
+                    )}
+                    {s.decision_note ? <div className="doc-note">{s.decision_note}</div> : null}
+                  </div>
+                  <Badge tone={
+                    s.status === "passed" ? "success" :
+                    s.status === "failed" ? "danger" :
+                    s.status === "waived" ? "muted" :
+                    s.status === "correction_required" ? "warn" : "warn"
+                  }>
+                    {s.status === "passed" ? "Passed" :
+                     s.status === "failed" ? "Not cleared" :
+                     s.status === "waived" ? "Waived" :
+                     s.status === "correction_required" ? "Needs follow-up" : "Pending"}
+                  </Badge>
+                </li>
+              ))}
             </ul>
           </Card>
         ) : null}
@@ -1019,56 +1120,6 @@ const ApplicationDashboard = () => {
                 </li>
               ))}
             </ul>
-          </Card>
-        ) : null}
-
-        {feeVisible ? (
-          <Card style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <h3 style={{ margin: 0 }}>{"Application fee"}</h3>
-              <Badge tone={feeBadge}>{application.payment_state}</Badge>
-            </div>
-            {invoice ? (
-              <p style={{ marginBottom: 8 }}>
-                {`Invoice ${invoice.reference} · ${config?.currency || "NGN"} ${(
-                  config?.application_fee_amount || 0
-                ).toLocaleString()}`}
-              </p>
-            ) : null}
-            {application.payment_state === "processing" ? (
-              <Notice tone="brand">
-                {"We are confirming your payment with the bank. If you didn't finish paying, use Retry or Cancel below."}
-              </Notice>
-            ) : null}
-            {application.payment_state === "verified" ? (
-              <Notice tone="success">{"Your fee has been received. The form is unlocked."}</Notice>
-            ) : null}
-            {application.payment_state !== "verified" ? (
-              <div className="btn-row">
-                <Button disabled={payingOnline} onClick={() => payFee(invoice)}>
-                  {payingOnline
-                    ? "Opening..."
-                    : application.payment_state === "processing"
-                    ? "Retry payment"
-                    : "Pay application fee"}
-                </Button>
-                {application.payment_state === "processing" ? (
-                  <Button variant="secondary" onClick={cancelPayment}>
-                    {"Cancel and try again"}
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-            {application.payment_state !== "verified" && invoice ? (
-              <div style={{ marginTop: 10 }}>
-                <DeclareAdmissionsPayment
-                  invoice={invoice}
-                  amount={config?.application_fee_amount || 0}
-                  schoolId={application.school_id}
-                  onDeclared={load}
-                />
-              </div>
-            ) : null}
           </Card>
         ) : null}
 

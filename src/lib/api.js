@@ -861,11 +861,17 @@ export const generateDueReminders = async () => {
 // says the opposite is intended), so the school_id filter here is the only
 // thing stopping a person active in two schools from seeing both schools'
 // notifications merged into one bell.
+// Unread only — once something is read (individually or via "Mark all as
+// read"), the bell should stop showing it rather than leaving an
+// already-handled item sitting there forever. Read notifications still
+// exist in the table (nothing here deletes a row), just never fetched into
+// this list again.
 export const fetchNotifications = async ({ schoolId, courseId } = {}) => {
   let query = supabase
     .from("notifications")
     .select("id, course_id, kind, title, body, link, read_at, created_at")
     .eq("school_id", schoolId)
+    .is("read_at", null)
     .order("created_at", { ascending: false })
     .limit(50);
   if (courseId) query = query.eq("course_id", courseId);
@@ -2596,6 +2602,18 @@ export const fetchMyApplicationDocuments = async (applicationId) => {
   return data || [];
 };
 
+// Same idea, for screening — the applicant's own read-only view of exactly
+// what staff see under "Screening" (Online Interview: passed, Common
+// Entrance Exam: pending, ...), instead of just the generic "Under review"
+// dot on the Progress tracker.
+export const fetchMyApplicationScreening = async (applicationId) => {
+  const { data, error } = await supabase.rpc("my_application_screening", {
+    target_application: applicationId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
 // Uploads straight to storage under the same admissions/<school>/<application>/
 // prefix the anonymous pre-submission form already writes to (051's bucket
 // policy only checks the school segment, not who's asking), then registers
@@ -2712,29 +2730,6 @@ export const declareAdmissionsPayment = async ({
     paid_on: paidOn || new Date().toISOString().slice(0, 10),
     note: note || null,
     proof_path: proofPath || null,
-  });
-  if (error) throw error;
-  return data;
-};
-
-// Manual path — a finance officer confirms a proof upload or a teller slip.
-// The gateway path runs from the Paystack webhook and is not exposed here.
-export const verifyApplicationPayment = async ({ paymentId, note, schoolId }) => {
-  const { data, error } = await supabase.rpc("verify_application_payment", {
-    target_payment: paymentId,
-    target_school: schoolId,
-    note_in: note || null,
-  });
-  if (error) throw error;
-  return data;
-};
-
-// Same manual path, for the acceptance fee raised once an offer is accepted.
-export const verifyAcceptancePayment = async ({ paymentId, note, schoolId }) => {
-  const { data, error } = await supabase.rpc("verify_acceptance_payment", {
-    target_payment: paymentId,
-    target_school: schoolId,
-    note_in: note || null,
   });
   if (error) throw error;
   return data;

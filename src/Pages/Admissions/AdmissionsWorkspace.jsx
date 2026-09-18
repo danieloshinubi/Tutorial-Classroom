@@ -18,8 +18,6 @@ import {
   recordInterviewOutcome,
   requestApplicationCorrection,
   decideApplication,
-  verifyApplicationPayment,
-  verifyAcceptancePayment,
   recordOfferResponse,
   fetchSchoolMembers,
   prepareClearanceItems,
@@ -303,9 +301,11 @@ const AdmissionsWorkspace = () => {
         </Card>
 
         {/* Application fee — the first payment gate, raised the moment the
-            applicant started their application. Manual (proof-upload)
-            payments sit here awaiting a bursar/admissions officer's
-            approval; online payments settle themselves automatically. */}
+            applicant started their application. Read-only here on purpose:
+            confirming a manual (proof-upload) payment is bursary's call
+            alone, made from the Payment queue (Bursary.jsx) — admissions
+            staff can see where things stand but never approve the money
+            themselves. Online payments settle themselves automatically. */}
         {applicationInvoice?.invoice ? (
           <Card style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -326,13 +326,7 @@ const AdmissionsWorkspace = () => {
                       <Badge tone={
                         p.status === "approved" ? "success" :
                         p.status === "rejected" ? "danger" : "warn"
-                      }>{p.status === "submitted" ? "being checked" : p.status}</Badge>
-                      {p.status === "submitted" ? (
-                        <Button size="sm" variant="secondary" disabled={busy}
-                          onClick={() => run(() => verifyApplicationPayment({ paymentId: p.id, schoolId }), "verify payment")}>
-                          {"Verify payment"}
-                        </Button>
-                      ) : null}
+                      }>{p.status === "submitted" ? "with bursary" : p.status}</Badge>
                     </div>
                   </li>
                 ))}
@@ -650,13 +644,7 @@ const AdmissionsWorkspace = () => {
                           <Badge tone={
                             p.status === "approved" ? "success" :
                             p.status === "rejected" ? "danger" : "warn"
-                          }>{p.status === "submitted" ? "being checked" : p.status}</Badge>
-                          {p.status === "submitted" ? (
-                            <Button size="sm" variant="secondary" disabled={busy}
-                              onClick={() => run(() => verifyAcceptancePayment({ paymentId: p.id, schoolId }), "verify payment")}>
-                              {"Verify payment"}
-                            </Button>
-                          ) : null}
+                          }>{p.status === "submitted" ? "with bursary" : p.status}</Badge>
                         </div>
                       </li>
                     ))}

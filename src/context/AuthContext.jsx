@@ -131,8 +131,16 @@ export const AuthProvider = ({ children }) => {
 
     let timer;
     const lock = () => {
+      // A hard navigation (signing out has to be, so the whole app resets)
+      // can't carry React Router's location.state the way an in-app link
+      // can, so Login.jsx's own redirectTo would fall back to /Dashboard —
+      // fine for staff, but an applicant timed out on their own portal
+      // would land on the empty member dashboard instead of back on their
+      // application. Carrying the path they were actually on as a query
+      // param gives Login.jsx the same "from" to redirect to either way.
+      const from = encodeURIComponent(window.location.pathname + window.location.search);
       supabase.auth.signOut().finally(() => {
-        window.location.href = "/Login?reason=inactivity";
+        window.location.href = `/Login?reason=inactivity&from=${from}`;
       });
     };
     const resetTimer = () => {

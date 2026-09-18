@@ -12,7 +12,6 @@ const Login = () => {
   const { signIn, session } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const redirectTo = location.state?.from?.pathname || "/Dashboard";
 
   // A trial signup happens on a different origin (schoolivio.com) than this
   // school's own subdomain, so the session it created can't follow across —
@@ -20,6 +19,19 @@ const Login = () => {
   // bounce to a blank login screen, the handoff carries the email (never the
   // password) and a one-time welcome flag.
   const params = new URLSearchParams(location.search);
+
+  // location.state carries an in-app link's "come back here" (e.g. ApplyAccount's
+  // sign-in link). A hard navigation — the inactivity sign-out in
+  // AuthContext.jsx, which has to fully reset the app — can't carry that,
+  // so it passes the same thing as a ?from= query param instead. Only ever
+  // trust it as a same-origin relative path: a leading "/" but never "//"
+  // (browsers treat that as protocol-relative to another host), so this can
+  // never become an open redirect off a crafted link.
+  const fromParam = params.get("from");
+  const safeFromParam = fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//")
+    ? fromParam
+    : null;
+  const redirectTo = location.state?.from?.pathname || safeFromParam || "/Dashboard";
   const [email, setEmail] = useState(params.get("email") || "");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
