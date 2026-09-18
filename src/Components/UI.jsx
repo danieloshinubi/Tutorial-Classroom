@@ -46,29 +46,6 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false 
     return () => observer.disconnect();
   });
 
-  // A page can have a second sticky layer of its own, below the header — a
-  // filter row, an "add" form (the .panel-top class) — and a table further
-  // down needs to know how tall THAT is too, so its own sticky header
-  // stacks beneath both instead of sliding underneath the panel. Same
-  // measure-and-publish approach, just aimed at whichever .panel-top this
-  // page happens to render, if any.
-  useLayoutEffect(() => {
-    const page = pageRef.current;
-    if (!page || typeof ResizeObserver === "undefined") return undefined;
-    const panel = page.querySelector(".panel-top");
-    if (!panel) {
-      page.style.setProperty("--panel-top-h", "0px");
-      return undefined;
-    }
-    const publish = () => {
-      page.style.setProperty("--panel-top-h", `${panel.offsetHeight}px`);
-    };
-    publish();
-    const observer = new ResizeObserver(publish);
-    observer.observe(panel);
-    return () => observer.disconnect();
-  });
-
   return (
   <div className={`page${wide ? " page-wide" : ""}`} ref={pageRef}>
     {(title || action || toolbar) && (

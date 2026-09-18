@@ -43,6 +43,7 @@ import {
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
+import { useToast } from "../../Components/Toast";
 import AdmissionLetter from "./AdmissionLetter";
 
 // Same field keys and labels ApplicationDashboard.jsx's own Section
@@ -103,12 +104,22 @@ const AdmissionsWorkspace = () => {
   const { schoolId, role, isAdmin, isPrincipal, labelFor } = useSchool();
   const { user } = useAuth();
 
+  const { notify } = useToast();
   const [workspace, setWorkspace] = useState(null);
   const [members, setMembers] = useState([]);
   const [classes, setClasses] = useState([]);
   const [registration, setRegistration] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setErrorState] = useState("");
+  // Every setError(...) call already pops the same message as a toast, so a
+  // staff member acting near the bottom of this (long) page sees the result
+  // where they are rather than having to scroll back up to the page head —
+  // the inline Notice further down stays only for the "workspace failed to
+  // load at all" case, where there's no other content on the page yet.
+  const setError = useCallback((message) => {
+    setErrorState(message);
+    if (message) notify(message, { tone: "error" });
+  }, [notify]);
   const [busy, setBusy] = useState(false);
   const [letterApp, setLetterApp] = useState(null);
   const [letterLoading, setLetterLoading] = useState(false);
@@ -145,7 +156,7 @@ const AdmissionsWorkspace = () => {
     } finally {
       setLoading(false);
     }
-  }, [applicationId, schoolId]);
+  }, [applicationId, schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -170,11 +181,20 @@ const AdmissionsWorkspace = () => {
     try {
       await fn();
       await load();
+      notify(`Done — ${label}.`, { tone: "success" });
     } catch (err) {
       setError(err.message || `Could not ${label}.`);
     } finally {
       setBusy(false);
     }
+  };
+
+  // For the forms below (each already does its own await + onDone={load}) —
+  // a reload plus a specific success pop, rather than the generic one `run`
+  // gives its one-click actions.
+  const reloadWithToast = (message) => async () => {
+    await load();
+    notify(message, { tone: "success" });
   };
 
   if (loading) {
@@ -252,7 +272,6 @@ const AdmissionsWorkspace = () => {
         }
       >
         <LiveUpdateBanner count={live.count} onReload={() => { live.reset(); load(); }} />
-        <Notice tone="error">{error}</Notice>
 
         {/* State strip — the whole application at a glance */}
         <Card style={{ marginBottom: 16 }}>
@@ -495,7 +514,7 @@ const AdmissionsWorkspace = () => {
             {"Return the application to the applicant for correction of one or more sections."}
           </p>
           <CorrectionForm applicationId={app.id} schoolId={schoolId} disabled={busy}
-            onDone={load} onError={setError} />
+            onDone={reloadWithToast("Correction requested.")} onError={setError} />
         </Card>
 
         {/* Review */}
@@ -509,14 +528,14 @@ const AdmissionsWorkspace = () => {
               }</strong> on {formatDate(activeReview.assigned_at)}</p>
               {isAssignedReviewer ? (
                 <ReviewForm applicationId={app.id} disabled={busy}
-                  onDone={load} onError={setError} />
+                  onDone={reloadWithToast("Review recorded.")} onError={setError} />
               ) : (
                 <Notice tone="muted">{"Only the assigned reviewer can record this recommendation."}</Notice>
               )}
             </div>
           ) : (
             <AssignReviewForm applicationId={app.id} schoolId={schoolId} members={members}
-              disabled={busy} onDone={load} onError={setError} />
+              disabled={busy} onDone={reloadWithToast("Reviewer assigned.")} onError={setError} />
           )}
           {reviews.filter((r) => r.completed_at).map((r) => (
             <div key={r.id} className="past-review">
@@ -534,7 +553,7 @@ const AdmissionsWorkspace = () => {
           <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Interview"}</h3>
             <InterviewForm applicationId={app.id} schoolId={schoolId} members={members} disabled={busy}
-              onDone={load} onError={setError} />
+              onDone={reloadWithToast("Interview scheduled.")} onError={setError} />
             {interviews.map((iv) => (
               <div key={iv.id} className="past-review">
                 <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
@@ -567,12 +586,17 @@ const AdmissionsWorkspace = () => {
             sees why, rather than the section vanishing with no explanation. */}
         <Card style={{ marginBottom: 16 }}>
           <h3 style={{ marginTop: 0 }}>{"Final decision"}</h3>
+          {app.decided_by ? (
+            <Notice tone="muted">
+              {`Decided by ${workspace?.decided_by_name || "a staff member"} · ${formatDate(app.decided_at, { withTime: true })}`}
+            </Notice>
+          ) : null}
           {canFinalise ? (
             <DecisionForm application={app} schoolId={schoolId} disabled={busy}
-              onDone={load} onError={setError} />
+              onDone={reloadWithToast("Decision recorded.")} onError={setError} />
           ) : (
             <Notice tone="muted">
-              {"Only owner/admin/principal can make the final admission decision. Screening, review and interview can still be recorded above."}
+              {"Only the Proprietor, an Administrator or the Principal can make the final admission decision. Screening, review and interview can still be recorded above."}
             </Notice>
           )}
         </Card>
@@ -745,7 +769,7 @@ const AdmissionsWorkspace = () => {
             <div style={{ borderTop: "1px solid var(--line)", marginTop: 14, paddingTop: 14 }}>
               <h4 style={{ marginTop: 0, marginBottom: 6 }}>{"Original documents seen in person"}</h4>
               <OriginalVerificationForm applicationId={app.id} schoolId={schoolId} disabled={busy}
-                onDone={load} onError={setError} />
+                onDone={reloadWithToast("Verification recorded.")} onError={setError} />
               {originalVerifications.length === 0 ? (
                 <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 8 }}>
                   {"Nothing recorded yet."}
@@ -791,7 +815,7 @@ const AdmissionsWorkspace = () => {
                 labelFor={labelFor}
                 schoolId={schoolId}
                 disabled={busy}
-                onDone={load}
+                onDone={reloadWithToast("Pupil registered.")}
                 onError={setError}
               />
             )}

@@ -409,17 +409,22 @@ a { color: var(--brand); }
   color: var(--ink-3);
 }
 
+/* Used to cap out at 1180px and centre, leaving two large empty margins on
+   any screen wider than that — every page, tables and lists included,
+   sat in a narrow column with the rest of the window bare on both sides.
+   Fills the window now (a small 20px gutter so nothing touches the very
+   edge), the same width every page already got via the `wide` prop /
+   .page-wide below — which this makes redundant, harmlessly: nothing
+   needs to stop passing `wide` for this to take effect everywhere. */
+/* This bottom padding is mirrored in lib/tableWrapFit.js's PAGE_BOTTOM_
+   PADDING constant — that script reserves exactly this much room below a
+   .table-wrap so the table's bounded pane doesn't push the page into
+   needing a second scrollbar of its own. Change one, change the other. */
 .page {
-  width: min(1180px, 100% - 40px);
+  width: calc(100% - 40px);
   margin: 0 auto;
-  padding: 0 0 72px;
+  padding: 0 0 32px;
 }
-
-/* A dense, multi-column view (Tickets' list-with-filters, the 3-pane
-   detail) wastes the extra room a capped reading width leaves on a wide
-   screen — the same reason a full email client spans the window instead
-   of centering in a narrow column. No pixel cap at all, unlike .page —
-   it should keep filling the window on any screen, ultrawide included. */
 .page.page-wide {
   width: calc(100% - 40px);
 }
@@ -442,7 +447,7 @@ a { color: var(--brand); }
   height: 1px;
   background: var(--line);
 }
-.page-body { padding-top: 20px; }
+.page-body { padding-top: 12px; }
 
 .page-head {
   display: flex;
@@ -1083,19 +1088,20 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 .hero .badge { background: rgb(255 255 255 / 0.18); color: #fff; border-color: transparent; }
 
 /* Tables */
-/* overflow-x:auto here (needed so a wide table can scroll sideways on a
-   narrow screen) forces the browser to also compute overflow-y as auto —
-   the CSS overflow spec ties the two together, and there's no legal way
-   to opt back out of it. That makes .table-wrap itself, not the page, the
-   nearest scrolling ancestor for anything sticky inside it — so rather
-   than fight that, the header sticks to the TOP OF THIS BOX, and the box
-   is given a bounded height so it becomes its own scroll pane once the
-   table has more rows than fit. max() keeps that pane from collapsing to
-   nothing on a short viewport if the page header above happens to be tall. */
+/* Its own scroll pane: the table's header stays visible while its rows
+   scroll, and the page around it (the search box, the tabs, everything
+   else) never has to scroll to reach the bottom of a long list. max-height
+   here is a same-frame fallback for before lib/tableWrapFit.js's first
+   measurement lands — that script is what sets the real value (inline, on
+   the element), sized to whatever actually renders above this box on a
+   given page rather than a guessed constant. The old guessed-constant
+   version of this rule was the reason a second, independent scrollbar used
+   to appear right beside the page's own one: whenever the real content
+   above the table didn't match the guess, .table-wrap ended up too tall for
+   the room actually left for it, and the page had to scroll a little too. */
 .table-wrap {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: max(320px, calc(100vh - var(--page-top-h, 0px) - var(--panel-top-h, 0px) - 130px));
+  overflow: auto;
+  max-height: 70vh;
 }
 table.data { width: 100%; border-collapse: collapse; min-width: 640px; }
 table.data th, table.data td {
@@ -1113,6 +1119,77 @@ table.data th {
   background: var(--surface);
 }
 table.data tr:last-child td { border-bottom: none; }
+
+/* ==========================================================================
+   People list (SchoolAdmin.jsx PeoplePanel) — a photo/initials avatar,
+   name and email combined into one scannable cell, a coloured edge on the
+   role picker so seniority reads without stopping to read the word, and
+   the four per-row actions as small icon buttons instead of four full
+   labelled buttons that used to wrap onto a second line on any narrower
+   screen.
+   ========================================================================== */
+.people-count {
+  margin: 2px 4px 2px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.people-row { transition: background-color .1s ease; }
+.people-row:hover { background: var(--bg); }
+.people-row.suspended { opacity: .55; }
+.people-person { display: flex; align-items: center; gap: 11px; }
+.people-person-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.people-avatar {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+}
+.people-avatar-photo { object-fit: cover; }
+.people-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.people-email {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 260px;
+}
+.people-actions { display: inline-flex; gap: 4px; }
+.row-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background-color .12s ease, color .12s ease, border-color .12s ease;
+}
+.row-action-btn:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--ink);
+  border-color: var(--line);
+}
+.row-action-btn:disabled { opacity: .35; cursor: not-allowed; }
+.row-action-btn.danger:hover:not(:disabled) {
+  background: var(--danger-soft, #fdecea);
+  color: var(--danger);
+  border-color: transparent;
+}
 
 /* Chat */
 .chat-list { list-style: none; margin: 14px 0 0; padding: 0; }
@@ -2322,7 +2399,7 @@ table.data tr:last-child td { border-bottom: none; }
   height: 1px;
   background: var(--line);
 }
-.panel-top + * { margin-top: 18px; }
+.panel-top + * { margin-top: 10px; }
 
 /* A form in a side column stays level with the list it is filling. */
 .panel-aside {
@@ -3375,6 +3452,47 @@ table.data tr:last-child td { border-bottom: none; }
 }
 @keyframes live-update-in {
   from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   Toast (Components/Toast.jsx) — action feedback (saved, refused, deleted)
+   as a floating pop instead of a message printed into the page flow, so it
+   reaches someone acting near the bottom of a long workspace without them
+   scrolling back up to see it. Same idea as the live-update banner above,
+   generalised to any success/error/warn result and pinned to the corner of
+   the viewport rather than the top of one page's content.
+   ========================================================================== */
+.toast-host {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 200;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 36px));
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 13.5px;
+  line-height: 1.4;
+  box-shadow: var(--shadow-2);
+  border-left: 4px solid var(--ink-3);
+  animation: toast-in 0.2s ease-out;
+}
+.toast-error   { border-left-color: var(--danger); }
+.toast-success { border-left-color: var(--success); }
+.toast-warn    { border-left-color: var(--warn-ink); }
+.toast-muted   { border-left-color: var(--ink-3); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 

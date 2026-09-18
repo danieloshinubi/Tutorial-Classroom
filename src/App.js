@@ -8,6 +8,8 @@ import {
 } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { SchoolProvider } from "./context/SchoolContext";
+import { ToastProvider } from "./Components/Toast";
+import { startTableWrapFit } from "./lib/tableWrapFit";
 import ConfigNotice from "./Components/ConfigNotice";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import SchoolRoute from "./Components/SchoolRoute";
@@ -57,6 +59,12 @@ import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
 import "./styles/theme.css";
 
+// Module-scope, not inside the App component: it has to run no matter which
+// of App/PlatformApp/MarketingApp ends up mounted below, and it watches
+// document.body directly rather than a specific React tree, so there is
+// nothing gained by tying it to any one component's lifecycle.
+startTableWrapFit();
+
 // /Levels/100/Courses/AZ-900 → /Courses/AZ-900, so bookmarks and old
 // notification links survive the change.
 const LegacyCourseRedirect = () => {
@@ -90,6 +98,7 @@ function App() {
   }
 
   return (
+    <ToastProvider>
     <Router>
       <AuthProvider>
         <SchoolProvider>
@@ -220,6 +229,7 @@ function App() {
         </SchoolProvider>
       </AuthProvider>
     </Router>
+    </ToastProvider>
   );
 }
 

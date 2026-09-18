@@ -1,5 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { Icon } from "react-icons-kit";
+import { edit2 } from "react-icons-kit/feather/edit2";
+import { lock } from "react-icons-kit/feather/lock";
+import { userX } from "react-icons-kit/feather/userX";
+import { userCheck } from "react-icons-kit/feather/userCheck";
+import { trash2 } from "react-icons-kit/feather/trash2";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
@@ -46,6 +52,7 @@ import {
   Select,
   displayName,
   initials,
+  bandClass,
   formatDate,
 } from "../../Components/UI";
 
@@ -80,6 +87,16 @@ const toneFor = (role) => {
   if (role === "teacher") return "brand";
   if (role === "bursar" || role === "admissions") return "warn";
   return undefined;
+};
+
+// Same grouping as toneFor, as a CSS colour instead of a badge tone — used
+// to give the role picker itself a coloured edge, so a row's seniority
+// reads at a glance without having to read the word.
+const roleAccent = (role) => {
+  if (role === "owner" || role === "admin" || role === "principal") return "var(--danger)";
+  if (role === "teacher") return "var(--brand)";
+  if (role === "bursar" || role === "admissions") return "var(--warn-ink)";
+  return "var(--line)";
 };
 
 /* ------------------------------------------------------------------ people */
@@ -511,12 +528,14 @@ const PeoplePanel = () => {
 
       {filtered.length > 0 ? (
         <Card className="pad-0" style={{ padding: "4px 14px" }}>
+          <p className="people-count">
+            {`${filtered.length} of ${members.length} ${members.length === 1 ? "person" : "people"}`}
+          </p>
           <div className="table-wrap">
-            <table className="data">
+            <table className="data people-table">
               <thead>
                 <tr>
-                  <th>{"Name"}</th>
-                  <th>{"Email"}</th>
+                  <th>{"Person"}</th>
                   <th>{"Role"}</th>
                   <th>{"Added"}</th>
                   <th>{""}</th>
@@ -525,32 +544,32 @@ const PeoplePanel = () => {
               <tbody>
                 {filtered.map((row) => {
                   const isSelf = row.profiles.id === user?.id;
+                  const rowBusy = busyId === row.id;
                   return (
-                    <tr key={row.id} style={{ opacity: row.is_active ? 1 : 0.5 }}>
+                    <tr key={row.id} className={`people-row${row.is_active ? "" : " suspended"}`}>
                       <td>
-                        <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <span
-                            className="brand-mark"
-                            style={{ width: 30, height: 30, borderRadius: "50%", fontSize: 12 }}
-                          >
-                            {initials(row.profiles)}
-                          </span>
-                          <span>
-                            {displayName(row.profiles)}
-                            {isSelf ? (
-                              <span style={{ marginLeft: 8 }}>
-                                <Badge tone="success">{"you"}</Badge>
-                              </span>
-                            ) : null}
-                            {!row.is_active ? (
-                              <span style={{ marginLeft: 8 }}>
-                                <Badge>{"suspended"}</Badge>
-                              </span>
-                            ) : null}
+                        <span className="people-person">
+                          {row.profiles.avatar_url ? (
+                            <img
+                              src={row.profiles.avatar_url}
+                              alt=""
+                              className="people-avatar people-avatar-photo"
+                            />
+                          ) : (
+                            <span className={`people-avatar ${bandClass(row.profiles.id || displayName(row.profiles))}`}>
+                              {initials(row.profiles)}
+                            </span>
+                          )}
+                          <span className="people-person-text">
+                            <span className="people-name">
+                              {displayName(row.profiles)}
+                              {isSelf ? <Badge tone="success">{"you"}</Badge> : null}
+                              {!row.is_active ? <Badge>{"suspended"}</Badge> : null}
+                            </span>
+                            <span className="people-email">{row.profiles.email || "—"}</span>
                           </span>
                         </span>
                       </td>
-                      <td style={{ color: "var(--ink-3)" }}>{row.profiles.email || "—"}</td>
                       <td>
                         {/* Changing your own role away from admin would lock
                             you out of this page, so it is fixed for yourself. */}
@@ -559,9 +578,9 @@ const PeoplePanel = () => {
                         ) : (
                           <Select
                             className="select"
-                            style={{ width: "auto", padding: "6px 8px" }}
+                            style={{ width: "auto", padding: "6px 8px", borderLeft: `3px solid ${roleAccent(row.role)}` }}
                             value={row.role}
-                            disabled={busyId === row.id}
+                            disabled={rowBusy}
                             onChange={(v) => changeRole(row, v)}
                             options={ROLES.map(([value, label]) => ({ value, label }))}
                           />
@@ -571,39 +590,47 @@ const PeoplePanel = () => {
                         {formatDate(row.created_at, { withTime: false })}
                       </td>
                       <td>
-                        <span className="btn-row" style={{ flexWrap: "wrap" }}>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={busyId === row.id}
+                        <span className="people-actions">
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            title="Edit"
+                            aria-label={`Edit ${displayName(row.profiles)}`}
+                            disabled={rowBusy}
                             onClick={() => startEdit(row)}
                           >
-                            {"Edit"}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={isSelf || busyId === row.id}
+                            <Icon icon={edit2} size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            title="Reset password"
+                            aria-label={`Reset ${displayName(row.profiles)}'s password`}
+                            disabled={isSelf || rowBusy}
                             onClick={() => handleResetPassword(row)}
                           >
-                            {"Reset password"}
-                          </Button>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            disabled={isSelf || busyId === row.id}
+                            <Icon icon={lock} size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="row-action-btn"
+                            title={row.is_active ? "Suspend" : "Restore"}
+                            aria-label={`${row.is_active ? "Suspend" : "Restore"} ${displayName(row.profiles)}`}
+                            disabled={isSelf || rowBusy}
                             onClick={() => toggleActive(row)}
                           >
-                            {row.is_active ? "Suspend" : "Restore"}
-                          </Button>
-                          <Button
-                            variant="danger"
-                            size="sm"
-                            disabled={isSelf || busyId === row.id}
+                            <Icon icon={row.is_active ? userX : userCheck} size={15} />
+                          </button>
+                          <button
+                            type="button"
+                            className="row-action-btn danger"
+                            title="Remove"
+                            aria-label={`Remove ${displayName(row.profiles)}`}
+                            disabled={isSelf || rowBusy}
                             onClick={() => handleRemove(row)}
                           >
-                            {"Remove"}
-                          </Button>
+                            <Icon icon={trash2} size={15} />
+                          </button>
                         </span>
                       </td>
                     </tr>
