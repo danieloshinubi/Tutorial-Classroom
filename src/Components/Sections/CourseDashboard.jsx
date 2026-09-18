@@ -15,7 +15,8 @@ import {
   requestEnrollment,
   unenroll,
 } from "../../lib/api";
-import { Page, Button, Badge, Notice, Empty, Tabs } from "../UI";
+import { Page, Button, Badge, Empty, Tabs } from "../UI";
+import { useActionFeedback } from "../Toast";
 
 const CourseDashboard = () => {
   const { code } = useParams();
@@ -26,7 +27,7 @@ const CourseDashboard = () => {
   const [membership, setMembership] = useState(null);
   const [tab, setTab] = useState("stream");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [busy, setBusy] = useState(false);
 
   // A tutor who owns this course, or any admin, can author its content.
@@ -55,7 +56,7 @@ const CourseDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [code, user, schoolId]);
+  }, [code, user, schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -101,7 +102,6 @@ const CourseDashboard = () => {
       <div className="shell">
         <Navbar />
         <Page title="Course">
-          <Notice tone="error">{error}</Notice>
           <Link to="/Courses">
             <Button variant="secondary">{"Back to courses"}</Button>
           </Link>
@@ -160,8 +160,6 @@ const CourseDashboard = () => {
             <Tabs tabs={tabs} active={tab} onChange={setTab} />
           </div>
         ) : null}
-
-        <Notice tone="error">{error}</Notice>
 
         {!hasAccess ? (
           <div className="locked">

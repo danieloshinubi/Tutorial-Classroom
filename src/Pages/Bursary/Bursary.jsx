@@ -26,6 +26,7 @@ import {
   PAYMENT_METHODS,
 } from "../../lib/api";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Page,
   Card,
@@ -837,8 +838,7 @@ const Bursary = () => {
   const [summary, setSummary] = useState(null);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const load = useCallback(async () => {
     if (!schoolId) return;
@@ -872,7 +872,7 @@ const Bursary = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, termId]);
+  }, [schoolId, termId, setError]);
 
   useEffect(() => {
     load();
@@ -918,10 +918,6 @@ const Bursary = () => {
           />
         }
       >
-        <Notice tone="error">{error}</Notice>
-        <Notice tone="success">{notice}</Notice>
-
-
 
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 

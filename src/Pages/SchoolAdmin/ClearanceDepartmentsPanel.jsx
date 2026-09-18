@@ -8,7 +8,8 @@ import {
   deleteClearanceDepartment,
   countClearanceChecklistItems,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Notice, Empty } from "../../Components/UI";
+import { Card, Field, Button, Badge, Empty } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Who has to sign off before an accepted applicant clears — Bursary, the
 // Library, Hostel, whatever this school actually runs people through before
@@ -23,8 +24,7 @@ const ClearanceDepartmentsPanel = () => {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const [name, setName] = useState("");
   const [editing, setEditing] = useState(null);
@@ -45,7 +45,7 @@ const ClearanceDepartmentsPanel = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -123,8 +123,6 @@ const ClearanceDepartmentsPanel = () => {
         {"Who an accepted applicant must clear with before they register — Bursary, the Library, Hostel, whatever your school actually runs people through. Deactivate a department to stop applying it to new applications without losing its history on existing ones. If nothing is listed here, clearance passes automatically for every accepted applicant."}
       </p>
 
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
 
       {/* This panel only ever renders nested inside AdmissionsSettingsPanel's
           own sticky .panel-top (the session picker) — giving this card a

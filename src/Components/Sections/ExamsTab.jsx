@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchExams, updateExam, deleteExam } from "../../lib/api";
-import { Card, Button, Badge, Notice, Empty, formatDate } from "../UI";
+import { Card, Button, Badge, Empty, formatDate } from "../UI";
+import { useActionFeedback } from "../Toast";
 
 // kind picks which list this renders: "exam" (the default "Exams" tab) or
 // "midterm" (the "Mid-exams" tab) — same table, same component, just a
@@ -10,7 +11,7 @@ import { Card, Button, Badge, Notice, Empty, formatDate } from "../UI";
 const ExamsTab = ({ courseId, canManage, kind = "exam", schoolId }) => {
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = () => {
     if (!schoolId) return;
@@ -21,7 +22,7 @@ const ExamsTab = ({ courseId, canManage, kind = "exam", schoolId }) => {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [courseId, kind, schoolId]);
+  useEffect(load, [courseId, kind, schoolId, setError]);
 
   const togglePublished = async (exam) => {
     setError("");
@@ -67,7 +68,6 @@ const ExamsTab = ({ courseId, canManage, kind = "exam", schoolId }) => {
         </div>
       ) : null}
 
-      <Notice tone="error">{error}</Notice>
       {loading ? <Empty>{"Loading exams..."}</Empty> : null}
       {!loading && exams.length === 0 ? (
         <Empty>

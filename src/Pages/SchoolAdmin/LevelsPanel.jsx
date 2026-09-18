@@ -7,7 +7,8 @@ import {
   deleteLevel,
   countCoursesOnLevel,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Notice, Empty } from "../../Components/UI";
+import { Card, Field, Button, Badge, Empty } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Suggestions only — a school picks whatever it actually calls its classes.
 // Two different things a school groups its courses by, and the same table
@@ -47,8 +48,7 @@ const LevelsPanel = () => {
   const [counts, setCounts] = useState({});
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const [form, setForm] = useState({ year: "", label: "" });
   const [editing, setEditing] = useState(null);
@@ -71,7 +71,7 @@ const LevelsPanel = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -158,8 +158,6 @@ const LevelsPanel = () => {
 
   return (
     <>
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
 
       <div className="panel-top">
       <p style={{ color: "var(--ink-2)", maxWidth: "62ch" }}>

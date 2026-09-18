@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useActionFeedback } from "../Toast";
 import {
   fetchParticipants,
   decideEnrollment,
@@ -8,7 +9,6 @@ import {
   Card,
   Badge,
   Button,
-  Notice,
   Empty,
   displayName,
   initials,
@@ -40,7 +40,7 @@ const PeopleTab = ({ course, canManage, schoolId }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(() => {
     if (!schoolId) return;
@@ -49,7 +49,7 @@ const PeopleTab = ({ course, canManage, schoolId }) => {
       .then(setRows)
       .catch((err) => setError(err.message || "Could not load participants."))
       .finally(() => setLoading(false));
-  }, [course.id, schoolId]);
+  }, [course.id, schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -86,7 +86,6 @@ const PeopleTab = ({ course, canManage, schoolId }) => {
 
   return (
     <>
-      <Notice tone="error">{error}</Notice>
 
       <h3>{"Tutor"}</h3>
       <Card style={{ marginBottom: 26 }}>

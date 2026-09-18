@@ -59,3 +59,27 @@ export const ToastProvider = ({ children }) => {
 const NOOP = { notify: () => null, dismiss: () => {} };
 
 export const useToast = () => useContext(ToastContext) || NOOP;
+
+// The near-universal per-page idiom this codebase used before toasts
+// existed: a local `error`/`notice` string, set after an action, printed as
+// <Notice tone="error">{error}</Notice> / <Notice tone="success">{notice}
+// </Notice> right under the page header — meant to be read immediately,
+// not to persist, so a person acting further down the page had to scroll up
+// to ever see it. Swap the plain useState calls for this hook and delete
+// those two inline <Notice> lines, and the exact same setError(...)/
+// setNotice(...) call sites throughout that file keep working unchanged —
+// the message now pops instead of printing into the page.
+export const useActionFeedback = () => {
+  const { notify } = useToast();
+  const [error, setErrorState] = useState("");
+  const [notice, setNoticeState] = useState("");
+  const setError = useCallback((message) => {
+    setErrorState(message);
+    if (message) notify(message, { tone: "error" });
+  }, [notify]);
+  const setNotice = useCallback((message) => {
+    setNoticeState(message);
+    if (message) notify(message, { tone: "success" });
+  }, [notify]);
+  return { error, setError, notice, setNotice };
+};

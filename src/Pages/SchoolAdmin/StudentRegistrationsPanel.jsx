@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchStudentRegistrations, updateStudentRegistration } from "../../lib/api";
-import { Card, Button, Badge, Notice, Empty, formatDate, displayName, Select } from "../../Components/UI";
+import { Card, Button, Badge, Empty, formatDate, displayName, Select } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const STATUS_LABEL = {
   active: "Active",
@@ -27,7 +28,7 @@ const StudentRegistrationsPanel = () => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -38,7 +39,7 @@ const StudentRegistrationsPanel = () => {
       .then(setRows)
       .catch((err) => setError(err.message || "Could not load the register."))
       .finally(() => setLoading(false));
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -84,7 +85,6 @@ const StudentRegistrationsPanel = () => {
         {"Every student ever registered at this school, with the permanent registration number issued the moment they were promoted from applicant to student. Standing (active, withdrawn, graduated, transferred) is tracked here, not deleted — the number is kept for life."}
       </p>
 
-      <Notice tone="error">{error}</Notice>
 
       <div className="btn-row" style={{ marginBottom: 16 }}>
         <input

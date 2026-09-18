@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSchool } from "../../context/SchoolContext";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   fetchSchoolMembers,
   fetchChildren,
@@ -11,7 +12,6 @@ import {
   Field,
   Button,
   Badge,
-  Notice,
   Empty,
   Select,
   displayName,
@@ -31,8 +31,7 @@ const GuardiansPanel = () => {
   const [relationship, setRelationship] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const load = useCallback(async () => {
     if (!schoolId) return;
@@ -55,7 +54,7 @@ const GuardiansPanel = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -122,8 +121,6 @@ const GuardiansPanel = () => {
         {"Choose which children each parent account can see. A parent with no children linked sees nothing at all."}
       </p>
 
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
 
       {loading ? <Empty>{"Loading..."}</Empty> : null}
 

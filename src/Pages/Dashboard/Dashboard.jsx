@@ -5,13 +5,13 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchMyCourses, fetchCoursesOwnedBy } from "../../lib/api";
 import ParentDashboard from "./ParentDashboard";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Page,
   Card,
   Grid,
   Badge,
   Empty,
-  Notice,
   Button,
   displayName,
 } from "../../Components/UI";
@@ -39,7 +39,7 @@ const Dashboard = () => {
   const [enrolled, setEnrolled] = useState([]);
   const [teaching, setTeaching] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
 
   useEffect(() => {
@@ -66,7 +66,7 @@ const Dashboard = () => {
     return () => {
       active = false;
     };
-  }, [user, schoolId, isStaff]);
+  }, [user, schoolId, isStaff, setError]);
 
   // A parent is not a student. Offering them courses to join, and telling
   // them they have not joined any, describes a relationship they do not have
@@ -98,7 +98,6 @@ const Dashboard = () => {
           )
         }
       >
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading your courses..."}</Empty> : null}
 
         {isStaff ? (

@@ -14,13 +14,13 @@ import {
   Card,
   Button,
   Field,
-  Notice,
   Empty,
   Badge,
   DateTimePicker,
   formatDate,
 } from "../UI";
 import { useDocumentPreview } from "../DocumentPreview";
+import { useActionFeedback } from "../Toast";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -55,7 +55,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const preview = useDocumentPreview();
   const fileInputRef = useRef(null);
 
@@ -67,7 +67,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [courseId]);
+  useEffect(load, [courseId, setError]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -336,7 +336,6 @@ const AssignmentsTab = ({ courseId, canManage }) => {
         </Card>
       ) : null}
 
-      <Notice tone="error">{error}</Notice>
       {loading ? <Empty>{"Loading assignments..."}</Empty> : null}
       {!loading && assignments.length === 0 ? (
         <Empty>{"No assignments yet."}</Empty>

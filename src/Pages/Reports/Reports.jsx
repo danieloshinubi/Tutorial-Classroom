@@ -4,12 +4,12 @@ import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchReportableStudents, fetchChildren } from "../../lib/api";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Page,
   Card,
   Grid,
   Button,
-  Notice,
   Empty,
   Badge,
   displayName,
@@ -28,7 +28,7 @@ const Reports = () => {
   const [children, setChildren] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(async () => {
     // Waiting for the school: without this the query goes out with
@@ -47,7 +47,7 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, user]);
+  }, [schoolId, user, setError]);
 
   useEffect(() => {
     load();
@@ -120,7 +120,6 @@ const Reports = () => {
             : "How your students are progressing"
         }
       >
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 
         {/* Children first — a parent who also teaches should not have to hunt

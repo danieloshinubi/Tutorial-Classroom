@@ -3,11 +3,11 @@ import { Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchCourses, fetchSessions } from "../../lib/api";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Page,
   Grid,
   Empty,
-  Notice,
   Button,
   Badge,
   bandClass,
@@ -25,7 +25,7 @@ const Courses = () => {
   const [sessionFilter, setSessionFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(async () => {
     if (!schoolId) return;
@@ -47,7 +47,7 @@ const Courses = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -103,7 +103,6 @@ const Courses = () => {
         }
       >
 
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading courses..."}</Empty> : null}
 
         {!loading && courses.length === 0 ? (

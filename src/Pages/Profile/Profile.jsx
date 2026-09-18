@@ -9,9 +9,9 @@ import {
   Field,
   Button,
   Badge,
-  Notice,
-} from "../../Components/UI";
+  } from "../../Components/UI";
 import { ImageUpload } from "../../Components/ImageUpload";
+import { useActionFeedback } from "../../Components/Toast";
 
 const Profile = () => {
   const { profile, user, refreshProfile } = useAuth();
@@ -24,8 +24,7 @@ const Profile = () => {
     avatar_url: "",
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   // Seed the form once the profile arrives from the auth context.
   useEffect(() => {
@@ -124,8 +123,6 @@ const Profile = () => {
               />
             </Field>
 
-            <Notice tone="error">{error}</Notice>
-            <Notice tone="success">{notice}</Notice>
 
             <Button type="submit" disabled={saving}>
               {saving ? "Saving..." : "Save profile"}

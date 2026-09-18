@@ -5,7 +5,8 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchTicket, fetchTicketMessages, addTicketMessage } from "../../lib/api";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
-import { Page, Card, Button, Badge, Notice, Empty, displayName, formatDate } from "../../Components/UI";
+import { Page, Card, Button, Badge, Empty, displayName, formatDate } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // A ticket raised by email can carry the sender's real formatting (a
 // signature block, paragraphs) rather than plain text — rendered through a
@@ -31,7 +32,7 @@ const MyTicketDetail = () => {
   const [ticket, setTicket] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -51,7 +52,7 @@ const MyTicketDetail = () => {
     } finally {
       setLoading(false);
     }
-  }, [ticketId, schoolId]);
+  }, [ticketId, schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -94,7 +95,6 @@ const MyTicketDetail = () => {
       <div className="shell">
         <Navbar />
         <Page title="Help Desk">
-          <Notice tone="error">{error}</Notice>
           <Link to="/Support">{"Back to your requests"}</Link>
         </Page>
       </div>
@@ -152,8 +152,6 @@ const MyTicketDetail = () => {
             </div>
           </form>
         </Card>
-
-        <Notice tone="error">{error}</Notice>
       </Page>
     </div>
   );

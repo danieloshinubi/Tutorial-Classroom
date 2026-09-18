@@ -4,6 +4,7 @@ import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchCoursesOwnedBy, updateCourse, deleteCourse } from "../../lib/api";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Page,
   Card,
@@ -11,15 +12,14 @@ import {
   Badge,
   Button,
   Empty,
-  Notice,
-} from "../../Components/UI";
+  } from "../../Components/UI";
 
 const Teach = () => {
   const { user } = useAuth();
   const { schoolId, labelFor } = useSchool();
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = () => {
     if (!user || !schoolId) return;
@@ -30,7 +30,7 @@ const Teach = () => {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [user, schoolId]);
+  useEffect(load, [user, schoolId, setError]);
 
   const handleArchiveToggle = async (course) => {
     setError("");
@@ -70,7 +70,6 @@ const Teach = () => {
           </Link>
         }
       >
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading..."}</Empty> : null}
         {!loading && courses.length === 0 ? (
           <Empty>{"You have not created any courses yet."}</Empty>

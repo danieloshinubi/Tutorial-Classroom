@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ApplicantShell } from "../../Components/ApplicantShell";
 import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   fetchMyApplications,
   fetchMyApplicantAccount,
@@ -13,7 +14,6 @@ import {
   Grid,
   Button,
   Badge,
-  Notice,
   Empty,
   formatDate,
 } from "../../Components/UI";
@@ -30,7 +30,7 @@ const Applications = () => {
   const [account, setAccount] = useState(null);
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(async () => {
     if (!schoolId) return;
@@ -47,7 +47,7 @@ const Applications = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -74,7 +74,6 @@ const Applications = () => {
           </Link>
         }
       >
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 
         {!loading && !account ? (

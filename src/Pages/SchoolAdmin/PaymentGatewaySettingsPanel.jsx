@@ -6,6 +6,7 @@ import {
   connectPaymentGateway,
 } from "../../lib/api";
 import { Card, Field, Button, Notice, Empty, Tabs, Select } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Only Paystack has a working checkout/webhook adapter today (see
 // supabase/functions/_shared/gateways/registry.ts) — this list is what
@@ -35,8 +36,7 @@ const PaymentGatewaySettingsPanel = () => {
   const { schoolId } = useSchool();
   const [gateway, setGateway] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const [mode, setMode] = useState("platform");
   const [provider, setProvider] = useState("paystack");
@@ -66,7 +66,7 @@ const PaymentGatewaySettingsPanel = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -157,8 +157,6 @@ const PaymentGatewaySettingsPanel = () => {
           {"This school has not connected a payment gateway yet — nobody has chosen one. Online payments are switched off until an owner or admin picks something below."}
         </Notice>
       ) : null}
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
 
       <Card style={{ marginBottom: 16, maxWidth: 640 }}>
         <h3 style={{ marginTop: 0 }}>{"Payment gateway"}</h3>

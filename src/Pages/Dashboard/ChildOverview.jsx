@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchChildCourses, fetchChildTeachers } from "../../lib/api";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Card,
   Badge,
   Button,
   Empty,
-  Notice,
   displayName,
   initials,
   formatDate,
@@ -74,7 +74,7 @@ const ChildOverview = ({ child, relationship, schoolId }) => {
   const [courses, setCourses] = useState([]);
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [showPast, setShowPast] = useState(false);
 
   const load = useCallback(async () => {
@@ -92,7 +92,7 @@ const ChildOverview = ({ child, relationship, schoolId }) => {
     } finally {
       setLoading(false);
     }
-  }, [child, schoolId]);
+  }, [child, schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -149,7 +149,6 @@ const ChildOverview = ({ child, relationship, schoolId }) => {
         </Link>
       </div>
 
-      <Notice tone="error">{error}</Notice>
       {loading ? <Empty>{"Loading..."}</Empty> : null}
 
       {!loading && courses.length === 0 ? (

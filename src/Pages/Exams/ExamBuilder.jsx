@@ -17,8 +17,9 @@ import {
   uploadExamQuestionImage,
   removeExamQuestionImage,
 } from "../../lib/api";
-import { Page, Card, Field, Button, Badge, Notice, Select, DateTimePicker } from "../../Components/UI";
+import { Page, Card, Field, Button, Badge, Select, DateTimePicker } from "../../Components/UI";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
+import { useActionFeedback } from "../../Components/Toast";
 
 const blankQuestion = (kind = "multiple_choice") => ({
   kind,
@@ -82,7 +83,7 @@ const ExamBuilder = () => {
   const [removedIds, setRemovedIds] = useState([]);
   const [imageUploading, setImageUploading] = useState({});
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   // Load an existing paper for editing.
   useEffect(() => {
@@ -146,7 +147,7 @@ const ExamBuilder = () => {
     return () => {
       active = false;
     };
-  }, [examId, isEditing, schoolId]);
+  }, [examId, isEditing, schoolId, setError]);
 
   const setExamField = (field) => (event) => {
     const value =
@@ -717,7 +718,6 @@ const ExamBuilder = () => {
           <Badge>{`${totalPoints} points`}</Badge>
         </div>
 
-        <Notice tone="error">{error}</Notice>
 
         <div className="btn-row" style={{ marginTop: 18 }}>
           <Button onClick={() => handleSave(true)} disabled={saving}>

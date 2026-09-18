@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import ChildOverview from "./ChildOverview";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   fetchChildren,
   fetchMyInvoices,
@@ -13,7 +14,6 @@ import {
   Card,
   Badge,
   Button,
-  Notice,
   Empty,
   displayName,
   formatDate,
@@ -34,7 +34,7 @@ const ParentDashboard = () => {
   const [invoices, setInvoices] = useState([]);
   const [notices, setNotices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(async () => {
     if (!user || !schoolId) return;
@@ -53,7 +53,7 @@ const ParentDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [user, schoolId]);
+  }, [user, schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -71,7 +71,6 @@ const ParentDashboard = () => {
       title={`Welcome back, ${profile ? displayName(profile) : ""}`}
       subtitle={school ? school.name : undefined}
     >
-      <Notice tone="error">{error}</Notice>
       {loading ? <Empty>{"Loading..."}</Empty> : null}
 
       <section>

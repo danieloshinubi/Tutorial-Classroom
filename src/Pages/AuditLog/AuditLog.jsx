@@ -2,13 +2,13 @@ import React, { useCallback, useEffect, useState } from "react";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchAuditLog, fetchAuditLogTables } from "../../lib/api";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Page,
   Card,
   Field,
   Button,
   Badge,
-  Notice,
   Empty,
   formatDate,
   Select,
@@ -174,7 +174,7 @@ const AuditLog = () => {
   const [page, setPage] = useState(0);
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const [tableFilter, setTableFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
@@ -203,7 +203,7 @@ const AuditLog = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, tableFilter, actionFilter, actorSearch, from, to, page]);
+  }, [schoolId, tableFilter, actionFilter, actorSearch, from, to, page, setError]);
 
   useEffect(() => {
     load();
@@ -291,7 +291,6 @@ const AuditLog = () => {
           ) : null}
         </Card>
 
-        <Notice tone="error">{error}</Notice>
 
         <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0 }}>
           {count > 0 ? `${count.toLocaleString()} recorded action${count === 1 ? "" : "s"}` : ""}

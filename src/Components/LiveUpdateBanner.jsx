@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "react-icons-kit";
 import { refreshCw } from "react-icons-kit/feather/refreshCw";
+import { useAuth } from "../context/AuthContext";
 import {
   subscribeToApplicationEvents,
   subscribeToTicketsList,
@@ -23,15 +24,25 @@ import {
 // 060_application_events_realtime.sql and
 // 122_tickets_and_applications_realtime.sql) or no event ever arrives here
 // no matter how correct this subscription code is.
-const useRealtimeCounter = (key, subscribe) => {
+// `shouldCount` decides whether a given realtime event should actually bump
+// the banner — the one case that never should is an event this same viewer
+// just caused themselves (they already see the result of their own action;
+// telling them to "reload" for it is noise). Read through a ref rather than
+// added as an effect dependency, since `shouldCount` is a fresh closure
+// every render and re-subscribing the channel every render (instead of once
+// per `key`) would mean briefly missing events during the resubscribe.
+const useRealtimeCounter = (key, subscribe, shouldCount) => {
   const [count, setCount] = useState(0);
   const countRef = useRef(0);
+  const shouldCountRef = useRef(shouldCount);
+  shouldCountRef.current = shouldCount;
 
   useEffect(() => {
     if (!key) return undefined;
     setCount(0);
     countRef.current = 0;
-    const channel = subscribe(() => {
+    const channel = subscribe((event) => {
+      if (shouldCountRef.current && !shouldCountRef.current(event)) return;
       countRef.current += 1;
       setCount(countRef.current);
     });
@@ -47,10 +58,18 @@ const useRealtimeCounter = (key, subscribe) => {
   return { count, reset };
 };
 
-export const useLiveApplicationUpdates = (applicationId) =>
-  useRealtimeCounter(applicationId, (onChange) =>
-    subscribeToApplicationEvents(applicationId, onChange)
+// application_events carries actor_id — the person who performed the
+// action that wrote this row — so a staff member (or applicant) who just
+// did the thing sees its result on screen already and doesn't also get
+// told "1 new update" for their own click.
+export const useLiveApplicationUpdates = (applicationId) => {
+  const { user } = useAuth();
+  return useRealtimeCounter(
+    applicationId,
+    (onChange) => subscribeToApplicationEvents(applicationId, onChange),
+    (event) => event?.actor_id !== user?.id
   );
+};
 
 export const useLiveTicketsListUpdates = (schoolId) =>
   useRealtimeCounter(schoolId, (onChange) => subscribeToTicketsList(schoolId, onChange));
@@ -58,8 +77,17 @@ export const useLiveTicketsListUpdates = (schoolId) =>
 export const useLiveApplicationsListUpdates = (schoolId) =>
   useRealtimeCounter(schoolId, (onChange) => subscribeToApplicationsList(schoolId, onChange));
 
-export const useLiveTicketThreadUpdates = (ticketId) =>
-  useRealtimeCounter(ticketId, (onChange) => subscribeToTicketThread(ticketId, onChange));
+// Same self-filtering for a ticket thread's own messages (ticket_messages
+// carries author_id). The ticket row's own status/priority updates have no
+// single "who changed this" column to check, so those always count.
+export const useLiveTicketThreadUpdates = (ticketId) => {
+  const { user } = useAuth();
+  return useRealtimeCounter(
+    ticketId,
+    (onChange) => subscribeToTicketThread(ticketId, onChange),
+    (payload) => payload?.table !== "ticket_messages" || payload?.new?.author_id !== user?.id
+  );
+};
 
 export const LiveUpdateBanner = ({ count, onReload, label }) => {
   const [spinning, setSpinning] = useState(false);
