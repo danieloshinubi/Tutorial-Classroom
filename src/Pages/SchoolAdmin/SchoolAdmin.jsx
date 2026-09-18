@@ -33,6 +33,7 @@ import {
 import { ImageUpload } from "../../Components/ImageUpload";
 import { ExportButton } from "../../Components/ExportButton";
 import { applyTenantBranding } from "../../lib/branding";
+import AdmissionLetter, { LETTER_MERGE_TAGS } from "../Admissions/AdmissionLetter";
 import {
   Page,
   Card,
@@ -633,8 +634,12 @@ const SettingsPanel = () => {
     signature_url: "",
     signatory_name: "",
     signatory_title: "",
+    admission_letter_offer_intro: "",
+    admission_letter_enrolled_intro: "",
+    admission_letter_closing: "",
   });
   const [saving, setSaving] = useState(false);
+  const [previewStatus, setPreviewStatus] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
@@ -650,6 +655,9 @@ const SettingsPanel = () => {
       signature_url: school.signature_url || "",
       signatory_name: school.signatory_name || "",
       signatory_title: school.signatory_title || "",
+      admission_letter_offer_intro: school.admission_letter_offer_intro || "",
+      admission_letter_enrolled_intro: school.admission_letter_enrolled_intro || "",
+      admission_letter_closing: school.admission_letter_closing || "",
     });
   }, [school]);
 
@@ -697,6 +705,9 @@ const SettingsPanel = () => {
         signature_url: form.signature_url.trim() || null,
         signatory_name: form.signatory_name.trim() || null,
         signatory_title: form.signatory_title.trim() || null,
+        admission_letter_offer_intro: form.admission_letter_offer_intro.trim() || null,
+        admission_letter_enrolled_intro: form.admission_letter_enrolled_intro.trim() || null,
+        admission_letter_closing: form.admission_letter_closing.trim() || null,
       });
       await reload();
       setNotice("School details saved.");
@@ -708,6 +719,29 @@ const SettingsPanel = () => {
   };
 
   if (!school) return <Empty>{"Loading..."}</Empty>;
+
+  if (previewStatus) {
+    const enrolled = previewStatus === "enrolled";
+    return (
+      <AdmissionLetter
+        application={{
+          reference: "SAMPLE/2026/0001",
+          first_name: "Ada",
+          middle_name: "",
+          surname: "Okafor",
+          date_of_birth: "2014-04-15",
+          guardian_name: "Mr & Mrs Okafor",
+          status: previewStatus,
+          offer_expires_at: enrolled ? null : new Date(Date.now() + 14 * 86400000).toISOString(),
+          registration_number: enrolled ? "REG-0001" : null,
+          sessions: { name: "2026/2027" },
+          classes: { name: "JSS 1" },
+          schools: { ...school, ...form },
+        }}
+        onClose={() => setPreviewStatus(null)}
+      />
+    );
+  }
 
   return (
     <Card style={{ maxWidth: 620 }}>
@@ -769,6 +803,59 @@ const SettingsPanel = () => {
         <Field label="Signatory title" hint="Their role, e.g. “Principal” or “Head of Admissions”.">
           <input className="input" value={form.signatory_title} onChange={update("signatory_title")} />
         </Field>
+
+        <div style={{ margin: "18px 0 4px" }}>
+          <strong style={{ fontSize: 14 }}>{"Admission letter wording"}</strong>
+          <p style={{ margin: "4px 0 0", color: "var(--ink-3)", fontSize: 13 }}>
+            {"Leave these blank and the admission letter keeps Schoolivio's own default wording. Write your own and it's used instead — everything else on the letter (the facts table, offer expiry and fee notices, and the signature above) stays the same either way."}
+          </p>
+          <p style={{ margin: "6px 0 0", color: "var(--ink-3)", fontSize: 12.5 }}>
+            {"Available in any of the fields below: "}
+            {LETTER_MERGE_TAGS.map(([tag], i) => (
+              <React.Fragment key={tag}>
+                {i > 0 ? ", " : ""}
+                <code>{`{{${tag}}}`}</code>
+              </React.Fragment>
+            ))}
+            {". Leave a blank line to start a new paragraph."}
+          </p>
+        </div>
+        <Field label="Offer letter — opening paragraph" hint="Used when an applicant is offered a place.">
+          <textarea
+            className="textarea"
+            style={{ minHeight: 100 }}
+            placeholder={`Following our review of the application submitted on your behalf, we are pleased to offer {{applicant_name}} a place at {{school_name}}.`}
+            value={form.admission_letter_offer_intro}
+            onChange={update("admission_letter_offer_intro")}
+          />
+        </Field>
+        <Field label="Enrolment letter — opening paragraph" hint="Used once the applicant is enrolled.">
+          <textarea
+            className="textarea"
+            style={{ minHeight: 100 }}
+            placeholder={`We are pleased to confirm that {{applicant_name}} has been enrolled at {{school_name}}.`}
+            value={form.admission_letter_enrolled_intro}
+            onChange={update("admission_letter_enrolled_intro")}
+          />
+        </Field>
+        <Field label="Closing line" hint="Shared by both letters, printed just before the signature.">
+          <textarea
+            className="textarea"
+            style={{ minHeight: 60 }}
+            placeholder="We look forward to welcoming your family to the school."
+            value={form.admission_letter_closing}
+            onChange={update("admission_letter_closing")}
+          />
+        </Field>
+        <div className="btn-row" style={{ marginBottom: 12 }}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setPreviewStatus("offered")}>
+            {"Preview offer letter"}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setPreviewStatus("enrolled")}>
+            {"Preview enrolment letter"}
+          </Button>
+        </div>
+
         <Field
           label="Theme colour"
           hint="Recolours buttons, active tabs, badges and highlights across this school's app — sign-in included. Leave it as Schoolivio's own purple until you'd rather match your school's colours."

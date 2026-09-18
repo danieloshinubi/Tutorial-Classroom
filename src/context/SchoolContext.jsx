@@ -55,7 +55,11 @@ export const SchoolProvider = ({ children }) => {
     try {
       const { data: schoolRow, error: schoolError } = await supabase
         .from("schools")
-        .select("id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active")
+        .select(
+          `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active,
+           signature_url, signatory_name, signatory_title,
+           admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
+        )
         .eq("slug", slug)
         .maybeSingle();
 

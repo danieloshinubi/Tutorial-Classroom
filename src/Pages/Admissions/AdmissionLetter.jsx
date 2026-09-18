@@ -1,6 +1,35 @@
 import React from "react";
 import { Button, formatDate } from "../../Components/UI";
 
+// The merge tags a tenant admin can use in their custom intro/closing text
+// (AdmissionsSettingsPanel's "Admission letter" tab) — kept in one place so
+// the settings panel's hint text and the actual substitution here can never
+// drift apart.
+export const LETTER_MERGE_TAGS = [
+  ["applicant_name", "The applicant's full name"],
+  ["school_name", "The school's name"],
+  ["guardian_name", "The guardian's name"],
+  ["session_name", "The academic session, if any"],
+  ["class_name", "The class/placement, if any"],
+  ["reference", "The application reference"],
+  ["registration_number", "The registration number, once enrolled"],
+];
+
+// {{tag}} → the matching value, or "" if that application has none (e.g.
+// {{registration_number}} before enrolment) — never leaves the literal
+// {{tag}} in printed output.
+export const fillLetterMergeTags = (template, vars) =>
+  template.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, tag) => vars[tag] ?? "");
+
+// A custom paragraph can contain blank lines to mean "new paragraph" —
+// split so multi-paragraph custom text doesn't print as one run-on block.
+const renderParagraphs = (text) =>
+  text
+    .split(/\n\s*\n/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((para, i) => <p key={i}>{para}</p>);
+
 // A printable letter the school can hand or email to the family.
 //
 // Laid out for A4 rather than for the screen: the print stylesheet drops the
@@ -12,6 +41,25 @@ const AdmissionLetter = ({ application: app, className, onClose }) => {
     .filter(Boolean)
     .join(" ");
   const placement = className || app.classes?.name;
+
+  const mergeVars = {
+    applicant_name: fullName,
+    school_name: school.name || "",
+    guardian_name: app.guardian_name || "",
+    session_name: app.sessions?.name || "",
+    class_name: placement || "",
+    reference: app.reference || "",
+    registration_number: app.registration_number || "",
+  };
+
+  // A tenant admin's own wording, merge-tagged — falls back to the default
+  // Schoolivio paragraphs below whenever they haven't set one, so a school
+  // that customises nothing keeps the exact letter it always had.
+  const customIntro =
+    app.status === "enrolled"
+      ? school.admission_letter_enrolled_intro
+      : school.admission_letter_offer_intro;
+  const customClosing = school.admission_letter_closing;
 
   return (
     <div className="letter-page">
@@ -45,7 +93,9 @@ const AdmissionLetter = ({ application: app, className, onClose }) => {
 
         <p>{`Dear ${app.guardian_name},`}</p>
 
-        {app.status === "enrolled" ? (
+        {customIntro ? (
+          renderParagraphs(fillLetterMergeTags(customIntro, mergeVars))
+        ) : app.status === "enrolled" ? (
           <p>
             {`We are pleased to confirm that ${fullName} has been enrolled at ${school.name}`}
             {app.sessions ? ` for the ${app.sessions.name} academic session` : ""}
@@ -113,7 +163,11 @@ const AdmissionLetter = ({ application: app, className, onClose }) => {
           </p>
         ) : null}
 
-        <p>{"We look forward to welcoming your family to the school."}</p>
+        {customClosing ? (
+          renderParagraphs(fillLetterMergeTags(customClosing, mergeVars))
+        ) : (
+          <p>{"We look forward to welcoming your family to the school."}</p>
+        )}
 
         <div className="letter-sign">
           <p>{"Yours faithfully,"}</p>

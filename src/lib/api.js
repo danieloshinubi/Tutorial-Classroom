@@ -1245,7 +1245,11 @@ export const updateSchool = async (id, changes) => {
     .from("schools")
     .update(changes)
     .eq("id", id)
-    .select("id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency")
+    .select(
+      `id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency,
+       signature_url, signatory_name, signatory_title,
+       admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
+    )
     .single();
   if (error) throw error;
   return data;
@@ -2306,7 +2310,9 @@ export const fetchApplication = async (id, schoolId) => {
        guardian_phone, guardian_relation, address, notes, document_links, status,
        offer_expires_at, decided_at, created_at, student_id, class_id,
        sessions ( id, name ), classes ( id, name ),
-       schools ( id, name, slug, logo_url, address, phone, email )`
+       schools ( id, name, slug, logo_url, address, phone, email,
+                 signature_url, signatory_name, signatory_title,
+                 admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing )`
     )
     .eq("id", id)
     .eq("school_id", schoolId)
