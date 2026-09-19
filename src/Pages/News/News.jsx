@@ -14,6 +14,7 @@ import {
   updateNoticeReply,
   fetchNoticeReactions,
   toggleNoticeReaction,
+  sendNoticeEmail,
   NOTICE_AUDIENCES,
 } from "../../lib/api";
 import {
@@ -331,10 +332,11 @@ const News = () => {
       });
       if (publishNow) {
         await publishNotice(created.id, schoolId);
+        const emailNote = await emailNotice(created.id);
         setNotice(
-          audience === "everyone"
+          (audience === "everyone"
             ? "Posted. Everyone at the school has been notified."
-            : `Posted. All ${AUDIENCE_LABEL[audience].toLowerCase()} have been notified.`
+            : `Posted. All ${AUDIENCE_LABEL[audience].toLowerCase()} have been notified.`) + emailNote
         );
       } else {
         setNotice("Saved as a draft. Nobody has been notified yet.");
@@ -348,11 +350,25 @@ const News = () => {
     }
   };
 
+  // Best-effort: publishing (and its in-app notification) already
+  // succeeded by the time this runs, so a mail-side hiccup is reported as
+  // a note, not an error that implies the notice itself failed to post.
+  const emailNotice = async (noticeId) => {
+    try {
+      const result = await sendNoticeEmail({ noticeId, schoolId });
+      if (result?.sent) return ` Emailed to ${result.count} ${result.count === 1 ? "person" : "people"}.`;
+      return " No mailbox connected — not emailed.";
+    } catch (err) {
+      return ` Could not email it: ${err.message}`;
+    }
+  };
+
   const send = async (row) => {
     setError("");
     try {
       await publishNotice(row.id, schoolId);
-      setNotice("Sent.");
+      const emailNote = await emailNotice(row.id);
+      setNotice(`Sent.${emailNote}`);
       load();
     } catch (err) {
       setError(err.message || "Could not send that notice.");

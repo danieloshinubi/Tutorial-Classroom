@@ -461,7 +461,7 @@ const Hero = () => {
           <Link to="/Start-Trial" className="mkt-btn mkt-btn-primary">{"Start free trial →"}</Link>
           <a href="mailto:hello@schoolivio.com" className="mkt-btn mkt-btn-ghost-dark">{"Book a demo"}</a>
         </div>
-        <p className="mkt-hero-trust">{"15-day free trial · No credit card required · Configure it your way from day one"}</p>
+        <p className="mkt-hero-trust">{"45-day free trial · No credit card required · Configure it your way from day one"}</p>
 
         <div className="mkt-mock-wrap">
           <div className="mkt-float-chip mkt-float-1">
@@ -667,7 +667,7 @@ const FinalCta = () => (
         <a href="mailto:hello@schoolivio.com" className="mkt-btn mkt-btn-ghost-dark">{"Book a personalised demo"}</a>
       </div>
       <p style={{ color: "rgba(255,255,255,.4)", fontSize: 13, marginTop: 22 }}>
-        {"No long-term commitment. 15 days free, no card required."}
+        {"No long-term commitment. 45 days free, no card required."}
       </p>
     </div>
   </section>

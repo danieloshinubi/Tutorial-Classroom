@@ -1377,7 +1377,7 @@ export const addSchoolUser = async ({ schoolId, email, firstName, surname, role 
 
   if (byInvitation) {
     try {
-      await invitePasswordSetup(address);
+      await invitePasswordSetup(address, schoolId);
       return { user_id: userId, email: address, role, invited: true, emailed: true };
     } catch {
       // The mailer failed — commonly the free-tier hourly limit. The account
@@ -2353,6 +2353,49 @@ export const decideApplication = async ({ id, schoolId, status, note, offerExpir
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
+};
+
+// Password reset ("reset", pre-auth, no session yet) and new-member
+// activation ("invite", sent by a school admin right after adding someone)
+// — both routed through the school's own connected mailbox when it has
+// one, falling back to Supabase's own default email otherwise. Always
+// resolves even for an unknown email/school, by design (see
+// auth-email-send's own comment) — never throws, so a caller can show the
+// same "if that address has an account..." message either way.
+export const sendBrandedAuthEmail = async ({ schoolId, email, kind }) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const { data, error } = await supabase.functions.invoke("auth-email-send", {
+    body: { schoolId, email, kind },
+    headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// Emails the applicant's guardian a branded update — a decision (offer/
+// enrolled/rejected) or a free-form note from admissions staff. Never
+// throws for "no mailbox connected" (that's an expected, common state, not
+// a failure) — callers check `sent` and show a different toast for it.
+export const notifyApplicant = async ({ applicationId, schoolId, kind, message }) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("admissions-notify", {
+    body: { applicationId, schoolId, kind, message },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not message that applicant.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
 };
 
 /* -------------------------------------------------------------------------- */
@@ -3359,6 +3402,32 @@ export const updateNotice = async ({ id, schoolId, ...fields }) => {
 export const publishNotice = async (id, schoolId) => {
   const { error } = await supabase.rpc("publish_notice", { target_notice: id, target_school: schoolId });
   if (error) throw error;
+};
+
+// The email half of "Post and notify" — publish_notice() itself only ever
+// raised the in-app bell notification. Never throws for an ordinary
+// no-mailbox-connected state; callers check `sent` and show a softer
+// message for that than for a real failure.
+export const sendNoticeEmail = async ({ noticeId, schoolId }) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("notice-mail-send", {
+    body: { noticeId, schoolId },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not email that notice.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
 };
 
 export const deleteNotice = async (id, schoolId) => {

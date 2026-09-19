@@ -7,7 +7,7 @@ import { useActionFeedback } from "../Components/Toast";
 // a school's own detail page — one place for what "extend a trial" means so
 // the three don't drift.
 const ExtendTrialModal = ({ school, onClose, onDone }) => {
-  const [days, setDays] = useState("15");
+  const [days, setDays] = useState("45");
   const [busy, setBusy] = useState(false);
   const { setError } = useActionFeedback();
 

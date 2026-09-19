@@ -17,7 +17,7 @@ const TrialGate = ({ children }) => {
       <Page title="Your trial has ended">
         <Card style={{ maxWidth: 560 }}>
           <p style={{ marginTop: 0 }}>
-            {`${school?.name || "Your school"}'s 15-day trial ended on ${
+            {`${school?.name || "Your school"}'s 45-day trial ended on ${
               school?.trial_ends_at ? formatDate(school.trial_ends_at, { withTime: false }) : "its due date"
             }. Everything you set up is still here — it just isn't reachable until the school moves to a plan.`}
           </p>

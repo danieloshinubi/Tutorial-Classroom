@@ -28,6 +28,7 @@ import {
   addSchoolUser,
   fetchClasses,
   fetchApplicantAccount,
+  notifyApplicant,
 } from "../../lib/api";
 import {
   Page,
@@ -40,6 +41,7 @@ import {
   formatDate,
   Select,
   DateTimePicker,
+  Modal,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
@@ -123,6 +125,7 @@ const AdmissionsWorkspace = () => {
   const [busy, setBusy] = useState(false);
   const [letterApp, setLetterApp] = useState(null);
   const [letterLoading, setLetterLoading] = useState(false);
+  const [messaging, setMessaging] = useState(false);
   // create_application_screening_items() is a no-op when this school hasn't
   // configured any screening steps — it succeeds and returns the (empty)
   // list rather than erroring, so pressing the button then looks like
@@ -264,11 +267,16 @@ const AdmissionsWorkspace = () => {
         title={`${app.reference} — ${app.first_name} ${app.surname}`}
         subtitle="Admissions workspace"
         action={
-          ["offered", "accepted", "enrolled"].includes(app.status) ? (
-            <Button variant="secondary" disabled={letterLoading} onClick={openLetter}>
-              {letterLoading ? "Opening..." : "Admission letter"}
+          <div className="btn-row">
+            <Button variant="secondary" onClick={() => setMessaging(true)}>
+              {"Message applicant"}
             </Button>
-          ) : null
+            {["offered", "accepted", "enrolled"].includes(app.status) ? (
+              <Button variant="secondary" disabled={letterLoading} onClick={openLetter}>
+                {letterLoading ? "Opening..." : "Admission letter"}
+              </Button>
+            ) : null}
+          </div>
         }
       >
         <LiveUpdateBanner count={live.count} onReload={() => { live.reset(); load(); }} />
@@ -593,7 +601,8 @@ const AdmissionsWorkspace = () => {
           ) : null}
           {canFinalise ? (
             <DecisionForm application={app} schoolId={schoolId} disabled={busy}
-              onDone={reloadWithToast("Decision recorded.")} onError={setError} />
+              onDone={async (message) => { await load(); notify(message, { tone: "success" }); }}
+              onError={setError} />
           ) : (
             <Notice tone="muted">
               {"Only the Proprietor, an Administrator or the Principal can make the final admission decision. Screening, review and interview can still be recorded above."}
@@ -853,7 +862,74 @@ const AdmissionsWorkspace = () => {
         </Card>
       </Page>
       {preview.node}
+      {messaging ? (
+        <MessageApplicantModal
+          application={app}
+          schoolId={schoolId}
+          onClose={() => setMessaging(false)}
+          onSent={(result) => {
+            setMessaging(false);
+            notify(
+              result.sent ? "Message emailed to the applicant." : "No mailbox connected — message was not emailed.",
+              { tone: result.sent ? "success" : "error" }
+            );
+          }}
+          onError={setError}
+        />
+      ) : null}
     </div>
+  );
+};
+
+// A one-off note to an applicant's guardian — the only outbound-email
+// affordance in Admissions until now was the print-only AdmissionLetter.
+// Goes out through the school's own connected mailbox via admissions-notify,
+// same as an offer/enrolment/rejection email, just with staff-written copy.
+const MessageApplicantModal = ({ application, schoolId, onClose, onSent, onError }) => {
+  const [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!message.trim()) return onError("Write a message first.");
+    setSending(true);
+    try {
+      const result = await notifyApplicant({ applicationId: application.id, schoolId, kind: "message", message: message.trim() });
+      onSent(result);
+    } catch (err) {
+      onError(err.message || "Could not send that message.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Message applicant"
+      subtitle={`Emailed to ${application.guardian_email}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose}>{"Cancel"}</Button>
+          <Button type="submit" form="message-applicant-form" disabled={sending}>
+            {sending ? "Sending..." : "Send"}
+          </Button>
+        </>
+      }
+    >
+      <form id="message-applicant-form" onSubmit={submit}>
+        <Field label="Message" hint="Sent as a branded email through this school's connected mailbox.">
+          <textarea
+            className="textarea"
+            rows={6}
+            autoFocus
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="e.g. Could you upload your most recent transcript by Friday?"
+          />
+        </Field>
+      </form>
+    </Modal>
   );
 };
 
@@ -1117,6 +1193,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
     onError("");
     try {
       await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null, schoolId });
+      await notifyApplicant({ applicationId: application.id, schoolId, kind: "enrolled" }).catch(() => null);
       onDone();
     } catch (err) {
       onError(err.message || "Could not register that applicant.");
@@ -1166,6 +1243,7 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
       }
 
       await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null, schoolId });
+      await notifyApplicant({ applicationId: application.id, schoolId, kind: "enrolled" }).catch(() => null);
 
       // The parent hides this whole form the moment status flips to
       // 'enrolled' (onDone() reloads it) — showing the one-time password
@@ -1293,7 +1371,18 @@ const DecisionForm = ({ application, schoolId, disabled, onDone, onError }) => {
         offerExpires: expires ? new Date(expires).toISOString() : null,
         conditions: decision === "offered" ? conditions : null,
       });
-      onDone();
+      let emailNote = "";
+      if (decision === "offered" || decision === "rejected") {
+        try {
+          const result = await notifyApplicant({ applicationId: application.id, schoolId, kind: decision });
+          emailNote = result?.sent
+            ? " Applicant emailed."
+            : " No mailbox connected — applicant was not emailed.";
+        } catch (err) {
+          emailNote = ` Could not email the applicant: ${err.message}`;
+        }
+      }
+      onDone(`Decision recorded.${emailNote}`);
     } catch (err) {
       onError(err.message || "Could not record the decision.");
     }

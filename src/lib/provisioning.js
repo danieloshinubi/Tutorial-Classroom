@@ -100,7 +100,21 @@ export const createAuthUser = async ({ email, firstName, surname, password }) =>
 
 // Sends the "set your password" email. Failure here is not fatal: the account
 // exists, and the person can use Forgot Password themselves.
-export const invitePasswordSetup = async (email) => {
+//
+// Routed through auth-email-send (branded, sent via the school's own
+// connected mailbox) when a schoolId is given — api.js can't be imported
+// here without a circular import (it already imports this file), so the
+// edge function is called directly rather than through sendBrandedAuthEmail.
+export const invitePasswordSetup = async (email, schoolId) => {
+  if (schoolId) {
+    const { data: { session } } = await supabase.auth.getSession();
+    const { error } = await supabase.functions.invoke("auth-email-send", {
+      body: { schoolId, email, kind: "invite" },
+      headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : undefined,
+    });
+    if (error) throw error;
+    return;
+  }
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${window.location.origin}/Reset-Password`,
   });
