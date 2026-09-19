@@ -1,8 +1,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { fetchOverview, fetchTenants } from "../lib/platformApi";
-import { Page, Card, Notice, Empty, Badge } from "../Components/UI";
+import {
+  fetchOverview,
+  fetchTenants,
+  fetchPlatformGateways,
+  fetchPlatformMailboxHealth,
+} from "../lib/platformApi";
+import { Page, Card, Empty, Badge, Button, formatDate } from "../Components/UI";
 import { StatRow } from "../Components/Charts";
+import { useActionFeedback } from "../Components/Toast";
+import ExtendTrialModal from "./ExtendTrialModal";
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // What the platform looks like from above: how many schools, how many are
 // actually being used, and which ones were added recently. A tenant that was
@@ -11,19 +20,29 @@ import { StatRow } from "../Components/Charts";
 const Overview = () => {
   const [stats, setStats] = useState(null);
   const [tenants, setTenants] = useState([]);
-  const [error, setError] = useState("");
+  const [gateways, setGateways] = useState([]);
+  const [mailboxes, setMailboxes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [extending, setExtending] = useState(null);
+  const { setError, setNotice } = useActionFeedback();
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([fetchOverview(), fetchTenants()])
-      .then(([o, t]) => {
+    Promise.all([
+      fetchOverview(),
+      fetchTenants(),
+      fetchPlatformGateways().catch(() => []),
+      fetchPlatformMailboxHealth().catch(() => []),
+    ])
+      .then(([o, t, g, m]) => {
         setStats(o);
         setTenants(t);
+        setGateways(g);
+        setMailboxes(m);
       })
       .catch((err) => setError(err.message || "Could not load the platform."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [setError]);
 
   useEffect(load, [load]);
 
@@ -32,9 +51,19 @@ const Overview = () => {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 6);
 
+  // Expiring within a week, or already past due — either way, the school
+  // finds out by hitting a hard wall (TrialGate.jsx) unless someone here
+  // reaches out or extends it first.
+  const trialsAtRisk = tenants
+    .filter((t) => t.plan === "trial" && t.trial_ends_at)
+    .filter((t) => new Date(t.trial_ends_at) - Date.now() < 7 * DAY_MS)
+    .sort((a, b) => new Date(a.trial_ends_at) - new Date(b.trial_ends_at));
+
+  const unconfirmedGateways = gateways.filter((g) => g.provider && !g.confirmed_at);
+  const brokenMailboxes = mailboxes.filter((m) => m.last_poll_status === "error");
+
   return (
     <Page title="Platform" subtitle="Every school on Schoolivio">
-      <Notice tone="error">{error}</Notice>
       {loading ? <Empty>{"Loading..."}</Empty> : null}
 
       {stats ? (
@@ -80,6 +109,71 @@ const Overview = () => {
         </Card>
       ) : null}
 
+      {!loading && trialsAtRisk.length ? (
+        <Card style={{ marginTop: 22, borderColor: "var(--warn-ink)" }}>
+          <h3 style={{ marginTop: 0 }}>{"Trials expiring soon"}</h3>
+          <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0 }}>
+            {"Within a week, or already past due — each one hits a hard lockout (TrialGate) with no way back in except emailing support, unless someone extends it first."}
+          </p>
+          <div style={{ display: "grid", gap: 8 }}>
+            {trialsAtRisk.map((t) => {
+              const expired = new Date(t.trial_ends_at) < new Date();
+              return (
+                <div key={t.id} className="doc-row">
+                  <div>
+                    <Link to={`/Tenants/${t.id}`}><strong>{t.name}</strong></Link>
+                    <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
+                      {`${expired ? "Expired" : "Expires"} ${formatDate(t.trial_ends_at, { withTime: false })}`}
+                    </div>
+                  </div>
+                  <div className="doc-actions">
+                    <Badge tone={expired ? "danger" : "warn"}>{expired ? "locked out" : "at risk"}</Badge>
+                    <Button size="sm" variant="secondary" onClick={() => setExtending(t)}>
+                      {"Extend"}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      ) : null}
+
+      {!loading && (unconfirmedGateways.length || brokenMailboxes.length) ? (
+        <div className="split" style={{ marginTop: 22 }}>
+          {unconfirmedGateways.length ? (
+            <Card>
+              <h3 style={{ marginTop: 0 }}>{"Gateways never confirmed"}</h3>
+              <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0 }}>
+                {"An owner picked a provider but never actually confirmed the credentials — online payments may not be working."}
+              </p>
+              <div className="btn-row" style={{ flexWrap: "wrap" }}>
+                {unconfirmedGateways.map((g) => (
+                  <Link key={g.school_id} to={`/Tenants/${g.school_id}`} className="chip-link">
+                    <Badge tone="warn">{g.school_name}</Badge>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          ) : null}
+          {brokenMailboxes.length ? (
+            <Card>
+              <h3 style={{ marginTop: 0 }}>{"Mailboxes with a failed poll"}</h3>
+              <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0 }}>
+                {"The last connection attempt failed — support emails to these addresses may be going unseen."}
+              </p>
+              <div className="btn-row" style={{ flexWrap: "wrap" }}>
+                {brokenMailboxes.map((m) => (
+                  <Link key={m.mailbox_id} to={`/Tenants/${m.school_id}`} className="chip-link">
+                    <Badge tone="danger">{`${m.school_name} · ${m.address}`}</Badge>
+                  </Link>
+                ))}
+              </div>
+            </Card>
+          ) : null}
+        </div>
+      ) : null}
+
       {newest.length ? (
         <section className="section">
           <h2>{"Recently added"}</h2>
@@ -122,6 +216,18 @@ const Overview = () => {
             </div>
           </Card>
         </section>
+      ) : null}
+
+      {extending ? (
+        <ExtendTrialModal
+          school={extending}
+          onClose={() => setExtending(null)}
+          onDone={(_updated, message) => {
+            setExtending(null);
+            setNotice(message);
+            load();
+          }}
+        />
       ) : null}
     </Page>
   );

@@ -735,6 +735,44 @@ export const Badge = ({ children, tone }) => (
 export const Notice = ({ tone = "muted", children }) =>
   children ? <p className={`notice ${tone}`}>{children}</p> : null;
 
+// A centred overlay dialog — title, an optional one-line subtitle, whatever
+// content the caller wants, then a footer for its action buttons. Nothing
+// in this codebase had a shared modal before this; every "view/edit one
+// record" flow was either a full page or a window.confirm(). Introduced for
+// the platform console's own record-level actions (approve, extend a
+// trial, review a single admin) — the same two-button footer shape (a
+// primary action, an outlined caution/danger one beside it) as approving or
+// rejecting a single record anywhere else that pattern shows up.
+export const Modal = ({ title, subtitle, onClose, children, footer, wide = false }) => (
+  <div className="modal-scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
+    <div className={`modal${wide ? " modal-wide" : ""}`} role="dialog" aria-modal="true">
+      <div className="modal-head">
+        <div>
+          <h3>{title}</h3>
+          {subtitle ? <p>{subtitle}</p> : null}
+        </div>
+        {onClose ? (
+          <button type="button" className="modal-close" aria-label="Close" onClick={onClose}>
+            {"✕"}
+          </button>
+        ) : null}
+      </div>
+      <div className="modal-body">{children}</div>
+      {footer ? <div className="modal-foot">{footer}</div> : null}
+    </div>
+  </div>
+);
+
+// The light, mint-tinted checklist box the platform console's own review
+// modals use for "here's a set of things to check off" — a group label plus
+// its checkboxes, visually set apart from the rest of the modal's body.
+export const ChecklistBox = ({ title, children }) => (
+  <div className="checklist-box">
+    {title ? <div className="checklist-box-title">{title}</div> : null}
+    {children}
+  </div>
+);
+
 export const Empty = ({ children }) => <div className="empty">{children}</div>;
 
 // A row of tabs that can outgrow its width — School Administration alone has

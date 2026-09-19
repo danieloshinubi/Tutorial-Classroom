@@ -124,23 +124,32 @@ a { color: var(--brand); }
    is purely a palette hook: every .side-* rule already reads its colours
    from custom properties (--surface, --ink, --line, --bg, --brand-soft,
    --brand-dark), so redeclaring just those, scoped to this one sidebar,
-   is enough to make the console's own nav read as a distinct, deliberately
-   "classic admin console" dark panel — teal accent on navy — rather than a
-   school's own white sidebar, without a single .side-* rule needing to
-   know it's sitting in the platform console at all. */
+   is enough to make the console's own nav read as a distinct, light "classic
+   admin console" panel rather than a school's own sidebar — but the accent
+   itself is deliberately NOT redeclared here. --brand/--brand-soft/etc. are
+   left to fall through from :root exactly as everywhere else in the product,
+   so the console reads as Schoolivio's own colour, not a one-off invented
+   for this page. */
 .shell.platform .side {
-  --surface: #10233d;
-  --ink: #f3f6fb;
-  --ink-2: rgb(243 246 251 / 0.78);
-  --ink-3: rgb(243 246 251 / 0.55);
-  --line: rgb(255 255 255 / 0.12);
-  --bg: rgb(255 255 255 / 0.08);
-  --brand-soft: rgb(45 212 191 / 0.18);
-  --brand-dark: #2dd4bf;
-  border-right: none;
+  --surface: #ffffff;
+  --ink: #142c4c;
+  --ink-2: #4c5c73;
+  --ink-3: #8996a8;
+  --line: #e6ebf2;
+  --bg: #f2f6fb;
+  border-right: 1px solid var(--line);
 }
 .shell.platform .side-link.active {
   box-shadow: inset 3px 0 0 var(--brand-dark);
+}
+.shell.platform .topbar {
+  --surface: #ffffff;
+  --ink: #142c4c;
+  --ink-2: #4c5c73;
+  --ink-3: #8996a8;
+  --line: #e6ebf2;
+  --bg: #ffffff;
+  background: #ffffff;
 }
 
 /* --- the sidebar --- */
@@ -176,6 +185,19 @@ a { color: var(--brand); }
   flex: 1;
 }
 .side-logo { width: 28px; height: 28px; border-radius: 8px; object-fit: cover; }
+/* Collapsed to an icon rail, the plain purple-on-white Mark reads as a
+   smudge at 18px — the same "dark surface, white logo" rule as the login
+   panel's own icon tile (Mark's tone="white") applies here too, just with
+   the tile itself standing in for the dark surface instead of a whole panel. */
+.side-brand-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+  flex: none;
+}
 .side-brand-text { display: flex; flex-direction: column; min-width: 0; }
 .side-school {
   font-weight: 650;
@@ -698,6 +720,91 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 .btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--line); }
 .btn-secondary:hover:not(:disabled) { background: var(--bg); }
 .btn-danger { background: var(--danger); color: #fff; }
+/* The outlined red beside a filled primary — "Reject"/"Deactivate" next to
+   "Approve"/"Save Setting" — a caution action that still needs to read as
+   less final than the solid .btn-danger used for an actual delete. */
+.btn-danger-outline {
+  background: none;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+.btn-danger-outline:hover { background: var(--danger-soft); }
+
+/* ==========================================================================
+   Modal (Components/UI.jsx) — a centred dialog for reviewing or acting on
+   one record, instead of a full page navigation for something that's just
+   "look at this, then approve/reject/save it."
+   ========================================================================== */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgb(15 23 42 / 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: modal-scrim-in 0.15s ease-out;
+}
+.modal {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-3);
+  animation: modal-in 0.16s ease-out;
+}
+.modal-wide { width: min(760px, 100%); }
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 24px 0;
+}
+.modal-head h3 { margin: 0; font-size: 19px; }
+.modal-head p { margin: 6px 0 0; color: var(--ink-3); font-size: 13.5px; }
+.modal-close {
+  border: none;
+  background: none;
+  color: var(--ink-3);
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+.modal-close:hover { background: var(--bg); color: var(--ink); }
+.modal-body { padding: 18px 24px; }
+.modal-foot {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 14px 24px 22px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+}
+@keyframes modal-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.checklist-box {
+  background: var(--brand-soft);
+  border-radius: var(--r-sm);
+  padding: 14px;
+}
+.checklist-box-title { font-weight: 600; font-size: 13.5px; margin-bottom: 10px; }
+.checklist-box label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  padding: 4px 0;
+}
 .btn-ghost { background: transparent; color: var(--ink-2); }
 .btn-ghost:hover:not(:disabled) { background: var(--bg); }
 .btn-sm { padding: 7px 12px; font-size: 13.5px; border-radius: var(--r-sm); }
@@ -1936,21 +2043,98 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .chip-link { text-decoration: none; }
 
+/* A plain text action in a table row — "View" the way Ecobank's own tables
+   use it, next to (or instead of) a filled button, for the record-level
+   action that opens a Modal rather than navigating anywhere. */
+.link-action {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--brand-dark);
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.link-action:hover { text-decoration: underline; }
+
+/* Split-screen sign-in — a dark angled panel carrying the mark on one side,
+   a boxed white card on the other, on its own tinted backdrop rather than
+   bare white. Deliberately no --brand override here: the panel's gradient
+   and the "Sign in" button both read Schoolivio's own purple from :root,
+   same as every other auth screen in the product, rather than a one-off
+   colour invented for this page. */
 .platform-login {
   min-height: 100vh;
   display: grid;
+  grid-template-columns: minmax(320px, 40%) 1fr;
+  background: #f8f7fb;
+}
+.platform-login-panel {
+  position: relative;
+  background:
+    radial-gradient(circle at 22% 20%, rgb(255 255 255 / 0.10), transparent 45%),
+    radial-gradient(circle at 85% 82%, rgb(255 255 255 / 0.08), transparent 40%),
+    linear-gradient(160deg, var(--brand-darker), var(--brand) 62%, var(--brand-light));
+  clip-path: polygon(0 0, 100% 0, 74% 100%, 0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  color: #fff;
+}
+.platform-login-panel-inner { text-align: center; max-width: 270px; }
+.platform-login-panel-mark {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: rgb(255 255 255 / 0.14);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 0.25);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 22px;
+}
+.platform-login-panel-word { font-weight: 700; font-size: 22px; letter-spacing: -0.01em; }
+.platform-login-panel-sub {
+  margin-top: 8px;
+  font-size: 13px;
+  color: rgb(255 255 255 / 0.72);
+  line-height: 1.6;
+}
+.platform-login-panel-list {
+  list-style: none;
+  margin: 26px 0 0;
+  padding: 20px 0 0;
+  border-top: 1px solid rgb(255 255 255 / 0.16);
+  text-align: left;
+  display: grid;
+  gap: 10px;
+  font-size: 12.5px;
+  color: rgb(255 255 255 / 0.75);
+}
+.platform-login-panel-list li { display: flex; align-items: center; gap: 9px; }
+.platform-login-panel-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-lighter);
+  flex: none;
+}
+.platform-login-right {
+  display: grid;
   place-items: center;
   padding: 32px 20px;
-  background: var(--bg);
 }
 .platform-login-card {
-  width: min(420px, 100%);
+  width: min(400px, 100%);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r);
-  padding: 30px 28px;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  padding: 36px 34px;
 }
-.platform-login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.platform-login-brand { display: none; }
 .platform-login-word { font-weight: 650; font-size: 17px; letter-spacing: -0.01em; }
 .platform-login-sub {
   font-size: 11.5px;
@@ -1959,8 +2143,8 @@ table.data tr:last-child td { border-bottom: none; }
   text-transform: uppercase;
   color: var(--ink-3);
 }
-.platform-login-card h1 { font-size: 24px; margin: 0 0 6px; }
-.platform-login-lede { color: var(--ink-2); font-size: 14px; margin: 0 0 18px; }
+.platform-login-card h1 { font-size: 25px; margin: 0 0 6px; }
+.platform-login-lede { color: var(--ink-2); font-size: 14px; margin: 0 0 22px; }
 .platform-login-foot {
   margin: 20px 0 0;
   padding-top: 16px;
@@ -1969,6 +2153,10 @@ table.data tr:last-child td { border-bottom: none; }
   color: var(--ink-3);
 }
 .platform-login-foot code, .facts code { font-size: 12px; }
+@media (max-width: 760px) {
+  .platform-login { grid-template-columns: 1fr; }
+  .platform-login-panel { clip-path: none; padding: 32px 20px; }
+}
 
 .facts { display: grid; gap: 10px; margin: 0; }
 .facts dt { font-size: 12.5px; color: var(--ink-3); }

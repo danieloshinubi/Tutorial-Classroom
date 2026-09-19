@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -6,20 +6,34 @@ import {
   Navigate,
   Link,
   NavLink,
+  useNavigate,
 } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { grid } from "react-icons-kit/feather/grid";
 import { layers } from "react-icons-kit/feather/layers";
+import { users as usersIcon } from "react-icons-kit/feather/users";
+import { clipboard } from "react-icons-kit/feather/clipboard";
+import { creditCard } from "react-icons-kit/feather/creditCard";
+import { mail } from "react-icons-kit/feather/mail";
+import { dollarSign } from "react-icons-kit/feather/dollarSign";
+import { clock } from "react-icons-kit/feather/clock";
 import { logOut } from "react-icons-kit/feather/logOut";
+import { search as searchIcon } from "react-icons-kit/feather/search";
 import { chevronsLeft } from "react-icons-kit/feather/chevronsLeft";
 import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
 import { AuthProvider, useAuth } from "../context/AuthContext";
-import { amIPlatformAdmin } from "../lib/platformApi";
+import { amIPlatformAdmin, platformSearch } from "../lib/platformApi";
 import ConfigNotice from "../Components/ConfigNotice";
 import PlatformLogin from "./PlatformLogin";
 import Overview from "./Overview";
 import Tenants from "./Tenants";
 import TenantDetail from "./TenantDetail";
+import PlatformTeam from "./PlatformTeam";
+import PlatformAuditLog from "./PlatformAuditLog";
+import PlatformTrials from "./PlatformTrials";
+import PlatformGateways from "./PlatformGateways";
+import PlatformMailboxes from "./PlatformMailboxes";
+import PlatformBilling from "./PlatformBilling";
 import { Page, Card, Notice, Button } from "../Components/UI";
 import { Mark } from "../Components/Logo";
 
@@ -33,7 +47,89 @@ import { Mark } from "../Components/Logo";
 const NAV = [
   { to: "/", label: "Overview", icon: grid, end: true },
   { to: "/Tenants", label: "Schools", icon: layers, end: false },
+  { to: "/Trials", label: "Trials", icon: clock, end: false },
+  { to: "/Gateways", label: "Gateways", icon: creditCard, end: false },
+  { to: "/Mailboxes", label: "Mailboxes", icon: mail, end: false },
+  { to: "/Billing", label: "Billing", icon: dollarSign, end: false },
+  { to: "/Team", label: "Team", icon: usersIcon, end: false },
+  { to: "/AuditLog", label: "Audit log", icon: clipboard, end: false },
 ];
+
+// "Which school is this person in" is a support-call question the console
+// couldn't answer before today except by opening every school in turn —
+// platform_search() (144) matches a school's own name/slug or a member's
+// name/email and says which school they belong to.
+const PlatformSearch = () => {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setResults([]);
+      return undefined;
+    }
+    const handle = setTimeout(() => {
+      platformSearch(query.trim())
+        .then((rows) => {
+          setResults(rows);
+          setOpen(true);
+        })
+        .catch(() => setResults([]));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [open]);
+
+  const goTo = (row) => {
+    setOpen(false);
+    setQuery("");
+    navigate(`/Tenants/${row.school_id}`);
+  };
+
+  return (
+    <div className="gsearch" ref={wrapRef}>
+      <Icon icon={searchIcon} size={15} className="gsearch-icon" />
+      <input
+        className="gsearch-input"
+        placeholder="Find a school, admin or email"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => results.length && setOpen(true)}
+      />
+      {open && results.length > 0 ? (
+        <div className="gsearch-panel">
+          <div className="gsearch-group">
+            <div className="account-heading">{"Schools"}</div>
+            {results.map((row) => (
+              <button
+                key={row.school_id}
+                type="button"
+                className="account-item"
+                onClick={() => goTo(row)}
+              >
+                <strong>{row.school_name}</strong>
+                <span style={{ color: "var(--ink-3)" }}>
+                  {row.matched_on === "school" ? row.school_slug : row.matched_on}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+};
 
 // The same .side + .topbar shell every school's own app already uses
 // (Components/Navbar/Navbar.jsx) — a top strip of two links had already run
@@ -53,7 +149,13 @@ const PlatformNav = () => {
       <aside className={`side${collapsed ? " collapsed" : ""}`}>
         <div className="side-head">
           <Link to="/" className="side-brand" title="Schoolivio platform">
-            <Mark size={28} />
+            {collapsed ? (
+              <span className="side-brand-icon">
+                <Mark size={18} tone="white" />
+              </span>
+            ) : (
+              <Mark size={28} />
+            )}
             {collapsed ? null : (
               <span className="side-brand-text">
                 <span className="side-school">{"Schoolivio"}</span>
@@ -99,6 +201,7 @@ const PlatformNav = () => {
       </aside>
 
       <header className="topbar">
+        <PlatformSearch />
         <span className="topbar-spacer" />
         <span className="nav-user" title={user?.email || ""}>
           <span className="nav-avatar brand-mark platform-mark">{"SV"}</span>
@@ -184,6 +287,12 @@ const PlatformApp = () => (
             <Route path="/" element={<Overview />} />
             <Route path="/Tenants" element={<Tenants />} />
             <Route path="/Tenants/:schoolId" element={<TenantDetail />} />
+            <Route path="/Trials" element={<PlatformTrials />} />
+            <Route path="/Gateways" element={<PlatformGateways />} />
+            <Route path="/Mailboxes" element={<PlatformMailboxes />} />
+            <Route path="/Billing" element={<PlatformBilling />} />
+            <Route path="/Team" element={<PlatformTeam />} />
+            <Route path="/AuditLog" element={<PlatformAuditLog />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

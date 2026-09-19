@@ -42,57 +42,68 @@ const PlatformLogin = () => {
 
   return (
     <div className="platform-login">
-      <form className="platform-login-card" onSubmit={submit}>
-        <div className="platform-login-brand">
-          <Mark size={34} />
-          <div>
-            <div className="platform-login-word">{"Schoolivio"}</div>
-            <div className="platform-login-sub">{"Platform console"}</div>
+      <div className="platform-login-panel">
+        <div className="platform-login-panel-inner">
+          <div className="platform-login-panel-mark">
+            <Mark size={34} tone="white" />
           </div>
+          <div className="platform-login-panel-word">{"Schoolivio"}</div>
+          <p className="platform-login-panel-sub">
+            {"The platform console — every school on Schoolivio, in one place."}
+          </p>
+          <ul className="platform-login-panel-list">
+            <li><span className="platform-login-panel-dot" />{"Trials, billing and onboarding at a glance"}</li>
+            <li><span className="platform-login-panel-dot" />{"Gateway and mailbox health across every school"}</li>
+            <li><span className="platform-login-panel-dot" />{"A full audit trail of every action taken here"}</li>
+          </ul>
         </div>
+      </div>
 
-        <h1>{"Sign in"}</h1>
-        <p className="platform-login-lede">
-          {"For Schoolivio staff. This console manages every school on the platform."}
-        </p>
+      <div className="platform-login-right">
+        <form className="platform-login-card" onSubmit={submit}>
+          <h1>{"Sign in"}</h1>
+          <p className="platform-login-lede">
+            {"For Schoolivio staff. This console manages every school on the platform."}
+          </p>
 
-        {inactive ? (
-          <Notice tone="muted">
-            {"You were signed out after 7 minutes of inactivity. Sign in again to continue."}
-          </Notice>
-        ) : null}
-        <Notice tone="error">{error}</Notice>
+          {inactive ? (
+            <Notice tone="muted">
+              {"You were signed out after 7 minutes of inactivity. Sign in again to continue."}
+            </Notice>
+          ) : null}
+          <Notice tone="error">{error}</Notice>
 
-        <Field label="Email">
-          <input
-            className="input"
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-        </Field>
+          <Field label="Email">
+            <input
+              className="input"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </Field>
 
-        <Field label="Password">
-          <input
-            className="input"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-        </Field>
+          <Field label="Password">
+            <input
+              className="input"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </Field>
 
-        <Button type="submit" disabled={busy} style={{ width: "100%", marginTop: 6 }}>
-          {busy ? "Signing in..." : "Sign in"}
-        </Button>
+          <Button type="submit" disabled={busy} style={{ width: "100%", marginTop: 6 }}>
+            {busy ? "Signing in..." : "Sign in"}
+          </Button>
 
-        <p className="platform-login-foot">
-          {"Looking for your own school? It lives at its own address — "}
-          <code>{"yourschool.schoolivio.com"}</code>
-          {"."}
-        </p>
-      </form>
+          <p className="platform-login-foot">
+            {"Looking for your own school? It lives at its own address — "}
+            <code>{"yourschool.schoolivio.com"}</code>
+            {"."}
+          </p>
+        </form>
+      </div>
     </div>
   );
 };

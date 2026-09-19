@@ -68,3 +68,124 @@ export const setTenantPlan = async ({ id, plan }) => {
 };
 
 export const PLANS = ["trial", "basic", "standard", "premium"];
+
+/* --------------------------------------------------------------- team access */
+export const fetchPlatformAdmins = async () => {
+  const { data, error } = await supabase.rpc("platform_list_admins");
+  if (error) throw error;
+  return data || [];
+};
+
+export const addPlatformAdmin = async (email) => {
+  const { data, error } = await supabase.rpc("platform_add_admin", { target_email: email });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const removePlatformAdmin = async (userId) => {
+  const { error } = await supabase.rpc("platform_remove_admin", { target_user: userId });
+  if (error) throw error;
+};
+
+/* ------------------------------------------------------------------ audit log */
+export const fetchPlatformAuditLog = async ({ schoolId, limit } = {}) => {
+  const { data, error } = await supabase.rpc("platform_audit_log", {
+    target_school: schoolId || null,
+    limit_rows: limit || 100,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
+/* --------------------------------------------------------------------- trial */
+export const extendTrial = async ({ schoolId, days }) => {
+  const { data, error } = await supabase.rpc("platform_extend_trial", {
+    target_school: schoolId,
+    days,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+/* ------------------------------------------------------------------- gateway */
+export const fetchPlatformGateways = async () => {
+  const { data, error } = await supabase.rpc("platform_gateways");
+  if (error) throw error;
+  return data || [];
+};
+
+/* ------------------------------------------------------------------ mailboxes */
+export const fetchPlatformMailboxHealth = async () => {
+  const { data, error } = await supabase.rpc("platform_mailbox_health");
+  if (error) throw error;
+  return data || [];
+};
+
+/* ----------------------------------------------------------------- onboarding */
+export const fetchOnboarding = async (schoolId) => {
+  const { data, error } = await supabase.rpc("platform_onboarding", { target_school: schoolId });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) || null;
+};
+
+/* -------------------------------------------------------------------- billing */
+export const fetchBillingForSchool = async (schoolId) => {
+  const { data, error } = await supabase.rpc("platform_billing_for_school", { target_school: schoolId });
+  if (error) throw error;
+  return data || [];
+};
+
+export const addBillingRecord = async ({ schoolId, plan, amount, currency, periodStart, periodEnd, status, note }) => {
+  const { data, error } = await supabase.rpc("platform_add_billing_record", {
+    target_school: schoolId,
+    plan_in: plan,
+    amount_in: amount,
+    currency_in: currency,
+    period_start_in: periodStart,
+    period_end_in: periodEnd,
+    status_in: status || "pending",
+    note_in: note || null,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const fetchAllBillingRecords = async () => {
+  const { data, error } = await supabase.rpc("platform_billing_records");
+  if (error) throw error;
+  return data || [];
+};
+
+export const setBillingStatus = async ({ recordId, status }) => {
+  const { data, error } = await supabase.rpc("platform_set_billing_status", {
+    target_record: recordId,
+    status_in: status,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+export const BILLING_STATUSES = ["pending", "paid", "overdue", "waived"];
+
+/* ---------------------------------------------------------------- offboarding */
+export const exportSchool = async (schoolId) => {
+  const { data, error } = await supabase.rpc("platform_export_school", { target_school: schoolId });
+  if (error) throw error;
+  return data;
+};
+
+export const archiveSchool = async ({ schoolId, archived }) => {
+  const { data, error } = await supabase.rpc("platform_archive_school", {
+    target_school: schoolId,
+    archived,
+  });
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+};
+
+/* -------------------------------------------------------------------- search */
+export const platformSearch = async (query) => {
+  const { data, error } = await supabase.rpc("platform_search", { query });
+  if (error) throw error;
+  return data || [];
+};
