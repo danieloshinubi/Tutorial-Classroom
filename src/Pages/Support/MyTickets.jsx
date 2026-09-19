@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
+import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchTickets, createTicket, fetchTicketGroups } from "../../lib/api";
 import { Page, Card, Field, Button, Badge, Empty, SkeletonList, Select, formatDate } from "../../Components/UI";
@@ -84,6 +85,7 @@ const NewTicketForm = ({ groups, onCreate, onCancel }) => {
 
 const MyTickets = () => {
   const { schoolId, school } = useSchool();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -91,15 +93,20 @@ const MyTickets = () => {
   const [showNew, setShowNew] = useState(false);
 
   const load = useCallback(() => {
-    if (!schoolId) return;
+    if (!schoolId || !user?.id) return;
     setLoading(true);
-    // Row level security scopes this to the caller's own tickets — a
-    // student or parent never sees anyone else's, no matter the filter.
-    fetchTickets({ schoolId, status: "all" })
+    // requester_id is passed explicitly, not left to RLS alone — RLS scopes
+    // a plain student/parent to their own tickets correctly, but a staff
+    // member (owner/admin/ticket-staff) opening their OWN "Help Desk" page
+    // is still RLS-permitted to see every ticket they can access as staff.
+    // This page is specifically "what did I raise", not "what am I allowed
+    // to see" — those are different questions, and only one of them is this
+    // page's job (the other is /Tickets).
+    fetchTickets({ schoolId, status: "all", requesterId: user.id })
       .then(setTickets)
       .catch((err) => setError(err.message || "Could not load your requests."))
       .finally(() => setLoading(false));
-  }, [schoolId, setError]);
+  }, [schoolId, user?.id, setError]);
 
   useEffect(load, [load]);
 

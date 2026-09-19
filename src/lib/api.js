@@ -4120,8 +4120,19 @@ const TICKET_SELECT = `
   requester:profiles!tickets_requester_id_fkey ( id, first_name, surname, username, email )
 `;
 
-export const fetchTickets = async ({ schoolId, status = "unresolved", groupId, assignedTo, priority, query }) => {
+// Shared by two very different pages: /Tickets (staff managing everything
+// they have access to) and /Support's "Help Desk" (a person's own raised
+// requests, staff or not). RLS alone can't tell those apart — it answers
+// "can this row be read by this user AT ALL", and a staff member's own
+// personal Help Desk query would otherwise come back with every ticket
+// they're staff-permitted to see, not just the ones they themselves raised.
+// `requesterId` is the explicit, application-level narrowing the self-service
+// view passes to make sure of that regardless of the caller's role — staff
+// callers (the /Tickets page) simply omit it and get what RLS already scopes
+// them to.
+export const fetchTickets = async ({ schoolId, status = "unresolved", groupId, assignedTo, priority, query, requesterId }) => {
   let q = supabase.from("tickets").select(TICKET_SELECT).eq("school_id", schoolId);
+  if (requesterId) q = q.eq("requester_id", requesterId);
   if (status === "unresolved") q = q.in("status", ["open", "pending"]);
   else if (status && status !== "all") q = q.eq("status", status);
   if (groupId) q = q.eq("group_id", groupId);
