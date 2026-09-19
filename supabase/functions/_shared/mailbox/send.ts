@@ -101,11 +101,23 @@ export async function sendBulkViaSchoolMailbox(
     try {
       await mailbox.transport.sendMail({
         from: mailbox.from,
-        to: mailbox.from,
+        // RFC 5322 empty-group syntax — a real recipient list stays in bcc
+        // (nobody sees anyone else's address), while "To" reads as an
+        // intentional bulk send rather than the mailbox owner's own address,
+        // which several spam filters specifically penalise as a from==to
+        // pattern.
+        to: "Undisclosed recipients:;",
         bcc: batch.join(", "),
         subject: args.subject,
         html: args.html,
         text: args.text,
+        headers: {
+          // A recognised bulk-mail signal most spam filters weight heavily
+          // in the other direction — its absence on a many-recipient send
+          // is itself a mark against deliverability.
+          "List-Unsubscribe": `<mailto:${mailbox.from.match(/<(.+)>/)?.[1] || mailbox.from}?subject=unsubscribe>`,
+          "Precedence": "bulk",
+        },
       });
       sent += batch.length;
     } catch {
