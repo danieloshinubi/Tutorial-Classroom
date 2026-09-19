@@ -7,6 +7,12 @@ import {
   Link,
   NavLink,
 } from "react-router-dom";
+import { Icon } from "react-icons-kit";
+import { grid } from "react-icons-kit/feather/grid";
+import { layers } from "react-icons-kit/feather/layers";
+import { logOut } from "react-icons-kit/feather/logOut";
+import { chevronsLeft } from "react-icons-kit/feather/chevronsLeft";
+import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { amIPlatformAdmin } from "../lib/platformApi";
 import ConfigNotice from "../Components/ConfigNotice";
@@ -25,39 +31,75 @@ import { Mark } from "../Components/Logo";
 // /platform/ imports lib/api.js.
 
 const NAV = [
-  { to: "/", label: "Overview" },
-  { to: "/Tenants", label: "Schools" },
+  { to: "/", label: "Overview", icon: grid, end: true },
+  { to: "/Tenants", label: "Schools", icon: layers, end: false },
 ];
 
+// The same .side + .topbar shell every school's own app already uses
+// (Components/Navbar/Navbar.jsx) — a top strip of two links had already run
+// out of room once (that's the whole reason the tenant app has a sidebar at
+// all), and a console meant to grow past "Overview" and "Schools" shouldn't
+// start from the thing that pattern replaced. .shell.platform gives this
+// sidebar its own dark, teal-accented palette (theme.css) purely by
+// overriding the CSS custom properties every .side-* rule already reads —
+// nothing here needed rewriting to look like a distinct console rather than
+// a school's own portal.
 const PlatformNav = () => {
   const { user, signOut } = useAuth();
+  const [collapsed, setCollapsed] = useState(false);
 
   return (
-    <header className="nav">
-      <div className="nav-inner">
-        <Link to="/" className="brand" title="Schoolivio platform">
-          <Mark size={26} />
-          <span className="brand-name">
-            {"Schoolivio"}
-            <span className="brand-suffix">{"platform"}</span>
-          </span>
-        </Link>
+    <>
+      <aside className={`side${collapsed ? " collapsed" : ""}`}>
+        <div className="side-head">
+          <Link to="/" className="side-brand" title="Schoolivio platform">
+            <Mark size={28} />
+            {collapsed ? null : (
+              <span className="side-brand-text">
+                <span className="side-school">{"Schoolivio"}</span>
+                <span className="side-product">{"Platform"}</span>
+              </span>
+            )}
+          </Link>
+          <button
+            type="button"
+            className="side-collapse"
+            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
+            title={collapsed ? "Expand" : "Collapse"}
+            onClick={() => setCollapsed((v) => !v)}
+          >
+            <Icon icon={collapsed ? chevronsRight : chevronsLeft} size={16} />
+          </button>
+        </div>
 
-        <nav className="nav-links">
-          {NAV.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.to === "/"}
-              className={({ isActive }) => `nav-link${isActive ? " active" : ""}`}
-            >
-              {link.label}
-            </NavLink>
-          ))}
+        <nav className="side-nav">
+          <div className="side-group">
+            {collapsed ? null : <div className="side-group-name">{"Console"}</div>}
+            {NAV.map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                end={link.end}
+                title={link.label}
+                className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
+              >
+                <Icon icon={link.icon} size={17} />
+                {collapsed ? null : <span>{link.label}</span>}
+              </NavLink>
+            ))}
+          </div>
         </nav>
 
-        <span className="nav-spacer" />
+        <div className="side-group side-others">
+          <button type="button" className="side-link" title="Sign out" onClick={signOut}>
+            <Icon icon={logOut} size={17} />
+            {collapsed ? null : <span>{"Sign out"}</span>}
+          </button>
+        </div>
+      </aside>
 
+      <header className="topbar">
+        <span className="topbar-spacer" />
         <span className="nav-user" title={user?.email || ""}>
           <span className="nav-avatar brand-mark platform-mark">{"SV"}</span>
           <span style={{ minWidth: 0 }}>
@@ -65,12 +107,8 @@ const PlatformNav = () => {
             <div className="nav-role">{"platform"}</div>
           </span>
         </span>
-
-        <button type="button" className="btn btn-secondary btn-sm" onClick={signOut}>
-          {"Sign out"}
-        </button>
-      </div>
-    </header>
+      </header>
+    </>
   );
 };
 

@@ -117,23 +117,31 @@ a { color: var(--brand); }
   overflow-y: auto;
 }
 
-/* The platform console (admin.schoolivio.com) has no sidebar — PlatformApp
-   renders <PlatformNav/> (class .nav) as a direct sibling of the routed page,
-   both inside .shell. The base grid above assumes a .side column is always
-   present, so .nav matched none of .side/.topbar and fell into the same
-   "main" cell as the page below it — the sticky nav (z-index 50) then
-   visually overlapped and clipped the top of the page's own title/action
-   row (e.g. "Add a school", "Suspend"), regardless of how that row was
-   padded. Single column instead: nav gets its own row, page content its own
-   row below — no shared cell, so nothing to overlap no matter how much
-   content either one holds. */
-.shell.platform {
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "topbar"
-    "main";
+/* The platform console (admin.schoolivio.com) now uses the exact same
+   .side + .topbar shell as a school's own app (PlatformApp.jsx's
+   PlatformNav) — it used to render a single top .nav bar instead, its own
+   one-off layout with its own overlap bugs to work around. .platform here
+   is purely a palette hook: every .side-* rule already reads its colours
+   from custom properties (--surface, --ink, --line, --bg, --brand-soft,
+   --brand-dark), so redeclaring just those, scoped to this one sidebar,
+   is enough to make the console's own nav read as a distinct, deliberately
+   "classic admin console" dark panel — teal accent on navy — rather than a
+   school's own white sidebar, without a single .side-* rule needing to
+   know it's sitting in the platform console at all. */
+.shell.platform .side {
+  --surface: #10233d;
+  --ink: #f3f6fb;
+  --ink-2: rgb(243 246 251 / 0.78);
+  --ink-3: rgb(243 246 251 / 0.55);
+  --line: rgb(255 255 255 / 0.12);
+  --bg: rgb(255 255 255 / 0.08);
+  --brand-soft: rgb(45 212 191 / 0.18);
+  --brand-dark: #2dd4bf;
+  border-right: none;
 }
-.shell.platform > .nav { grid-area: topbar; }
+.shell.platform .side-link.active {
+  box-shadow: inset 3px 0 0 var(--brand-dark);
+}
 
 /* --- the sidebar --- */
 .side {
@@ -234,6 +242,18 @@ a { color: var(--brand); }
 }
 .side-link svg { flex: 0 0 auto; }
 .side-link:hover { background: var(--bg); color: var(--ink); }
+/* Sign out (PlatformApp.jsx's PlatformNav) is the one .side-link that's a
+   <button>, not an <a>/<NavLink> — reset here rather than inline so it
+   matches every other sidebar row's look (font, spacing, hover) exactly,
+   instead of the browser's own default button chrome peeking through. */
+button.side-link {
+  width: 100%;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
 /* The current section, marked clearly — on a sidebar you can afford to. */
 .side-link.active {
   background: var(--brand-soft);
