@@ -720,7 +720,7 @@ const Footer = () => (
         target="_blank"
         rel="noopener noreferrer"
       >
-        <img src="/brand/tekktopia-logo.png" alt="Tekktopia" width="18" height="18" />
+        <img src="/brand/tekktopia-logo.png" alt="Tekktopia" width="30" height="30" />
         {"A product of Tekktopia Limited"}
       </a>
     </div>
