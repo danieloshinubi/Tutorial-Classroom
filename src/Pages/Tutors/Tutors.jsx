@@ -8,15 +8,15 @@ import {
   Grid,
   Badge,
   Empty,
-  Notice,
   displayName,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const Tutors = () => {
   const { schoolId } = useSchool();
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { error, setError } = useActionFeedback();
 
   useEffect(() => {
     if (!schoolId) return undefined;
@@ -36,13 +36,12 @@ const Tutors = () => {
     return () => {
       active = false;
     };
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   return (
     <div className="shell">
       <Navbar />
       <Page title="Tutors">
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading tutors..."}</Empty> : null}
         {!loading && !error && tutors.length === 0 ? (
           <Empty>{"No tutors have signed up yet."}</Empty>

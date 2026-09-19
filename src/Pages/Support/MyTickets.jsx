@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchTickets, createTicket, fetchTicketGroups } from "../../lib/api";
-import { Page, Card, Field, Button, Badge, Notice, Empty, Select, formatDate } from "../../Components/UI";
+import { Page, Card, Field, Button, Badge, Empty, Select, formatDate } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const STATUS_TONE = { open: "brand", pending: "warn", resolved: "success", closed: undefined };
 const STATUS_LABEL = { open: "Open", pending: "Pending", resolved: "Resolved", closed: "Closed" };
@@ -17,7 +18,7 @@ const NewTicketForm = ({ groups, onCreate, onCancel }) => {
   const [description, setDescription] = useState("");
   const [groupId, setGroupId] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const submit = async (e) => {
     e.preventDefault();
@@ -76,7 +77,6 @@ const NewTicketForm = ({ groups, onCreate, onCancel }) => {
             {"Cancel"}
           </Button>
         </div>
-        <Notice tone="error">{error}</Notice>
       </form>
     </Card>
   );
@@ -87,7 +87,7 @@ const MyTickets = () => {
   const [tickets, setTickets] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [showNew, setShowNew] = useState(false);
 
   const load = useCallback(() => {
@@ -99,7 +99,7 @@ const MyTickets = () => {
       .then(setTickets)
       .catch((err) => setError(err.message || "Could not load your requests."))
       .finally(() => setLoading(false));
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -126,8 +126,6 @@ const MyTickets = () => {
           </Button>
         }
       >
-        <Notice tone="error">{error}</Notice>
-
         {showNew ? <NewTicketForm groups={groups} onCreate={handleCreate} onCancel={() => setShowNew(false)} /> : null}
 
         {loading ? <Empty>{"Loading..."}</Empty> : null}

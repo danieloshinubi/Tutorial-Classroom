@@ -15,8 +15,9 @@ import {
   fetchSchoolMembers,
   fetchTicketGroupHistory,
 } from "../../lib/api";
-import { Page, Notice, Empty, Select, displayName, initials, formatDate } from "../../Components/UI";
+import { Page, Empty, Select, displayName, initials, formatDate } from "../../Components/UI";
 import { useLiveTicketThreadUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+import { useActionFeedback } from "../../Components/Toast";
 
 const PRIORITY = ["low", "medium", "high", "urgent"];
 const PRIORITY_LABEL = { low: "Low", medium: "Medium", high: "High", urgent: "Urgent" };
@@ -64,7 +65,7 @@ const TicketDetail = () => {
   const [groups, setGroups] = useState([]);
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError, setNotice: setSaveNotice } = useActionFeedback();
 
   const [composeKind, setComposeKind] = useState("reply");
   const [composeBody, setComposeBody] = useState("");
@@ -76,7 +77,6 @@ const TicketDetail = () => {
   const [pending, setPending] = useState({});
   const [tagInput, setTagInput] = useState("");
   const [saving, setSaving] = useState(false);
-  const [saveNotice, setSaveNotice] = useState("");
 
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
@@ -103,7 +103,7 @@ const TicketDetail = () => {
     } finally {
       setLoading(false);
     }
-  }, [ticketId, schoolId]);
+  }, [ticketId, schoolId, setError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -244,7 +244,6 @@ const TicketDetail = () => {
       <div className="shell">
         <Navbar />
         <Page title="Ticket" wide>
-          <Notice tone="error">{error}</Notice>
           <Link to="/Tickets">{"Back to all tickets"}</Link>
         </Page>
       </div>
@@ -379,8 +378,6 @@ const TicketDetail = () => {
               </form>
             </div>
 
-            <Notice tone="error">{error}</Notice>
-
             <div className="tix-msg original">
               <span className="tix-avatar">{initials(requesterProfile)}</span>
               <div className="tix-msg-body">
@@ -505,7 +502,6 @@ const TicketDetail = () => {
               <div className="tix-readonly">{ticket.requester?.email || ticket.requester_email || "—"}</div>
             </div>
 
-            {saveNotice ? <Notice tone="success">{saveNotice}</Notice> : null}
             <button type="button" className="tix-btn tix-btn-primary full" disabled={!hasPending || saving} onClick={applyUpdate}>
               {saving ? "Updating..." : "Update"}
             </button>

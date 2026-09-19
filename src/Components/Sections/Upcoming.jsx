@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchUpcomingAssignments } from "../../lib/api";
-import { Card, Empty, Notice, formatDate } from "../UI";
+import { Card, Empty, formatDate } from "../UI";
+import { useActionFeedback } from "../Toast";
 
 const Upcoming = ({ courseId }) => {
   const [assignments, setAssignments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { error, setError } = useActionFeedback();
 
   useEffect(() => {
     let active = true;
@@ -26,13 +27,12 @@ const Upcoming = ({ courseId }) => {
     return () => {
       active = false;
     };
-  }, [courseId]);
+  }, [courseId, setError]);
 
   return (
     <Card>
       <h3 style={{ marginTop: 0 }}>{"Upcoming"}</h3>
 
-      <Notice tone="error">{error}</Notice>
       {loading ? <Empty>{"Loading..."}</Empty> : null}
       {!loading && !error && assignments.length === 0 ? (
         <Empty>{"Woohoo, no work due soon!"}</Empty>

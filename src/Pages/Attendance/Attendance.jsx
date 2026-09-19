@@ -33,6 +33,7 @@ import {
   displayName,
   formatDate,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const nowLocalISO = () => {
   const d = new Date();
@@ -60,8 +61,7 @@ const MarkAttendance = ({ schoolId }) => {
   const [draft, setDraft] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { error, setError, setNotice } = useActionFeedback();
 
   useEffect(() => {
     if (!schoolId) return;
@@ -71,7 +71,7 @@ const MarkAttendance = ({ schoolId }) => {
         setClassId((current) => current || rows[0]?.id || "");
       })
       .catch((err) => setError(err.message || "Could not load your classes."));
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   const loadRoster = useCallback(() => {
     if (!classId || !schoolId || !sessionAt) return;
@@ -84,7 +84,7 @@ const MarkAttendance = ({ schoolId }) => {
       })
       .catch((err) => setError(err.message || "Could not load this class's roster."))
       .finally(() => setLoading(false));
-  }, [classId, schoolId, sessionAt]);
+  }, [classId, schoolId, sessionAt, setError]);
 
   useEffect(loadRoster, [loadRoster]);
 
@@ -131,9 +131,6 @@ const MarkAttendance = ({ schoolId }) => {
           <DateTimePicker value={sessionAt} onChange={setSessionAt} />
         </Field>
       </div>
-
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
 
       {loading ? (
         <Empty>{"Loading roster..."}</Empty>
@@ -217,7 +214,7 @@ const AttendanceRecords = ({ schoolId }) => {
   const [from, setFrom] = useState(todayRangeISO());
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(() => {
     if (!schoolId) return;
@@ -227,7 +224,7 @@ const AttendanceRecords = ({ schoolId }) => {
       .then(setRecords)
       .catch((err) => setError(err.message || "Could not load attendance records."))
       .finally(() => setLoading(false));
-  }, [schoolId, from, to]);
+  }, [schoolId, from, to, setError]);
 
   useEffect(load, [load]);
 
@@ -244,8 +241,6 @@ const AttendanceRecords = ({ schoolId }) => {
           <ExportButton columns={RECORD_EXPORT_COLUMNS} rows={records} filename={`class-attendance-${from}-to-${to}.csv`} />
         </div>
       </div>
-
-      <Notice tone="error">{error}</Notice>
 
       {loading ? (
         <Empty>{"Loading..."}</Empty>
@@ -297,7 +292,7 @@ const SchoolAttendance = ({ schoolId }) => {
   const [from, setFrom] = useState(todayRangeISO());
   const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(() => {
     if (!schoolId) return;
@@ -307,7 +302,7 @@ const SchoolAttendance = ({ schoolId }) => {
       .then(setRecords)
       .catch((err) => setError(err.message || "Could not load school attendance."))
       .finally(() => setLoading(false));
-  }, [schoolId, from, to]);
+  }, [schoolId, from, to, setError]);
 
   useEffect(load, [load]);
 
@@ -327,8 +322,6 @@ const SchoolAttendance = ({ schoolId }) => {
           <ExportButton columns={SCHOOL_EXPORT_COLUMNS} rows={records} filename={`school-attendance-${from}-to-${to}.csv`} />
         </div>
       </div>
-
-      <Notice tone="error">{error}</Notice>
 
       {loading ? (
         <Empty>{"Loading..."}</Empty>
@@ -372,8 +365,7 @@ const LogResumption = ({ schoolId }) => {
   const [resumedAt, setResumedAt] = useState(nowLocalISO());
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   useEffect(() => {
     if (!schoolId) return;
@@ -383,7 +375,7 @@ const LogResumption = ({ schoolId }) => {
         setPersonId((current) => current || rows[0]?.id || "");
       })
       .catch((err) => setError(err.message || "Could not load this school's people."));
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -429,8 +421,6 @@ const LogResumption = ({ schoolId }) => {
         <Field label="Note (optional)">
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Late — traffic" />
         </Field>
-        <Notice tone="error">{error}</Notice>
-        <Notice tone="success">{notice}</Notice>
         <Button type="submit" disabled={saving}>
           {saving ? "Logging..." : "Log resumption"}
         </Button>
@@ -445,12 +435,12 @@ const Devices = ({ schoolId }) => {
   const [issuedKey, setIssuedKey] = useState(null);
   const [label, setLabel] = useState("");
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(() => {
     if (!schoolId) return;
     fetchAttendanceDevices(schoolId).then(setDevices).catch((err) => setError(err.message));
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -494,7 +484,6 @@ const Devices = ({ schoolId }) => {
           <code style={{ userSelect: "all" }}>{issuedKey.key}</code>
         </Notice>
       ) : null}
-      <Notice tone="error">{error}</Notice>
 
       <form onSubmit={handleCreate} className="btn-row" style={{ marginBottom: 20 }}>
         <input
@@ -553,7 +542,7 @@ const MyChildrenAttendance = ({ schoolId }) => {
   const [classRecords, setClassRecords] = useState([]);
   const [schoolRecords, setSchoolRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   useEffect(() => {
     if (!schoolId || !user?.id) return;
@@ -568,13 +557,12 @@ const MyChildrenAttendance = ({ schoolId }) => {
       })
       .catch((err) => setError(err.message || "Could not load attendance."))
       .finally(() => setLoading(false));
-  }, [schoolId, user?.id]);
+  }, [schoolId, user?.id, setError]);
 
   if (loading) return <Empty>{"Loading..."}</Empty>;
 
   return (
     <>
-      <Notice tone="error">{error}</Notice>
       <Card>
         <h3 style={{ marginTop: 0 }}>{"Class attendance"}</h3>
         {classRecords.length === 0 ? (
@@ -636,7 +624,7 @@ const MyAttendance = ({ schoolId }) => {
   const { user } = useAuth();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   useEffect(() => {
     if (!schoolId || !user?.id) return;
@@ -645,13 +633,12 @@ const MyAttendance = ({ schoolId }) => {
       .then(setRecords)
       .catch((err) => setError(err.message || "Could not load your attendance."))
       .finally(() => setLoading(false));
-  }, [schoolId, user?.id]);
+  }, [schoolId, user?.id, setError]);
 
   if (loading) return <Empty>{"Loading..."}</Empty>;
 
   return (
     <Card>
-      <Notice tone="error">{error}</Notice>
       {records.length === 0 ? (
         <Empty>{"No resumptions recorded for you yet."}</Empty>
       ) : (

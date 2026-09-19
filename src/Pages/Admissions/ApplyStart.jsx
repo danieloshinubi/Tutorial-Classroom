@@ -12,6 +12,7 @@ import {
   createApplicantAccount,
   startApplication,
 } from "../../lib/api";
+import { useActionFeedback } from "../../Components/Toast";
 import {
   Page,
   Card,
@@ -57,7 +58,7 @@ const ApplyStart = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   useEffect(() => {
     supabase
@@ -181,8 +182,6 @@ const ApplyStart = () => {
         title="Start an application"
         subtitle={school ? school.name : ""}
       >
-        <Notice tone="error">{error}</Notice>
-
         {noSessionsOpen ? (
           <Card style={{ maxWidth: 620 }}>
             <p>{"There are no admission sessions open at the moment."}</p>

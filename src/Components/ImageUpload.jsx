@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
-import { Button, Notice } from "./UI";
+import { Button } from "./UI";
+import { useActionFeedback } from "./Toast";
 
 const MAX_BYTES = 5 * 1024 * 1024; // a photo or a logo, not a course material
 const ACCEPT = "image/png,image/jpeg,image/webp";
@@ -16,7 +17,7 @@ const ACCEPT = "image/png,image/jpeg,image/webp";
 export const ImageUpload = ({ value, onUpload, onRemove, shape = "circle", size = 72 }) => {
   const inputRef = useRef(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const choose = async (file) => {
     if (!file) return;
@@ -93,7 +94,6 @@ export const ImageUpload = ({ value, onUpload, onRemove, shape = "circle", size 
           onChange={(e) => choose(e.target.files?.[0])}
         />
       </div>
-      <Notice tone="error">{error}</Notice>
     </div>
   );
 };

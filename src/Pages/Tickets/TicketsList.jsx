@@ -9,8 +9,9 @@ import {
   createTicket,
   updateTicket,
 } from "../../lib/api";
-import { Page, Button, Notice, Empty, Select, displayName, initials } from "../../Components/UI";
+import { Page, Button, Empty, Select, displayName, initials } from "../../Components/UI";
 import { useLiveTicketsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+import { useActionFeedback } from "../../Components/Toast";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -94,7 +95,7 @@ const NewTicketForm = ({ groups, onCreate, onCancel }) => {
   const [cc, setCc] = useState("");
   const [bcc, setBcc] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const submit = async (e) => {
     e.preventDefault();
@@ -184,7 +185,6 @@ const NewTicketForm = ({ groups, onCreate, onCancel }) => {
             {saving ? "Creating..." : "Create ticket"}
           </button>
         </div>
-        <Notice tone="error">{error}</Notice>
       </form>
     </div>
   );
@@ -196,7 +196,7 @@ const TicketsList = () => {
   const [tickets, setTickets] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [showNew, setShowNew] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
@@ -221,7 +221,7 @@ const TicketsList = () => {
       .then(setTickets)
       .catch((err) => setError(err.message || "Could not load tickets."))
       .finally(() => setLoading(false));
-  }, [schoolId, statusFilter, groupFilter, priorityFilter, search]);
+  }, [schoolId, statusFilter, groupFilter, priorityFilter, search, setError]);
 
   useEffect(load, [load]);
 
@@ -270,7 +270,6 @@ const TicketsList = () => {
           onReload={() => { live.reset(); load(); }}
           label={`${live.count} new update${live.count === 1 ? "" : "s"} on tickets`}
         />
-        <Notice tone="error">{error}</Notice>
 
         {showNew ? (
           <NewTicketForm groups={groups} onCreate={handleCreate} onCancel={() => setShowNew(false)} />

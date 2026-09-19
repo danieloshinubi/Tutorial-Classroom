@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { trackApplication, STATUS_LABEL } from "../../lib/api";
-import { Field, Button, Notice, Badge, Card, formatDate } from "../../Components/UI";
+import { Field, Button, Badge, Card, formatDate } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Section keys the staff "Request correction" checklist uses
 // (AdmissionsWorkspace.jsx) — plain English for a family reading this, not
@@ -35,7 +36,7 @@ const ApplicationStatus = () => {
   const [result, setResult] = useState(null);
   const [checked, setChecked] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   // Carries the name already on file into /Apply/Claim's signup form too —
   // no reason to make someone retype what they already gave the school.
@@ -95,8 +96,6 @@ const ApplicationStatus = () => {
               onChange={(e) => setEmail(e.target.value)}
             />
           </Field>
-
-          <Notice tone="error">{error}</Notice>
 
           <Button type="submit" disabled={busy}>
             {busy ? "Checking..." : "Check status"}

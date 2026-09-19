@@ -7,8 +7,9 @@ import {
   uploadPublicApplicationDocument,
   removePublicApplicationDocument,
 } from "../../lib/api";
-import { Field, Button, Notice, Select, DatePicker } from "../../Components/UI";
+import { Field, Button, Select, DatePicker } from "../../Components/UI";
 import { applyTenantBranding } from "../../lib/branding";
+import { useActionFeedback } from "../../Components/Toast";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -69,7 +70,7 @@ const Apply = () => {
     documentLinks: "",
   });
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [done, setDone] = useState(null);
 
   // Each entry: { key, name, size, status: 'uploading'|'done'|'error', kind, path?, error? }
@@ -448,8 +449,6 @@ const Apply = () => {
               <textarea className="textarea" style={{ minHeight: 90 }} value={form.notes} onChange={update("notes")} />
             </Field>
           </section>
-
-          <Notice tone="error">{error}</Notice>
 
           <div className="apply-actions">
             <Button type="submit" disabled={submitting || uploadingCount > 0}>

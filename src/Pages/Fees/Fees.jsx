@@ -30,6 +30,7 @@ import {
 } from "../../Components/UI";
 import { StatRow } from "../../Components/Charts";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
+import { useActionFeedback } from "../../Components/Toast";
 
 const METHOD_LABEL = Object.fromEntries(PAYMENT_METHODS);
 
@@ -81,8 +82,7 @@ const Fees = () => {
   const [children, setChildren] = useState([]);
   const [terms, setTerms] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
   const [openId, setOpenId] = useState(null);
 
   const load = useCallback(async () => {
@@ -107,7 +107,7 @@ const Fees = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, user]);
+  }, [schoolId, user, setError]);
 
   // "For Term 2, 2025/2026" is a lot more legible than a bare invoice
   // reference — an admissions invoice (application/acceptance fee) has no
@@ -158,9 +158,6 @@ const Fees = () => {
           isParent ? "What your children owe, and what you have paid" : "Your school fees"
         }
       >
-        <Notice tone="error">{error}</Notice>
-        <Notice tone="success">{notice}</Notice>
-
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 
         {!loading && invoices.length === 0 ? (

@@ -16,6 +16,7 @@ import {
   deleteDocumentRequirement,
 } from "../../lib/api";
 import { Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput, Select } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 import ClearanceDepartmentsPanel from "./ClearanceDepartmentsPanel";
 
 // Defaults mirror classroom.effective_admission_config()'s fallback exactly
@@ -55,8 +56,7 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
   const [existing, setExisting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,7 +80,7 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, sessionId]);
+  }, [schoolId, sessionId, setError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -117,8 +117,6 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
           {"Nothing has been set for this scope yet — the fields below show what applicants currently experience (the built-in defaults). Save to make it explicit."}
         </Notice>
       ) : null}
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
 
       <Card style={{ marginBottom: 16, maxWidth: 640 }}>
         <h3 style={{ marginTop: 0 }}>{"Application fee"}</h3>
@@ -203,7 +201,7 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [form, setForm] = useState({ name: "", code: "", faculty: "", department: "", study_mode: "full_time", capacity: "" });
 
   const load = useCallback(async () => {
@@ -215,7 +213,7 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, sessionId]);
+  }, [schoolId, sessionId, setError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -259,7 +257,6 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
       <p style={{ color: "var(--ink-2)", maxWidth: "62ch" }}>
         {"What an applicant chooses from at Apply/Start — leave faculty and department blank for a school that doesn't use them."}
       </p>
-      <Notice tone="error">{error}</Notice>
 
       <Card style={{ maxWidth: 680, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>{"Add a programme"}</h3>
@@ -331,7 +328,7 @@ const ChecklistPanel = ({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [form, setForm] = useState({ kind: "", label: "", is_required: true, notes: "" });
 
   const load = useCallback(async () => {
@@ -343,7 +340,7 @@ const ChecklistPanel = ({
     } finally {
       setLoading(false);
     }
-  }, [schoolId, sessionId, fetchRows]);
+  }, [schoolId, sessionId, fetchRows, setError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -396,7 +393,6 @@ const ChecklistPanel = ({
   return (
     <>
       <p style={{ color: "var(--ink-2)", maxWidth: "62ch" }}>{description}</p>
-      <Notice tone="error">{error}</Notice>
 
       <Card style={{ maxWidth: 640, marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>{`Add ${title.toLowerCase()}`}</h3>

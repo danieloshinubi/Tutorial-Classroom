@@ -41,6 +41,7 @@ import {
   Empty,
   formatDate,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -98,7 +99,7 @@ const TakeExam = () => {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const { error, setError } = useActionFeedback();
 
   // Guards the timer and the proctor from submitting twice.
   const submittedRef = useRef(false);
@@ -153,7 +154,7 @@ const TakeExam = () => {
     return () => {
       active = false;
     };
-  }, [examId, user.id, schoolId]);
+  }, [examId, user.id, schoolId, setError]);
 
   // Pushes anything unsynced and reports what the connection is doing.
   const flush = useCallback(async () => {
@@ -179,7 +180,7 @@ const TakeExam = () => {
       );
     }
     return false;
-  }, []);
+  }, [setError]);
 
   const handleSubmit = useCallback(async () => {
     const current = attemptRef.current;
@@ -209,7 +210,7 @@ const TakeExam = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [flush]);
+  }, [flush, setError]);
 
   /* ------------------------------------------------------------ proctoring */
   const handleViolation = useCallback(async (kind, detail) => {
@@ -352,7 +353,7 @@ const TakeExam = () => {
       <div className="shell">
         <Navbar />
         <Page title="Exam">
-          <Notice tone="error">{error || "That exam is not available."}</Notice>
+          {error ? null : <Notice tone="error">{"That exam is not available."}</Notice>}
         </Page>
       </div>
     );
@@ -464,7 +465,6 @@ const TakeExam = () => {
                 {`This exam closed on ${formatDate(exam.closes_at)}. Ask your tutor to extend the deadline.`}
               </Notice>
             ) : null}
-            <Notice tone="error">{error}</Notice>
 
             <div style={{ marginTop: 16 }}>
               <Button onClick={handleStart} disabled={starting || closed}>
@@ -522,8 +522,6 @@ const TakeExam = () => {
             ) : null}
           </Card>
         ) : null}
-
-        <Notice tone="error">{error}</Notice>
 
         {/* Two-column: paper on the left, palette + clock on the right. */}
         <div className="exam-layout">

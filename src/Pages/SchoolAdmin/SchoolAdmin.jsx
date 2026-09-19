@@ -46,7 +46,6 @@ import {
   Field,
   Button,
   Badge,
-  Notice,
   Empty,
   Tabs,
   Select,
@@ -55,6 +54,7 @@ import {
   bandClass,
   formatDate,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const ROLES = [
   ["owner", "Proprietor"],
@@ -109,8 +109,7 @@ const PeoplePanel = () => {
   const [roleFilter, setRoleFilter] = useState("all");
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const [showInvite, setShowInvite] = useState(false);
   const [invite, setInvite] = useState({
@@ -135,7 +134,7 @@ const PeoplePanel = () => {
       .then(setMembers)
       .catch((err) => setError(err.message || "Could not load the school's people."))
       .finally(() => setLoading(false));
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -458,9 +457,6 @@ const PeoplePanel = () => {
         </Card>
       ) : null}
 
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
-
       {issued ? (
         <Card
           style={{
@@ -667,8 +663,7 @@ const SettingsPanel = () => {
   });
   const [saving, setSaving] = useState(false);
   const [previewStatus, setPreviewStatus] = useState(null);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   useEffect(() => {
     if (!school) return;
@@ -915,9 +910,6 @@ const SettingsPanel = () => {
           </div>
         </Field>
 
-        <Notice tone="error">{error}</Notice>
-        <Notice tone="success">{notice}</Notice>
-
         <Button type="submit" disabled={saving}>
           {saving ? "Saving..." : "Save changes"}
         </Button>
@@ -985,7 +977,7 @@ const ConnectMailboxForm = ({ schoolId, onConnected, onCancel }) => {
     password: "",
   });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const set = (field) => (e) => setForm((c) => ({ ...c, [field]: e.target.value }));
 
@@ -1165,7 +1157,6 @@ const ConnectMailboxForm = ({ schoolId, onConnected, onCancel }) => {
           </Field>
         </div>
 
-        <Notice tone="error">{error}</Notice>
         <div className="btn-row" style={{ marginTop: 8 }}>
           <Button type="submit" disabled={saving}>{saving ? "Connecting..." : "Connect mailbox"}</Button>
           <Button type="button" variant="secondary" onClick={onCancel}>{"Cancel"}</Button>
@@ -1179,7 +1170,7 @@ const MailboxesPanel = () => {
   const { schoolId } = useSchool();
   const [mailboxes, setMailboxes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [busyId, setBusyId] = useState(null);
   const [showConnect, setShowConnect] = useState(false);
 
@@ -1190,7 +1181,7 @@ const MailboxesPanel = () => {
       .then(setMailboxes)
       .catch((err) => setError(err.message || "Could not load connected mailboxes."))
       .finally(() => setLoading(false));
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -1242,8 +1233,6 @@ const MailboxesPanel = () => {
           onCancel={() => setShowConnect(false)}
         />
       ) : null}
-
-      <Notice tone="error">{error}</Notice>
 
       {loading ? <Empty>{"Loading..."}</Empty> : null}
       {!loading && mailboxes.length === 0 ? <Empty>{"No mailbox connected yet."}</Empty> : null}

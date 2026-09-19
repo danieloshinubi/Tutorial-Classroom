@@ -5,7 +5,8 @@ import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
 import { claimApplication } from "../../lib/api";
 import { applyTenantBranding } from "../../lib/branding";
-import { Field, Button, Notice } from "../../Components/UI";
+import { Field, Button } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // The bridge for an application that was submitted without an account (the
 // public /Apply form) — arrived at from "Check an application"'s new "Sign
@@ -36,7 +37,7 @@ const ApplyClaim = () => {
   });
   const [submitting, setSubmitting] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
   // True the moment sign-up/sign-in on THIS page succeeds — used to skip the
   // "is this you?" confirmation only in that case. Someone who was already
@@ -217,7 +218,6 @@ const ApplyClaim = () => {
             <p style={{ color: "var(--ink-2)", fontSize: 14 }}>
               {`Claim ${claimRef || "this application"} (${claimEmail || "—"}) under this account?`}
             </p>
-            <Notice tone="error">{error}</Notice>
             <div className="btn-row">
               <Button onClick={doClaim} disabled={claiming}>{"Yes, claim it"}</Button>
               <Button variant="secondary" onClick={() => signOut()}>{"Not you? Sign out"}</Button>
@@ -306,8 +306,6 @@ const ApplyClaim = () => {
               <input required type="password" className="input" value={form.confirm} onChange={update("confirm")} />
             </Field>
 
-            <Notice tone="error">{error}</Notice>
-
             <Button type="submit" disabled={submitting}>
               {submitting ? "Creating account..." : "Create account and continue"}
             </Button>
@@ -320,8 +318,6 @@ const ApplyClaim = () => {
             <Field label="Password">
               <input required type="password" className="input" value={form.password} onChange={update("password")} />
             </Field>
-
-            <Notice tone="error">{error}</Notice>
 
             <Button type="submit" disabled={submitting}>
               {submitting ? "Signing in..." : "Sign in and continue"}

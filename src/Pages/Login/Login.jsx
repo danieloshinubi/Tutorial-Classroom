@@ -7,6 +7,7 @@ import AuthLayout from "../../Components/AuthLayout";
 import GoogleButton from "../../Components/GoogleButton";
 import { useAuth } from "../../context/AuthContext";
 import { Field, Button, Notice } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const Login = () => {
   const { signIn, session } = useAuth();
@@ -35,7 +36,7 @@ const Login = () => {
   const [email, setEmail] = useState(params.get("email") || "");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [submitting, setSubmitting] = useState(false);
 
   // Someone already signed in should not sit on the login screen.
@@ -129,8 +130,6 @@ const Login = () => {
         <div className="forgot-row">
           <Link to="/Forgot-Password">{"Forgot password?"}</Link>
         </div>
-
-        <Notice tone="error">{error}</Notice>
 
         <Button type="submit" className="btn-block" disabled={submitting}>
           {submitting ? "Signing in..." : "Sign in"}

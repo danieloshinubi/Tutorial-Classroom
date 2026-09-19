@@ -10,6 +10,7 @@ import {
   setCurrentTerm,
 } from "../../lib/api";
 import { Card, Field, Button, Badge, Notice, Empty, formatDate, Select, DatePicker } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // A school runs sessions made of terms. Fees, results and attendance are all
 // reported per term, so nothing downstream can be built until this exists.
@@ -20,8 +21,7 @@ const AcademicPanel = () => {
   const [terms, setTerms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const [session, setSession] = useState({ name: "", startsOn: "", endsOn: "" });
   const [term, setTerm] = useState({ sessionId: "", name: "", startsOn: "", endsOn: "" });
@@ -39,7 +39,7 @@ const AcademicPanel = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -147,9 +147,6 @@ const AcademicPanel = () => {
 
   return (
     <>
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
-
       <div className="panel-top">
         <p style={{ color: "var(--ink-2)", maxWidth: "64ch" }}>
           {"Your academic calendar. Results, fees and attendance are all reported against a term, so set these up before anything else."}

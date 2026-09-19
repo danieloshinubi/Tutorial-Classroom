@@ -24,6 +24,7 @@ import {
   formatDate,
 } from "../../Components/UI";
 import { useLiveApplicationsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+import { useActionFeedback } from "../../Components/Toast";
 
 // The staff dashboard. Every queue the admissions team acts on — payment,
 // documents, screening, action-required, review, interview, decision,
@@ -58,7 +59,7 @@ const AdmissionsQueues = () => {
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sessionBusy, setSessionBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const [rosterStatus, setRosterStatus] = useState("open");
   const [rosterQuery, setRosterQuery] = useState("");
@@ -84,7 +85,7 @@ const AdmissionsQueues = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId]);
+  }, [schoolId, setError]);
 
   useEffect(() => {
     load();
@@ -142,7 +143,6 @@ const AdmissionsQueues = () => {
           onReload={() => { live.reset(); load(); }}
           label={`${live.count} new update${live.count === 1 ? "" : "s"} on admissions`}
         />
-        <Notice tone="error">{error}</Notice>
 
         {/* Whether the school is taking applications at all — the first
             thing to check when the queue is unexpectedly empty. Pinned

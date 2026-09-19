@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import AuthLayout from "../../Components/AuthLayout";
-import { Field, Button, Notice } from "../../Components/UI";
+import { Field, Button } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Landing page for the link emailed by ForgotPassword. Supabase puts a
 // recovery session in the URL, and detectSessionInUrl picks it up, so by the
@@ -10,8 +11,7 @@ import { Field, Button, Notice } from "../../Components/UI";
 const ResetPassword = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
   const [submitting, setSubmitting] = useState(false);
 
   const { updatePassword } = useAuth();
@@ -67,9 +67,6 @@ const ResetPassword = () => {
               autoComplete="new-password"
             />
           </Field>
-
-          <Notice tone="error">{error}</Notice>
-          <Notice tone="success">{notice}</Notice>
 
           <Button type="submit" className="btn-block" disabled={submitting}>
             {submitting ? "Updating..." : "Update password"}

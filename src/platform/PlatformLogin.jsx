@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Field, Button, Notice } from "../Components/UI";
 import { Mark } from "../Components/Logo";
+import { useActionFeedback } from "../Components/Toast";
 
 // Deliberately not the school sign-in screen.
 //
@@ -14,7 +15,7 @@ const PlatformLogin = () => {
   const inactive = new URLSearchParams(window.location.search).get("reason") === "inactivity";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [busy, setBusy] = useState(false);
 
   const submit = async (event) => {
@@ -71,7 +72,6 @@ const PlatformLogin = () => {
               {"You were signed out after 7 minutes of inactivity. Sign in again to continue."}
             </Notice>
           ) : null}
-          <Notice tone="error">{error}</Notice>
 
           <Field label="Email">
             <input

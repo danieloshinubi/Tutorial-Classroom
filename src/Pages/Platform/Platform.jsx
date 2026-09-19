@@ -12,10 +12,10 @@ import {
   Field,
   Button,
   Badge,
-  Notice,
   Empty,
   formatDate,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const slugify = (value) =>
   value
@@ -32,8 +32,7 @@ const Platform = () => {
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", slug: "", ownerEmail: "" });
@@ -45,7 +44,7 @@ const Platform = () => {
       .then(setSchools)
       .catch((err) => setError(err.message || "Could not load schools."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [setError]);
 
   useEffect(load, [load]);
 
@@ -193,9 +192,6 @@ const Platform = () => {
             </form>
           </Card>
         ) : null}
-
-        <Notice tone="error">{error}</Notice>
-        <Notice tone="success">{notice}</Notice>
 
         {loading ? <Empty>{"Loading..."}</Empty> : null}
         {!loading && schools.length === 0 ? (

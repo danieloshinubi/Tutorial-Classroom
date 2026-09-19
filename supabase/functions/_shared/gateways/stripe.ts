@@ -120,6 +120,20 @@ export const stripeAdapter: PaymentGatewayAdapter = {
     const signature = parts.v1;
     if (!timestamp || !signature) return false;
 
+    // Stripe's own recommendation: reject a signature whose timestamp is
+    // outside a tolerance window, so a payload sniffed off the wire (a
+    // proxy log, a browser dev tools tab on a misconfigured redirect, a
+    // compromised intermediary) can't be replayed indefinitely — the HMAC
+    // alone never expires on its own, only this check makes it expire.
+    // settle_online_payment()'s own idempotency-by-reference already stops
+    // a replay from crediting twice, but that's a second line of defense,
+    // not a reason to skip the first one Stripe itself documents.
+    const TOLERANCE_SECONDS = 5 * 60;
+    const timestampSeconds = Number(timestamp);
+    if (!Number.isFinite(timestampSeconds)) return false;
+    const ageSeconds = Math.abs(Date.now() / 1000 - timestampSeconds);
+    if (ageSeconds > TOLERANCE_SECONDS) return false;
+
     const key = await crypto.subtle.importKey(
       "raw",
       new TextEncoder().encode(webhookSecret),

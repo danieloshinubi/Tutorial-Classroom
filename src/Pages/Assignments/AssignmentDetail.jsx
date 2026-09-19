@@ -23,6 +23,7 @@ import {
   formatDate,
 } from "../../Components/UI";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Nice size line, so a phone user knows what they are about to download.
 const humanSize = (bytes) => {
@@ -108,8 +109,7 @@ const SubmitPanel = ({ assignment, userId }) => {
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
   const preview = useDocumentPreview();
   const fileInput = useRef(null);
 
@@ -137,7 +137,7 @@ const SubmitPanel = ({ assignment, userId }) => {
     return () => {
       active = false;
     };
-  }, [assignment.id, userId]);
+  }, [assignment.id, userId, setError]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -264,9 +264,6 @@ const SubmitPanel = ({ assignment, userId }) => {
           />
         </Field>
 
-        <Notice tone="error">{error}</Notice>
-        <Notice tone="success">{notice}</Notice>
-
         {/* Resubmitting replaces the previous attempt and clears the grade,
             so say that before they click. */}
         {isGraded ? (
@@ -290,7 +287,7 @@ const GradePanel = ({ assignment, graderId }) => {
   const [submissions, setSubmissions] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [savingId, setSavingId] = useState(null);
   const preview = useDocumentPreview();
 
@@ -313,7 +310,7 @@ const GradePanel = ({ assignment, graderId }) => {
       })
       .catch((err) => setError(err.message || "Could not load submissions."))
       .finally(() => setLoading(false));
-  }, [assignment.id, schoolId]);
+  }, [assignment.id, schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -355,7 +352,6 @@ const GradePanel = ({ assignment, graderId }) => {
   return (
     <>
       <h3>{`Submissions (${submissions.length})`}</h3>
-      <Notice tone="error">{error}</Notice>
       {submissions.length === 0 ? <Empty>{"Nobody has submitted yet."}</Empty> : null}
 
       {submissions.map((submission) => (
@@ -459,7 +455,7 @@ const AssignmentDetail = () => {
 
   const [assignment, setAssignment] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const briefPreview = useDocumentPreview();
 
   useEffect(() => {
@@ -485,7 +481,7 @@ const AssignmentDetail = () => {
     return () => {
       active = false;
     };
-  }, [assignmentId, schoolId]);
+  }, [assignmentId, schoolId, setError]);
 
   const canManage =
     isAdmin ||
@@ -495,7 +491,6 @@ const AssignmentDetail = () => {
     <div className="shell">
       <Navbar />
       <Page title={assignment?.title || "Assignment"}>
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 
         {assignment ? (

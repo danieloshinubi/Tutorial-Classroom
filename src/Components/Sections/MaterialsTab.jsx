@@ -9,8 +9,9 @@ import {
   uploadMaterialFile,
   deleteMaterialFile,
 } from "../../lib/api";
-import { Card, Button, Field, Notice, Empty, formatDate } from "../UI";
+import { Card, Button, Field, Empty, formatDate } from "../UI";
 import { useDocumentPreview } from "../DocumentPreview";
+import { useActionFeedback } from "../Toast";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -38,7 +39,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const preview = useDocumentPreview();
   const fileInput = useRef(null);
 
@@ -51,7 +52,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [courseId, schoolId]);
+  useEffect(load, [courseId, schoolId, setError]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -253,8 +254,6 @@ const MaterialsTab = ({ courseId, canManage }) => {
               />
             </Field>
 
-            <Notice tone="error">{error}</Notice>
-
             <Button type="submit" disabled={saving}>
               {saving
                 ? file
@@ -268,7 +267,6 @@ const MaterialsTab = ({ courseId, canManage }) => {
         </Card>
       ) : null}
 
-      {!showForm ? <Notice tone="error">{error}</Notice> : null}
       {loading ? <Empty>{"Loading materials..."}</Empty> : null}
       {!loading && materials.length === 0 ? (
         <Empty>{"No materials have been posted for this course yet."}</Empty>

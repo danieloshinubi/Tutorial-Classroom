@@ -16,11 +16,11 @@ import {
   Card,
   Button,
   Badge,
-  Notice,
   Empty,
   displayName,
   formatDate,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // The invigilator's record for one paper. Read-only by design: there is no
 // update or delete policy on exam_events, so this log cannot be rewritten.
@@ -75,7 +75,7 @@ const AttemptDetail = ({ attempt, schoolId, onGraded }) => {
   const [marks, setMarks] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   useEffect(() => {
     fetchAttemptDetail({ attemptId: attempt.id, schoolId })
@@ -95,7 +95,7 @@ const AttemptDetail = ({ attempt, schoolId, onGraded }) => {
       })
       .catch((err) => setError(err.message || "Could not load the paper."))
       .finally(() => setLoading(false));
-  }, [attempt.id, schoolId]);
+  }, [attempt.id, schoolId, setError]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -177,7 +177,6 @@ const AttemptDetail = ({ attempt, schoolId, onGraded }) => {
         );
       })}
 
-      <Notice tone="error">{error}</Notice>
       <Button onClick={handleSave} disabled={saving}>
         {saving ? "Saving..." : "Save marks"}
       </Button>
@@ -193,7 +192,7 @@ const ExamResults = () => {
   const [openId, setOpenId] = useState(null);
   const [logId, setLogId] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const load = useCallback(() => {
     if (!schoolId) return;
@@ -204,7 +203,7 @@ const ExamResults = () => {
       })
       .catch((err) => setError(err.message || "Could not load results."))
       .finally(() => setLoading(false));
-  }, [examId, schoolId]);
+  }, [examId, schoolId, setError]);
 
   useEffect(load, [load]);
 
@@ -230,7 +229,6 @@ const ExamResults = () => {
           ) : null
         }
       >
-        <Notice tone="error">{error}</Notice>
         {loading ? <Empty>{"Loading..."}</Empty> : null}
 
         {!loading && attempts.length === 0 ? (

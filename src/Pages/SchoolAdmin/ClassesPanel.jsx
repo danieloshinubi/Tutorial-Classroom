@@ -28,6 +28,7 @@ import {
   Select,
   displayName,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // A class is a roster, not a level: "JSS 2" is the level, "JSS 2B" is the
 // class with pupils in it and a form teacher over it.
@@ -46,7 +47,7 @@ const ClassesPanel = () => {
 
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const [form, setForm] = useState({ name: "", levelYear: "", sessionId: "", formTeacherId: "" });
   const [subject, setSubject] = useState({ code: "", name: "" });
@@ -78,7 +79,7 @@ const ClassesPanel = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, levels]);
+  }, [schoolId, levels, setError]);
 
   useEffect(() => {
     load();
@@ -229,8 +230,6 @@ const ClassesPanel = () => {
 
   return (
     <>
-      <Notice tone="error">{error}</Notice>
-
       {levels.length === 0 ? (
         <Notice tone="error">
           {"Add class levels first — a class belongs to one. See the Class levels tab."}

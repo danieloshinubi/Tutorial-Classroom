@@ -14,9 +14,10 @@ import {
   fetchMessageReactions,
   toggleMessageReaction,
 } from "../../lib/api";
-import { Card, Notice, Button, displayName } from "../UI";
+import { Card, Button, displayName } from "../UI";
 import Reactions from "../Reactions";
 import EmojiInput from "../EmojiInput";
+import { useActionFeedback } from "../Toast";
 
 // A textarea that grows with what is being typed, so a long announcement is
 // visible while it is written instead of scrolling inside two lines.
@@ -49,7 +50,7 @@ const Comments = ({ message, comments, onPost, onEdit, onRemove }) => {
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState("");
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const rows = comments || [];
   const showing = open || rows.length > 0;
@@ -153,8 +154,6 @@ const Comments = ({ message, comments, onPost, onEdit, onRemove }) => {
         );
       })}
 
-      <Notice tone="error">{error}</Notice>
-
       <div className="composer composer-inline">
         <Growing
           minRows={2}
@@ -177,7 +176,7 @@ const ClassChat = ({ courseId, schoolId }) => {
   const [comments, setComments] = useState({});
   const [reactions, setReactions] = useState({});
   const [draft, setDraft] = useState("");
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [sending, setSending] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [draftEdit, setDraftEdit] = useState("");
@@ -227,7 +226,7 @@ const ClassChat = ({ courseId, schoolId }) => {
       active = false;
       channel.unsubscribe();
     };
-  }, [courseId, addMessage, user, schoolId]);
+  }, [courseId, addMessage, user, schoolId, setError]);
 
   const saveEdit = async (message) => {
     const body = draftEdit.trim();
@@ -359,8 +358,6 @@ const ClassChat = ({ courseId, schoolId }) => {
           </Button>
         </div>
       </div>
-
-      <Notice tone="error">{error}</Notice>
 
       <ul className="chat-list">
         {messages.length === 0 ? (

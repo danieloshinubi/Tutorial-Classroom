@@ -41,6 +41,7 @@ import {
   Select,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
+import { useActionFeedback } from "../../Components/Toast";
 import AdmissionLetter from "./AdmissionLetter";
 
 // country-region-data ships each country as a [name, isoCode, regions] tuple
@@ -162,8 +163,7 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
   const [draft, setDraft] = useState(value || {});
   const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
   const [customQual, setCustomQual] = useState(() => computeCustomQual(fields, value));
 
   useEffect(() => setDraft(value || {}), [value]);
@@ -313,9 +313,6 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
               </Field>
             ))}
 
-            <Notice tone="error">{error}</Notice>
-            {notice && !error ? <Notice tone="success">{notice}</Notice> : null}
-
             {disabled ? null : (
               <Button type="submit" disabled={saving}>
                 {saving ? "Saving..." : "Save section"}
@@ -358,7 +355,7 @@ const DeclareAdmissionsPayment = ({ invoice, amount, schoolId, onDeclared }) => 
   const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
 
   const submit = async (e) => {
     e.preventDefault();
@@ -424,7 +421,6 @@ const DeclareAdmissionsPayment = ({ invoice, amount, schoolId, onDeclared }) => 
           onChange={(e) => setFile(e.target.files?.[0] || null)}
         />
       </Field>
-      <Notice tone="error">{error}</Notice>
       <div className="btn-row">
         <Button type="submit" disabled={busy}>
           {busy ? "Sending..." : "Send to the bursary"}
@@ -464,13 +460,13 @@ const ApplicationDashboard = () => {
   const [screening, setScreening] = useState([]);
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [submitting, setSubmitting] = useState(false);
   const [declaration, setDeclaration] = useState(false);
   const [decliningOffer, setDecliningOffer] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
   const [uploadingDocId, setUploadingDocId] = useState(null);
-  const [docError, setDocError] = useState("");
+  const { setError: setDocError } = useActionFeedback();
   const [letterApp, setLetterApp] = useState(null);
   const [letterLoading, setLetterLoading] = useState(false);
   const live = useLiveApplicationUpdates(applicationId);
@@ -520,7 +516,7 @@ const ApplicationDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [applicationId, school?.id]);
+  }, [applicationId, school?.id, setError]);
 
   useEffect(() => {
     load();
@@ -759,7 +755,6 @@ const ApplicationDashboard = () => {
       <>
         <ApplicantShell school={school} />
         <Page title="Application">
-          <Notice tone="error">{error}</Notice>
           <Link to="/Applications">
             <Button variant="secondary">{"Back to my applications"}</Button>
           </Link>
@@ -825,7 +820,6 @@ const ApplicationDashboard = () => {
         subtitle={school ? `Application to ${school.name}` : "Application"}
       >
         <LiveUpdateBanner count={live.count} onReload={() => { live.reset(); load(); }} />
-        <Notice tone="error">{error}</Notice>
 
         <div className={`appdash-hero ${heroTone}`}>
           <div>
@@ -936,7 +930,6 @@ const ApplicationDashboard = () => {
         {documents.length > 0 ? (
           <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Documents"}</h3>
-            <Notice tone="error">{docError}</Notice>
             <ul className="doc-list">
               {documents.map((d) => {
                 const canUpload = ["not_uploaded", "rejected", "resubmission_required"].includes(d.status);

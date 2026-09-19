@@ -24,6 +24,7 @@ import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { amIPlatformAdmin, platformSearch } from "../lib/platformApi";
 import ConfigNotice from "../Components/ConfigNotice";
+import { ToastProvider } from "../Components/Toast";
 import PlatformLogin from "./PlatformLogin";
 import Overview from "./Overview";
 import Tenants from "./Tenants";
@@ -277,28 +278,30 @@ const SignOutButton = () => {
 };
 
 const PlatformApp = () => (
-  <Router>
-    <AuthProvider>
-      <ConfigNotice />
-      <PlatformGate>
-        <div className="shell platform">
-          <PlatformNav />
-          <Routes>
-            <Route path="/" element={<Overview />} />
-            <Route path="/Tenants" element={<Tenants />} />
-            <Route path="/Tenants/:schoolId" element={<TenantDetail />} />
-            <Route path="/Trials" element={<PlatformTrials />} />
-            <Route path="/Gateways" element={<PlatformGateways />} />
-            <Route path="/Mailboxes" element={<PlatformMailboxes />} />
-            <Route path="/Billing" element={<PlatformBilling />} />
-            <Route path="/Team" element={<PlatformTeam />} />
-            <Route path="/AuditLog" element={<PlatformAuditLog />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </PlatformGate>
-    </AuthProvider>
-  </Router>
+  <ToastProvider>
+    <Router>
+      <AuthProvider>
+        <ConfigNotice />
+        <PlatformGate>
+          <div className="shell platform">
+            <PlatformNav />
+            <Routes>
+              <Route path="/" element={<Overview />} />
+              <Route path="/Tenants" element={<Tenants />} />
+              <Route path="/Tenants/:schoolId" element={<TenantDetail />} />
+              <Route path="/Trials" element={<PlatformTrials />} />
+              <Route path="/Gateways" element={<PlatformGateways />} />
+              <Route path="/Mailboxes" element={<PlatformMailboxes />} />
+              <Route path="/Billing" element={<PlatformBilling />} />
+              <Route path="/Team" element={<PlatformTeam />} />
+              <Route path="/AuditLog" element={<PlatformAuditLog />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+        </PlatformGate>
+      </AuthProvider>
+    </Router>
+  </ToastProvider>
 );
 
 export default PlatformApp;

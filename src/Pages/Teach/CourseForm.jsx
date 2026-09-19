@@ -19,6 +19,7 @@ import {
   Notice,
   Select,
 } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Handles both /Teach/New and /Teach/:courseId/Edit.
 const CourseForm = () => {
@@ -43,7 +44,7 @@ const CourseForm = () => {
   // show an empty form that saves blanks over the real row.
   const [loaded, setLoaded] = useState(!isEditing);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   // A tutor should not have to wait for an administrator to define a class
   // before they can create a course, so they can add one right here.
   const [newClass, setNewClass] = useState("");
@@ -102,7 +103,7 @@ const CourseForm = () => {
       })
       .catch((err) => setError(err.message || "Could not load the course."))
       .finally(() => setLoading(false));
-  }, [courseId, isEditing, schoolId]);
+  }, [courseId, isEditing, schoolId, setError]);
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
@@ -195,7 +196,7 @@ const CourseForm = () => {
           ) : isEditing && !loaded ? (
             <>
               <Notice tone="error">
-                {error || "Could not load that course, so it cannot be edited safely."}
+                {"Could not load that course, so it cannot be edited safely."}
               </Notice>
               <Button variant="secondary" onClick={() => navigate("/Teach")}>
                 {"Back to teaching"}
@@ -309,8 +310,6 @@ const CourseForm = () => {
                   onChange={update("description")}
                 />
               </Field>
-
-              <Notice tone="error">{error}</Notice>
 
               <div style={{ display: "flex", gap: "10px" }}>
                 <Button type="submit" disabled={saving}>

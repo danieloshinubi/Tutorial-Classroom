@@ -8,36 +8,23 @@ own courses; administrators manage every user and course.
 
 ### 1. Create the database
 
-Open the Supabase **SQL Editor** and run [`supabase/schema.sql`](supabase/schema.sql).
+Every table, policy and function lives as a numbered file under
+[`supabase/`](supabase) — `001_grants.sql`, `002_backfill_profiles.sql`, and so
+on through the current schema. There's no separate bootstrap script to run
+first; the numbered migrations are the whole schema, applied in order.
 
-It creates a dedicated `classroom` schema — nothing in your `public` schema is
-touched — containing:
+Set `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` in `.env` (a personal
+access token from your Supabase account, and the project's ref from its
+Settings page — no database password needed, this runs through the
+Management API), then:
 
-| Table         | Purpose                                                   |
-| ------------- | --------------------------------------------------------- |
-| `profiles`    | One row per auth user (name, username, role)               |
-| `levels`      | 100 / 200 / 300 / 400                                      |
-| `courses`     | Catalogue plus tutor-created courses, with an owner        |
-| `enrollments` | Which courses a user has joined                            |
-| `materials`   | Reading lists and resources per course                     |
-| `assignments` | Work set by a tutor                                        |
-| `submissions` | One per student per assignment, with grade and feedback    |
-| `messages`    | Class chat, streamed over Supabase Realtime                |
+```bash
+npm run migrate           # apply everything outstanding
+npm run migrate:status    # show what has run without changing anything
+```
 
-Row level security is enabled on every table. The script also seeds the four
-levels and the full 68-course catalogue.
-
-Then run the patches, in order:
-
-| File | What it does |
-| --- | --- |
-| `supabase/001_grants.sql` | Table privileges — without it every query fails with `permission denied` |
-| `supabase/002_backfill_profiles.sql` | Profiles for anyone who signed up before the trigger existed |
-| `supabase/003_exams.sql` | The exams and tests system (below) |
-| `supabase/004_exam_security.sql` | Proctoring, disqualification and the audit log |
-
-> **Warning:** the script starts with `DROP SCHEMA classroom CASCADE`. Re-running
-> it is a full reset, not a migration.
+Safe to re-run — each file only ever applies once, tracked in
+`schoolivio.migrations`.
 
 ### 2. Expose the schema
 

@@ -5,12 +5,12 @@ import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { sendBrandedAuthEmail } from "../../lib/api";
 import AuthLayout from "../../Components/AuthLayout";
-import { Field, Button, Notice } from "../../Components/UI";
+import { Field, Button } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
   const [submitting, setSubmitting] = useState(false);
   // Resolved the same way AuthLayout resolves the school it shows on this
   // very page — so the reset email can go out through THIS school's own
@@ -76,9 +76,6 @@ const ForgotPassword = () => {
               autoComplete="email"
             />
           </Field>
-
-          <Notice tone="error">{error}</Notice>
-          <Notice tone="success">{notice}</Notice>
 
           <Button type="submit" className="btn-block" disabled={submitting}>
             {submitting ? "Sending..." : "Send reset link"}

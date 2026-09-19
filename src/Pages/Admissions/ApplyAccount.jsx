@@ -4,7 +4,8 @@ import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
 import { applyTenantBranding } from "../../lib/branding";
-import { Field, Button, Notice } from "../../Components/UI";
+import { Field, Button } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // The accounted flow's real front door. /Apply/Start (where you pick a
 // session and begin the form itself) sits behind ProtectedRoute — it needs
@@ -28,7 +29,7 @@ const ApplyAccount = () => {
     confirm: "",
   });
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   useEffect(() => {
@@ -163,8 +164,6 @@ const ApplyAccount = () => {
           <Field label="Confirm password">
             <input required type="password" className="input" value={form.confirm} onChange={update("confirm")} />
           </Field>
-
-          <Notice tone="error">{error}</Notice>
 
           <div className="apply-actions">
             <Button type="submit" disabled={submitting}>

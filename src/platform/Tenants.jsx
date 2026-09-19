@@ -11,11 +11,11 @@ import {
   Field,
   Button,
   Badge,
-  Notice,
   Empty,
   formatDate,
 } from "../Components/UI";
 import { downloadCsv } from "../lib/csv";
+import { useActionFeedback } from "../Components/Toast";
 
 // A slug becomes a hostname, so it has to be safe to put in one.
 const slugify = (value) =>
@@ -29,8 +29,7 @@ const slugify = (value) =>
 const Tenants = () => {
   const [tenants, setTenants] = useState([]);
   const [query, setQuery] = useState("");
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -46,7 +45,7 @@ const Tenants = () => {
       .then(setTenants)
       .catch((err) => setError(err.message || "Could not load the schools."))
       .finally(() => setLoading(false));
-  }, []);
+  }, [setError]);
 
   useEffect(load, [load]);
 
@@ -150,9 +149,6 @@ const Tenants = () => {
         </div>
       }
     >
-      <Notice tone="error">{error}</Notice>
-      <Notice tone="success">{notice}</Notice>
-
       {adding ? (
         <Card style={{ marginBottom: 22 }}>
           <h3>{"A new school"}</h3>

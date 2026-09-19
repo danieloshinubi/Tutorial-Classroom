@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { clearPasswordChangeFlag } from "../../lib/api";
 import AuthLayout from "../../Components/AuthLayout";
-import { Field, Button, Notice } from "../../Components/UI";
+import { Field, Button } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Shown the first time someone signs in with a password an administrator
 // issued. There is no way past it — the account is unusable until the
@@ -11,7 +12,7 @@ import { Field, Button, Notice } from "../../Components/UI";
 const SetPassword = () => {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState("");
+  const { setError } = useActionFeedback();
   const [saving, setSaving] = useState(false);
 
   const { updatePassword, refreshProfile, signOut } = useAuth();
@@ -68,8 +69,6 @@ const SetPassword = () => {
               autoComplete="new-password"
             />
           </Field>
-
-          <Notice tone="error">{error}</Notice>
 
           <Button type="submit" className="btn-block" disabled={saving}>
             {saving ? "Saving..." : "Save and continue"}

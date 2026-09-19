@@ -6,7 +6,8 @@ import { eye } from "react-icons-kit/feather/eye";
 import GoogleButton from "../../Components/GoogleButton";
 import { useAuth } from "../../context/AuthContext";
 import AuthLayout from "../../Components/AuthLayout";
-import { Field, Button, Notice } from "../../Components/UI";
+import { Field, Button } from "../../Components/UI";
+import { useActionFeedback } from "../../Components/Toast";
 
 // Shared by the student (/Signup) and tutor (/SignupTutor) pages — the only
 // differences are the heading, the role sent to Supabase, and the footer links.
@@ -20,8 +21,7 @@ const SignupForm = ({ heading, subheading, role, footer }) => {
     confirmPassword: "",
   });
   const [visible, setVisible] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const { setError, setNotice } = useActionFeedback();
   const [submitting, setSubmitting] = useState(false);
 
   const { signUp } = useAuth();
@@ -167,9 +167,6 @@ const SignupForm = ({ heading, subheading, role, footer }) => {
               autoComplete="new-password"
             />
           </Field>
-
-          <Notice tone="error">{error}</Notice>
-          <Notice tone="success">{notice}</Notice>
 
           <Button type="submit" className="btn-block" disabled={submitting}>
             {submitting ? "Creating account..." : "Create account"}
