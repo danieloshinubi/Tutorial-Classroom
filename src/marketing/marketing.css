@@ -91,8 +91,8 @@
   flex: none; width: 32px; height: 32px; border-radius: 10px; margin-top: 1px;
   display: flex; align-items: center; justify-content: center; font-size: 15px;
 }
-.mkt-nav-dd-icon.a { background: #f0e9ff; }
-.mkt-nav-dd-icon.b { background: #e3f1ff; }
+.mkt-nav-dd-icon.a { background: #f0e9ff; color: var(--mkt-brand-dark); }
+.mkt-nav-dd-icon.b { background: #e3f1ff; color: #1d6fd1; }
 .mkt-nav-dd-title { display: block; font-size: 13px; font-weight: 600; color: #16122a; }
 .mkt-nav-dd-desc { display: block; font-size: 11px; color: rgba(22,18,42,.45); margin-top: 1px; }
 

@@ -1,5 +1,19 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { Icon } from "react-icons-kit";
+import { grid } from "react-icons-kit/feather/grid";
+import { clipboard } from "react-icons-kit/feather/clipboard";
+import { creditCard } from "react-icons-kit/feather/creditCard";
+import { edit } from "react-icons-kit/feather/edit";
+import { barChart2 } from "react-icons-kit/feather/barChart2";
+import { search } from "react-icons-kit/feather/search";
+import { layers } from "react-icons-kit/feather/layers";
+import { lock } from "react-icons-kit/feather/lock";
+import { bell } from "react-icons-kit/feather/bell";
+import { fileText } from "react-icons-kit/feather/fileText";
+import { checkCircle } from "react-icons-kit/feather/checkCircle";
+import { cpu } from "react-icons-kit/feather/cpu";
+import { settings } from "react-icons-kit/feather/settings";
 import { supabase } from "../lib/supabaseClient";
 import { Mark } from "../Components/Logo";
 
@@ -91,32 +105,32 @@ const MODULES = [
 
 const FEATURES = [
   {
-    icon: "🗂️",
+    icon: grid,
     title: "One dashboard for the whole school",
     body: "Admissions, teaching, fees, exams and results in a single workspace — nobody switches between five different tools to run one school day.",
   },
   {
-    icon: "📝",
+    icon: clipboard,
     title: "Admissions, start to finish",
     body: "Application → screening → offer → acceptance fee → clearance → enrolment, each step tracked and gated automatically, right through to the admission letter.",
   },
   {
-    icon: "💳",
+    icon: creditCard,
     title: "Fees parents actually understand",
     body: "Line-item invoices, plain-language payment status, online or manual payment — never just a wall of numbers a parent has to decode.",
   },
   {
-    icon: "🖩",
+    icon: edit,
     title: "Exams built for the room",
     body: "MCQ and short-answer auto-grading, image-based questions, a real scientific calculator when a subject needs one, and proctoring events logged as they happen.",
   },
   {
-    icon: "📊",
+    icon: barChart2,
     title: "Results without the spreadsheet chase",
     body: "Result sheets, an approval workflow before anything is released, and report cards a parent can actually read.",
   },
   {
-    icon: "🔍",
+    icon: search,
     title: "Every action, accounted for",
     body: "Who did what, when, and from where — a full audit trail across admissions, bursary, teaching and every role in between.",
   },
@@ -129,7 +143,7 @@ const FEATURES = [
 const CAPABILITIES = [
   {
     key: "multitenant",
-    icon: "🏫",
+    icon: layers,
     label: "Multi-tenant",
     title: "One platform, every school its own",
     body: "Onboard unlimited schools on a single, secure platform — every tenant fully isolated by row-level security, right down to who can read a single invoice. Add a new school in minutes, manage every tenant's plan and access from one console.",
@@ -137,7 +151,7 @@ const CAPABILITIES = [
   },
   {
     key: "roles",
-    icon: "🔐",
+    icon: lock,
     label: "Role-based access",
     title: "Everyone sees exactly their own job",
     body: "Owners, principals, bursars, admissions officers, teachers, parents and students each get their own view — nothing more. Access is enforced at the database layer, not just hidden in the interface.",
@@ -145,7 +159,7 @@ const CAPABILITIES = [
   },
   {
     key: "notifications",
-    icon: "🔔",
+    icon: bell,
     label: "Real-time notifications",
     title: "Nobody has to go looking for news",
     body: "An offer, a status change, a new invoice, a graded result — the right person is notified the moment it happens, in-app, without refreshing or digging through menus.",
@@ -153,7 +167,7 @@ const CAPABILITIES = [
   },
   {
     key: "documents",
-    icon: "📄",
+    icon: fileText,
     label: "Document verification",
     title: "Original documents, checked once, trusted after",
     body: "Staff record exactly which original documents they've physically sighted — WAEC certificates, birth certificates, whatever your school requires — with who checked it and when.",
@@ -161,7 +175,7 @@ const CAPABILITIES = [
   },
   {
     key: "clearance",
-    icon: "✅",
+    icon: checkCircle,
     label: "Clearance workflow",
     title: "Nobody enrols until every department signs off",
     body: "Name your own clearance departments — Bursary, Library, Hostel, whatever your school runs — and an applicant can't be registered as a student until every one of them has cleared.",
@@ -169,7 +183,7 @@ const CAPABILITIES = [
   },
   {
     key: "audit",
-    icon: "🔍",
+    icon: search,
     label: "Audit trail",
     title: "Every action, accounted for",
     body: "Who did what, when, and from where — a full audit trail across admissions, bursary, teaching and every role in between, visible to the people who need to answer for it.",
@@ -177,7 +191,7 @@ const CAPABILITIES = [
   },
   {
     key: "payments",
-    icon: "💳",
+    icon: creditCard,
     label: "Online + manual payments",
     title: "However your parents actually pay",
     body: "Take payments through an online gateway, or record cash and bank transfers manually — either way, an invoice's status updates the moment it's settled, with nothing left ambiguous.",
@@ -185,7 +199,7 @@ const CAPABILITIES = [
   },
   {
     key: "grading",
-    icon: "🖩",
+    icon: cpu,
     label: "Auto-grading",
     title: "Objective questions grade themselves",
     body: "MCQ and short-answer questions are graded the moment an exam is submitted — with image-based questions and a real scientific calculator for the subjects that need one.",
@@ -193,7 +207,7 @@ const CAPABILITIES = [
   },
   {
     key: "protocols",
-    icon: "⚙️",
+    icon: settings,
     label: "Configurable protocols",
     title: "Your school's rules, not a fixed template",
     body: "Every protocol — fees, required documents, screening steps, clearance departments, programmes — is set from School administration by your own staff. No code, no developer, no ticket to file.",
@@ -361,14 +375,14 @@ const Nav = () => {
             <div className="mkt-nav-dd-panel">
               <div className="mkt-nav-dd-card">
                 <a href="#product" className="mkt-nav-dd-item">
-                  <span className="mkt-nav-dd-icon a">{"🗂️"}</span>
+                  <span className="mkt-nav-dd-icon a"><Icon icon={grid} size={15} /></span>
                   <span>
                     <span className="mkt-nav-dd-title">{"Features"}</span>
                     <span className="mkt-nav-dd-desc">{"Everyday tools your school uses"}</span>
                   </span>
                 </a>
                 <a href="#capabilities" className="mkt-nav-dd-item">
-                  <span className="mkt-nav-dd-icon b">{"🏫"}</span>
+                  <span className="mkt-nav-dd-icon b"><Icon icon={layers} size={15} /></span>
                   <span>
                     <span className="mkt-nav-dd-title">{"Capabilities"}</span>
                     <span className="mkt-nav-dd-desc">{"What makes the platform different"}</span>
@@ -520,7 +534,7 @@ const FeatureGrid = () => (
       <div className="mkt-grid">
         {FEATURES.map((f) => (
           <div className="mkt-card" key={f.title}>
-            <div className="mkt-card-icon">{f.icon}</div>
+            <div className="mkt-card-icon"><Icon icon={f.icon} size={19} /></div>
             <h3>{f.title}</h3>
             <p>{f.body}</p>
           </div>
@@ -571,13 +585,13 @@ const Capabilities = () => {
                 onClick={() => select(i)}
               >
                 <span className="mkt-cap-dot" />
-                <span className="mkt-cap-icon">{c.icon}</span>
+                <span className="mkt-cap-icon"><Icon icon={c.icon} size={15} /></span>
                 {c.label}
               </button>
             ))}
           </div>
           <div className="mkt-cap-panel" key={cap.key}>
-            <div className="mkt-cap-panel-icon">{cap.icon}</div>
+            <div className="mkt-cap-panel-icon"><Icon icon={cap.icon} size={22} /></div>
             <h3>{cap.title}</h3>
             <p>{cap.body}</p>
             <div className="mkt-cap-checks">
