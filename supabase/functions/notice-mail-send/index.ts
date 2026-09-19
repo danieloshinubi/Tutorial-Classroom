@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     if (!result.ok) {
       return json({ sent: false, reason: result.reason });
     }
-    return json({ sent: true, count: result.sent, failedBatches: result.failedBatches });
+    return json({ sent: true, count: result.sent, failed: result.failed });
   } catch (err) {
     return json({ error: (err as Error).message || "Could not email that notice." }, 500);
   }

@@ -76,54 +76,43 @@ export async function sendViaSchoolMailbox(
 }
 
 export type BulkSendResult =
-  | { ok: true; sent: number; failedBatches: number }
+  | { ok: true; sent: number; failed: number }
   | { ok: false; reason: MailboxReason };
 
-// A school-wide announcement can address hundreds of people at once — one
-// SMTP call per recipient would be slow and is exactly the pattern mail
-// providers rate-limit or flag as spam. Recipients are BCC'd in small
-// batches instead (nobody sees anyone else's address either way), reusing
-// one transport/connection for the whole run rather than re-authenticating
-// per batch.
+// One send per recipient, each addressed to them by name — no BCC batch,
+// no "Undisclosed recipients". Slower than one BCC blast per batch, but a
+// real school's audience is a few hundred people at most, well inside an
+// edge function's run time, and an individually-addressed message reads as
+// ordinary mail rather than a bulk blast — which is also better, not just
+// more transparent, for actually landing in an inbox.
 export async function sendBulkViaSchoolMailbox(
   admin: AdminClient,
-  args: { schoolId: string; recipients: string[]; subject: string; html: string; text: string; batchSize?: number },
+  args: { schoolId: string; recipients: string[]; subject: string; html: string; text: string },
 ): Promise<BulkSendResult> {
   const mailbox = await getSchoolMailboxTransport(admin, args.schoolId);
   if (!mailbox.ok) return mailbox;
 
-  const batchSize = args.batchSize || 40;
+  const unsubscribeTarget = mailbox.from.match(/<(.+)>/)?.[1] || mailbox.from;
   let sent = 0;
-  let failedBatches = 0;
+  let failed = 0;
 
-  for (let i = 0; i < args.recipients.length; i += batchSize) {
-    const batch = args.recipients.slice(i, i + batchSize);
+  for (const recipient of args.recipients) {
     try {
       await mailbox.transport.sendMail({
         from: mailbox.from,
-        // RFC 5322 empty-group syntax — a real recipient list stays in bcc
-        // (nobody sees anyone else's address), while "To" reads as an
-        // intentional bulk send rather than the mailbox owner's own address,
-        // which several spam filters specifically penalise as a from==to
-        // pattern.
-        to: "Undisclosed recipients:;",
-        bcc: batch.join(", "),
+        to: recipient,
         subject: args.subject,
         html: args.html,
         text: args.text,
         headers: {
-          // A recognised bulk-mail signal most spam filters weight heavily
-          // in the other direction — its absence on a many-recipient send
-          // is itself a mark against deliverability.
-          "List-Unsubscribe": `<mailto:${mailbox.from.match(/<(.+)>/)?.[1] || mailbox.from}?subject=unsubscribe>`,
-          "Precedence": "bulk",
+          "List-Unsubscribe": `<mailto:${unsubscribeTarget}?subject=unsubscribe>`,
         },
       });
-      sent += batch.length;
+      sent += 1;
     } catch {
-      failedBatches += 1;
+      failed += 1;
     }
   }
 
-  return { ok: true, sent, failedBatches };
+  return { ok: true, sent, failed };
 }
