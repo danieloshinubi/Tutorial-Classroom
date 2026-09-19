@@ -25,10 +25,12 @@ import {
   Field,
   Select,
   MoneyInput,
+  Section,
   formatDate,
 } from "../Components/UI";
 import { StatRow } from "../Components/Charts";
 import { useActionFeedback } from "../Components/Toast";
+import { downloadCsv } from "../lib/csv";
 
 const Fact = ({ label, children }) =>
   children ? (
@@ -468,8 +470,27 @@ const TenantDetail = () => {
         <BillingSection schoolId={schoolId} currency={tenant.currency} />
       </div>
 
-      <section className="section">
-        <h2>{"Who runs it"}</h2>
+      <Section
+        title="Who runs it"
+        action={
+          admins.length > 0 ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                downloadCsv(`${tenant.slug}-admins`, admins, [
+                  { key: "name", label: "Name" },
+                  { key: "email", label: "Email" },
+                  { key: "role", label: "Role" },
+                  { key: (a) => (a.is_active ? "active" : "deactivated"), label: "Status" },
+                ])
+              }
+            >
+              {"Export CSV"}
+            </Button>
+          ) : null
+        }
+      >
         {admins.length === 0 ? (
           <Empty>
             {"Nobody administers this school yet — it cannot be set up until somebody does."}
@@ -508,7 +529,7 @@ const TenantDetail = () => {
             </div>
           </Card>
         )}
-      </section>
+      </Section>
 
       <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 24 }}>
         {"To work inside this school, sign in at "}

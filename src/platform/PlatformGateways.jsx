@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchPlatformGateways } from "../lib/platformApi";
 import { Page, Card, Badge, Empty, Select, Modal, Button, formatDate } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
+import { downloadCsv } from "../lib/csv";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -50,10 +51,21 @@ const PlatformGateways = () => {
     });
   }, [rows, status, query]);
 
+  const exportCsv = () => {
+    downloadCsv("gateways", filtered, [
+      { key: "school_name", label: "School" },
+      { key: (g) => g.provider || "", label: "Provider" },
+      { key: (g) => g.mode || "", label: "Mode" },
+      { key: (g) => STATUS_LABEL[statusOf(g)], label: "Status" },
+      { key: (g) => (g.confirmed_at ? formatDate(g.confirmed_at) : ""), label: "Confirmed" },
+    ]);
+  };
+
   return (
     <Page
       title="Gateways"
       subtitle="Every school's payment gateway, and whether it was ever actually confirmed"
+      action={<Button variant="secondary" disabled={!filtered.length} onClick={exportCsv}>{"Export CSV"}</Button>}
       toolbar={
         <div className="filters">
           <Select

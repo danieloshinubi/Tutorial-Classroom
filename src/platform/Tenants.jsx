@@ -15,6 +15,7 @@ import {
   Empty,
   formatDate,
 } from "../Components/UI";
+import { downloadCsv } from "../lib/csv";
 
 // A slug becomes a hostname, so it has to be safe to put in one.
 const slugify = (value) =>
@@ -121,14 +122,32 @@ const Tenants = () => {
 
   const preview = slugTouched ? slugify(slug) : slugify(name);
 
+  const exportCsv = () => {
+    downloadCsv("schools", filtered, [
+      { key: "name", label: "School" },
+      { key: (t) => `${t.slug}.schoolivio.com`, label: "Address" },
+      { key: (t) => t.plan || "trial", label: "Plan" },
+      { key: "students", label: "Students" },
+      { key: "teachers", label: "Staff" },
+      { key: "courses", label: "Courses" },
+      { key: (t) => formatDate(t.created_at, { withTime: false }), label: "Added" },
+      { key: (t) => (t.is_active ? "active" : "suspended"), label: "Status" },
+    ]);
+  };
+
   return (
     <Page
       title="Schools"
       subtitle={`${tenants.length} tenant${tenants.length === 1 ? "" : "s"} on the platform`}
       action={
-        <Button onClick={() => setAdding((v) => !v)}>
-          {adding ? "Cancel" : "Add a school"}
-        </Button>
+        <div className="btn-row">
+          <Button variant="secondary" disabled={!filtered.length} onClick={exportCsv}>
+            {"Export CSV"}
+          </Button>
+          <Button onClick={() => setAdding((v) => !v)}>
+            {adding ? "Cancel" : "Add a school"}
+          </Button>
+        </div>
       }
     >
       <Notice tone="error">{error}</Notice>

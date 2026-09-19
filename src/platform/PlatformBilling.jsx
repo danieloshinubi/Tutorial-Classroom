@@ -10,6 +10,7 @@ import {
 } from "../lib/platformApi";
 import { Page, Card, Badge, Empty, Select, Modal, Button, Field, MoneyInput, formatDate } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
+import { downloadCsv } from "../lib/csv";
 
 const BILLING_TONE = { paid: "success", pending: "warn", overdue: "danger", waived: "muted" };
 const STATUS_OPTIONS = [{ value: "", label: "All statuses" }, ...BILLING_STATUSES.map((s) => ({ value: s, label: s }))];
@@ -159,11 +160,28 @@ const PlatformBilling = () => {
     }
   };
 
+  const exportCsv = () => {
+    downloadCsv("billing", filtered, [
+      { key: "school_name", label: "School" },
+      { key: "plan", label: "Plan" },
+      { key: (r) => `${r.currency} ${Number(r.amount).toLocaleString()}`, label: "Amount" },
+      { key: (r) => formatDate(r.period_start, { withTime: false }), label: "Period start" },
+      { key: (r) => formatDate(r.period_end, { withTime: false }), label: "Period end" },
+      { key: "status", label: "Status" },
+      { key: (r) => r.note || "", label: "Note" },
+    ]);
+  };
+
   return (
     <Page
       title="Billing"
       subtitle="A manual ledger of what every school was invoiced, and whether it was paid"
-      action={<Button onClick={() => setAdding(true)}>{"Record a period"}</Button>}
+      action={
+        <div className="btn-row">
+          <Button variant="secondary" disabled={!filtered.length} onClick={exportCsv}>{"Export CSV"}</Button>
+          <Button onClick={() => setAdding(true)}>{"Record a period"}</Button>
+        </div>
+      }
       toolbar={
         <div className="filters">
           <Select value={status} onChange={setStatus} options={STATUS_OPTIONS} style={{ minWidth: 180 }} />

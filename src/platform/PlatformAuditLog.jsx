@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchPlatformAuditLog } from "../lib/platformApi";
-import { Page, Card, Badge, Empty, formatDate } from "../Components/UI";
+import { Page, Card, Badge, Empty, Button, formatDate } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
+import { downloadCsv } from "../lib/csv";
 
 const ACTION_TONE = { INSERT: "success", UPDATE: "brand", DELETE: "danger" };
 
@@ -28,8 +29,23 @@ const PlatformAuditLog = () => {
 
   useEffect(load, [load]);
 
+  const exportCsv = () => {
+    downloadCsv("platform-audit-log", rows, [
+      { key: (r) => formatDate(r.created_at, { withTime: true }), label: "When" },
+      { key: (r) => r.school_name || "", label: "School" },
+      { key: "table_name", label: "Table" },
+      { key: "action", label: "Action" },
+      { key: (r) => (r.changed_fields || []).join("; "), label: "Changed" },
+      { key: "actor_label", label: "By" },
+    ]);
+  };
+
   return (
-    <Page title="Audit log" subtitle="What this console's own actions have changed, across every school">
+    <Page
+      title="Audit log"
+      subtitle="What this console's own actions have changed, across every school"
+      action={<Button variant="secondary" disabled={!rows.length} onClick={exportCsv}>{"Export CSV"}</Button>}
+    >
       {loading ? <Empty>{"Loading..."}</Empty> : null}
       {!loading && rows.length === 0 ? <Empty>{"Nothing recorded yet."}</Empty> : null}
 

@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { fetchPlatformAdmins, addPlatformAdmin, removePlatformAdmin } from "../lib/platformApi";
 import { Page, Card, Button, Badge, Empty, Field, Modal, formatDate } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
+import { downloadCsv } from "../lib/csv";
 
 // Who has access to this console. classroom.platform_admins existed since
 // day one with no RPC and no UI at all — granting or revoking access, or
@@ -61,11 +62,24 @@ const PlatformTeam = () => {
     }
   };
 
+  const exportCsv = () => {
+    downloadCsv("platform-team", admins, [
+      { key: "name", label: "Name" },
+      { key: "email", label: "Email" },
+      { key: (a) => formatDate(a.added_at, { withTime: false }), label: "Added" },
+    ]);
+  };
+
   return (
     <Page
       title="Team"
       subtitle="Everyone with access to this console"
-      action={<Button onClick={() => setShowAdd(true)}>{"Grant access"}</Button>}
+      action={
+        <div className="btn-row">
+          <Button variant="secondary" disabled={!admins.length} onClick={exportCsv}>{"Export CSV"}</Button>
+          <Button onClick={() => setShowAdd(true)}>{"Grant access"}</Button>
+        </div>
+      }
     >
       {loading ? <Empty>{"Loading..."}</Empty> : null}
 
