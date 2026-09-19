@@ -390,6 +390,13 @@
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
   border-top: 1px solid var(--mkt-line-soft); padding: 20px 28px; font-size: 11px; color: rgba(22,18,42,.4);
 }
+.mkt-footer-tekktopia {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11px; font-weight: 600; color: rgba(22,18,42,.55);
+  transition: color .15s;
+}
+.mkt-footer-tekktopia img { border-radius: 4px; display: block; }
+.mkt-footer-tekktopia:hover { color: #16122a; }
 
 /* ------------------------------------------------------------ start-trial --- */
 .mkt-auth-shell { min-height: 100vh; background: var(--mkt-navy-0); display: flex; align-items: center; justify-content: center; padding: 40px 20px; }

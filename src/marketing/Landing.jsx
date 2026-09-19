@@ -714,6 +714,15 @@ const Footer = () => (
     <div className="mkt-wrap mkt-footer-bottom">
       <span>{`© ${new Date().getFullYear()} Schoolivio. All rights reserved.`}</span>
       <span>{"Built for schools that want one calm place to run their year."}</span>
+      <a
+        className="mkt-footer-tekktopia"
+        href="https://tekktopia.com"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        <img src="/brand/tekktopia-logo.png" alt="Tekktopia" width="18" height="18" />
+        {"A product of Tekktopia Limited"}
+      </a>
     </div>
   </footer>
 );
