@@ -8,10 +8,16 @@ import {
 import { Card, Field, Button, Notice, Empty, Tabs, Select } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
-// Only Paystack has a working checkout/webhook adapter today (see
+// Every provider with a working checkout/webhook adapter (see
 // supabase/functions/_shared/gateways/registry.ts) — this list is what
 // keeps an unbuilt provider from ever being selectable here, rather than
-// selectable-then-erroring at save time.
+// selectable-then-erroring at save time. Flutterwave and Stripe each need
+// one more secret than Paystack does: neither can be verified from the API
+// secret key alone, because neither derives its webhook signature from
+// it — Flutterwave compares against a fixed "secret hash" you set in your
+// dashboard, Stripe signs with a separate webhook signing secret. Marked
+// `secret: true` like the API key itself, since both live in the same
+// encrypted Vault blob, never in public_config.
 const IMPLEMENTED_PROVIDERS = {
   paystack: {
     label: "Paystack",
@@ -20,7 +26,50 @@ const IMPLEMENTED_PROVIDERS = {
       { key: "public_key", label: "Public key", placeholder: "pk_live_..." },
     ],
   },
+  flutterwave: {
+    label: "Flutterwave",
+    fields: [
+      { key: "secret_key", label: "Secret key", placeholder: "FLWSECK-...", secret: true },
+      { key: "public_key", label: "Public key", placeholder: "FLWPUBK-..." },
+      {
+        key: "hash",
+        label: "Webhook secret hash",
+        placeholder: "Set under Settings → Webhooks in your Flutterwave dashboard",
+        secret: true,
+        hint: "Not your API key — a separate value you set yourself in Flutterwave's dashboard, then paste the same value here so we can tell a real webhook from a forged one.",
+      },
+    ],
+  },
+  stripe: {
+    label: "Stripe",
+    fields: [
+      { key: "secret_key", label: "Secret key", placeholder: "sk_live_...", secret: true },
+      { key: "public_key", label: "Publishable key", placeholder: "pk_live_..." },
+      {
+        key: "webhook_secret",
+        label: "Webhook signing secret",
+        placeholder: "whsec_...",
+        secret: true,
+        hint: "From the webhook endpoint you create in Stripe pointing at this school's Stripe webhook URL — not the API secret key above.",
+      },
+    ],
+  },
 };
+
+// Not a real provider — picking it just tells the server "figure out which
+// of the above this key belongs to." Kept out of IMPLEMENTED_PROVIDERS
+// (which doubles as "the providers pay-init/the webhooks actually know how
+// to run") and shown as generic secret_key/public_key fields, since we
+// don't know yet which extra field (if any) will turn out to be needed.
+const OTHER_PROVIDER = "other";
+const PROVIDER_OPTIONS = [
+  ...Object.entries(IMPLEMENTED_PROVIDERS).map(([key, p]) => ({ value: key, label: p.label })),
+  { value: OTHER_PROVIDER, label: "Other / not listed" },
+];
+const OTHER_FIELDS = [
+  { key: "secret_key", label: "Secret key", placeholder: "Your gateway's secret/private key", secret: true },
+  { key: "public_key", label: "Public key", placeholder: "Your gateway's public key (if it has one)" },
+];
 
 const Toggle = ({ label, hint, checked, onChange, disabled }) => (
   <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
@@ -83,9 +132,13 @@ const PaymentGatewaySettingsPanel = () => {
     setError("");
     setNotice("");
 
-    const activeProvider = IMPLEMENTED_PROVIDERS[provider];
+    const activeFields = provider === OTHER_PROVIDER ? OTHER_FIELDS : IMPLEMENTED_PROVIDERS[provider].fields;
     if (mode === "byo") {
-      const missing = activeProvider.fields.filter((f) => f.secret && !credentials[f.key]?.trim());
+      // Every secret-marked field is required, not just the API key — a
+      // Flutterwave/Stripe connection missing its webhook hash/signing
+      // secret would pass the "does this key authenticate" check below and
+      // still never actually confirm a real payment automatically.
+      const missing = activeFields.filter((f) => f.secret && !credentials[f.key]?.trim());
       if (missing.length) {
         setError(`Enter ${missing.map((f) => f.label.toLowerCase()).join(" and ")} to connect your own account.`);
         return;
@@ -97,7 +150,7 @@ const PaymentGatewaySettingsPanel = () => {
       const secrets = {};
       const publicConfig = {};
       if (mode === "byo") {
-        activeProvider.fields.forEach((f) => {
+        activeFields.forEach((f) => {
           const value = credentials[f.key]?.trim();
           if (!value) return;
           if (f.secret) secrets[f.key] = value;
@@ -105,7 +158,7 @@ const PaymentGatewaySettingsPanel = () => {
         });
       }
 
-      await connectPaymentGateway({
+      const result = await connectPaymentGateway({
         schoolId,
         provider,
         mode,
@@ -114,7 +167,18 @@ const PaymentGatewaySettingsPanel = () => {
         secrets: mode === "byo" ? secrets : undefined,
       });
       setCredentials({});
-      setNotice(mode === "platform" ? "Now using Schoolivio's shared account." : "Connected — your own account will now take payments.");
+
+      if (result?.detectedProvider) {
+        const detected = IMPLEMENTED_PROVIDERS[result.detectedProvider];
+        const extraFields = detected.fields.filter((f) => f.secret && f.key !== "secret_key");
+        setNotice(
+          extraFields.length
+            ? `Connected — that key was recognised as your ${detected.label} account. Switch the provider above to ${detected.label} and add your ${extraFields.map((f) => f.label.toLowerCase()).join(" and ")} too, so payments can be confirmed automatically.`
+            : `Connected — that key was recognised as your ${detected.label} account.`
+        );
+      } else {
+        setNotice(mode === "platform" ? "Now using Schoolivio's shared account." : "Connected — your own account will now take payments.");
+      }
       await load();
     } catch (err) {
       setError(err.message || "Could not save that.");
@@ -142,7 +206,7 @@ const PaymentGatewaySettingsPanel = () => {
 
   if (loading) return <Empty>{"Loading..."}</Empty>;
 
-  const activeProvider = IMPLEMENTED_PROVIDERS[provider] || IMPLEMENTED_PROVIDERS.paystack;
+  const activeFields = provider === OTHER_PROVIDER ? OTHER_FIELDS : (IMPLEMENTED_PROVIDERS[provider] || IMPLEMENTED_PROVIDERS.paystack).fields;
 
   const currentlyLabel = !gateway?.provider
     ? "Not connected — online payments will not work for this school until an owner or admin chooses one below."
@@ -186,11 +250,16 @@ const PaymentGatewaySettingsPanel = () => {
                 <Select
                   value={provider}
                   onChange={(value) => { setProvider(value); setCredentials({}); }}
-                  options={Object.entries(IMPLEMENTED_PROVIDERS).map(([key, p]) => ({ value: key, label: p.label }))}
+                  options={PROVIDER_OPTIONS}
                 />
               </Field>
-              {activeProvider.fields.map((f) => (
-                <Field key={f.key} label={f.label}>
+              {provider === OTHER_PROVIDER ? (
+                <p style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: -8 }}>
+                  {"Don't see your gateway above? Enter its keys below and we'll check them against the gateways we do support — if one of those accepts the key, we'll connect it under its real name."}
+                </p>
+              ) : null}
+              {activeFields.map((f) => (
+                <Field key={f.key} label={f.label} hint={f.hint}>
                   <input
                     className="input"
                     type={f.secret ? "password" : "text"}
@@ -202,7 +271,7 @@ const PaymentGatewaySettingsPanel = () => {
                 </Field>
               ))}
               <p style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-                {"Credentials are encrypted at rest and never shown again after saving — only an Edge Function ever reads them, to actually start or verify a payment."}
+                {"Credentials are encrypted at rest and never shown again after saving. Before anything is saved, we make a read-only call to the gateway itself to confirm the key actually works — a wrong or revoked key is rejected here, not the first time a family tries to pay."}
               </p>
             </>
           ) : (

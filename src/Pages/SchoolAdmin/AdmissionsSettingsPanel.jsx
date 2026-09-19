@@ -505,7 +505,12 @@ const AdmissionsSettingsPanel = () => {
 
   return (
     <>
-      <p style={{ color: "var(--ink-2)", maxWidth: "68ch" }}>
+      {/* .panel-top below pulls itself up 14px to sit flush under the
+          sticky page header when it's the page-body's first element — here
+          it isn't, so that pull-up used to eat into this paragraph's own
+          last line. Matching margin-bottom cancels it out (sibling margins
+          collapse: 16 + -14 nets a clean 2px gap). */}
+      <p style={{ color: "var(--ink-2)", maxWidth: "68ch", marginBottom: 16 }}>
         {"Not every school runs admissions the same way — fees, required documents, screening steps and clearance departments are all configured here, per school, per session. Nothing here needs a developer."}
       </p>
 

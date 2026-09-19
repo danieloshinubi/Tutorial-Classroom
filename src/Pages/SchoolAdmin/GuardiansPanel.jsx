@@ -117,10 +117,16 @@ const GuardiansPanel = () => {
 
   return (
     <>
-      <p style={{ color: "var(--ink-2)", maxWidth: "64ch" }}>
+      {/* .panel-top below pulls itself up 14px (margin-top: -14px) to sit
+          flush under the sticky page header when it's the first thing in
+          the page — here it isn't, so that same pull-up ate into this
+          paragraph's own last line instead. Matching margin-bottom cancels
+          it out (sibling margins collapse: 16 + -14 nets a clean 2px gap)
+          instead of leaving the panel's opaque background overlapping the
+          text above it. */}
+      <p style={{ color: "var(--ink-2)", maxWidth: "64ch", marginBottom: 16 }}>
         {"Choose which children each parent account can see. A parent with no children linked sees nothing at all."}
       </p>
-
 
       {loading ? <Empty>{"Loading..."}</Empty> : null}
 
@@ -132,55 +138,67 @@ const GuardiansPanel = () => {
 
       {parents.length > 0 ? (
         <div className="panel-top">
-        <Card style={{ maxWidth: 640 }}>
+        <Card>
           <h3 style={{ marginTop: 0 }}>{"Link a child to a parent"}</h3>
+          {/* A row instead of four stacked fields — the same form in a
+              fraction of the height, so the list of already-linked parents
+              below doesn't start a full scroll down. */}
           <form onSubmit={handleLink}>
-            <Field label="Parent">
-              <Select
-                className="select"
-                value={selected}
-                onChange={setSelected}
-                options={[
-                  { value: "", label: "Choose a parent" },
-                  ...parents.map((p) => ({
-                    value: p.profiles.id,
-                    label: `${displayName(p.profiles)} — ${p.profiles.email}`,
-                  })),
-                ]}
-              />
-            </Field>
-
-            <Field
-              label="Child"
-              hint={
-                students.length
-                  ? "Only student accounts appear here."
-                  : "No student accounts yet — add one under People first."
-              }
+            <div
+              style={{
+                display: "grid",
+                gap: 12,
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                alignItems: "start",
+              }}
             >
-              <Select
-                className="select"
-                value={childId}
-                onChange={setChildId}
-                disabled={students.length === 0}
-                options={[
-                  { value: "", label: "Choose a child" },
-                  ...students.map((s) => ({
-                    value: s.profiles.id,
-                    label: `${displayName(s.profiles)} — ${s.profiles.email}`,
-                  })),
-                ]}
-              />
-            </Field>
+              <Field label="Parent">
+                <Select
+                  className="select"
+                  value={selected}
+                  onChange={setSelected}
+                  options={[
+                    { value: "", label: "Choose a parent" },
+                    ...parents.map((p) => ({
+                      value: p.profiles.id,
+                      label: `${displayName(p.profiles)} — ${p.profiles.email}`,
+                    })),
+                  ]}
+                />
+              </Field>
 
-            <Field label="Relationship" hint="Optional — mother, father, guardian.">
-              <input
-                className="input"
-                value={relationship}
-                placeholder="Mother"
-                onChange={(e) => setRelationship(e.target.value)}
-              />
-            </Field>
+              <Field
+                label="Child"
+                hint={
+                  students.length
+                    ? "Only student accounts appear here."
+                    : "No student accounts yet — add one under People first."
+                }
+              >
+                <Select
+                  className="select"
+                  value={childId}
+                  onChange={setChildId}
+                  disabled={students.length === 0}
+                  options={[
+                    { value: "", label: "Choose a child" },
+                    ...students.map((s) => ({
+                      value: s.profiles.id,
+                      label: `${displayName(s.profiles)} — ${s.profiles.email}`,
+                    })),
+                  ]}
+                />
+              </Field>
+
+              <Field label="Relationship" hint="Optional — mother, father, guardian.">
+                <input
+                  className="input"
+                  value={relationship}
+                  placeholder="Mother"
+                  onChange={(e) => setRelationship(e.target.value)}
+                />
+              </Field>
+            </div>
 
             <Button type="submit" disabled={busy}>
               {busy ? "Linking..." : "Link"}
