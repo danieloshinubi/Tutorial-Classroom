@@ -56,11 +56,8 @@ Deno.serve(async (req) => {
       { db: { schema: "classroom" } },
     );
 
-    const { data: school, error: schoolError } = await admin
-      .from("schools")
-      .select("id, name, slug, logo_url, theme_color")
-      .eq("id", n.school_id)
-      .single();
+    const { data: schoolRows, error: schoolError } = await admin.rpc("get_school_for_mail", { target_school: n.school_id });
+    const school = schoolRows?.[0];
     if (schoolError || !school) return json({ error: "That school could not be found." }, 404);
 
     const { data: recipientRows, error: recipientsError } = await admin.rpc("notice_recipients", { target_notice: noticeId });

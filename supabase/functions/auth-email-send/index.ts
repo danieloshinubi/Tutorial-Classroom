@@ -64,11 +64,8 @@ Deno.serve(async (req) => {
       if (!isAdmin) return json({ error: "Only an owner or administrator can send that." }, 403);
     }
 
-    const { data: school } = await admin
-      .from("schools")
-      .select("id, name, slug, logo_url, theme_color")
-      .eq("id", schoolId)
-      .maybeSingle();
+    const { data: schoolRows } = await admin.rpc("get_school_for_mail", { target_school: schoolId });
+    const school = schoolRows?.[0];
 
     const redirectTo = school ? `https://${school.slug}.schoolivio.com/Reset-Password` : undefined;
 

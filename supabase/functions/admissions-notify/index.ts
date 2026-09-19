@@ -86,11 +86,8 @@ Deno.serve(async (req) => {
       { db: { schema: "classroom" } },
     );
 
-    const { data: school, error: schoolError } = await admin
-      .from("schools")
-      .select("id, name, slug, logo_url, theme_color, admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing, signatory_name, signatory_title")
-      .eq("id", app.school_id)
-      .single();
+    const { data: schoolRows, error: schoolError } = await admin.rpc("get_school_for_mail", { target_school: app.school_id });
+    const school = schoolRows?.[0];
     if (schoolError || !school) return json({ error: "That school could not be found." }, 404);
 
     const applicantName = [app.first_name, app.middle_name, app.surname].filter(Boolean).join(" ");

@@ -23,7 +23,6 @@ import {
   Field,
   Button,
   Badge,
-  Notice,
   Empty,
   Select,
   DateTimePicker,
@@ -32,6 +31,7 @@ import {
 } from "../../Components/UI";
 import Reactions from "../../Components/Reactions";
 import EmojiInput from "../../Components/EmojiInput";
+import { useActionFeedback } from "../../Components/Toast";
 
 const AUDIENCE_LABEL = Object.fromEntries(NOTICE_AUDIENCES);
 
@@ -50,10 +50,10 @@ const forInput = (iso) => {
 // closure or a levy is nearly always the same question the next parent has.
 const Replies = ({ notice, replies, onReply, onEdit, onRemove, canModerate }) => {
   const { user } = useAuth();
+  const { setError } = useActionFeedback();
   const replyRef = useRef(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editDraft, setEditDraft] = useState("");
@@ -65,7 +65,6 @@ const Replies = ({ notice, replies, onReply, onEdit, onRemove, canModerate }) =>
     const body = draft.trim();
     if (!body) return;
     setBusy(true);
-    setError("");
     try {
       await onReply(notice.id, body);
       setDraft("");
@@ -163,8 +162,6 @@ const Replies = ({ notice, replies, onReply, onEdit, onRemove, canModerate }) =>
         );
       })}
 
-      <Notice tone="error">{error}</Notice>
-
       <div className="composer composer-inline">
         <textarea
           ref={replyRef}
@@ -195,12 +192,11 @@ const News = () => {
   // Posting is the office's job — a teacher has their class stream.
   const canPost = roles.some((r) => ["owner", "admin", "principal"].includes(r));
 
+  const { setError, setNotice } = useActionFeedback();
   const [notices, setNotices] = useState([]);
   const [replies, setReplies] = useState({});
   const [reactions, setReactions] = useState({});
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
   const [composing, setComposing] = useState(false);
@@ -234,7 +230,7 @@ const News = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, user]);
+  }, [schoolId, user, setError]);
 
   useEffect(() => {
     load();
@@ -471,9 +467,6 @@ const News = () => {
           ) : null
         }
       >
-        <Notice tone="error">{error}</Notice>
-        <Notice tone="success">{notice}</Notice>
-
         {composing ? (
           <Card style={{ marginBottom: 24 }}>
             <h3>{editingId ? "Editing a notice" : "A new notice"}</h3>
