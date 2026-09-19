@@ -32,6 +32,8 @@ import {
   Tabs,
   displayName,
   formatDate,
+  SkeletonList,
+  SkeletonTable,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -133,7 +135,7 @@ const MarkAttendance = ({ schoolId }) => {
       </div>
 
       {loading ? (
-        <Empty>{"Loading roster..."}</Empty>
+        <SkeletonList rows={4} avatar={false} />
       ) : roster.length === 0 ? (
         <Empty>{"This class has no pupils yet."}</Empty>
       ) : (
@@ -243,7 +245,7 @@ const AttendanceRecords = ({ schoolId }) => {
       </div>
 
       {loading ? (
-        <Empty>{"Loading..."}</Empty>
+        <SkeletonTable rows={5} cols={5} />
       ) : records.length === 0 ? (
         <Empty>{"No attendance marked in this range yet."}</Empty>
       ) : (
@@ -324,7 +326,7 @@ const SchoolAttendance = ({ schoolId }) => {
       </div>
 
       {loading ? (
-        <Empty>{"Loading..."}</Empty>
+        <SkeletonTable rows={5} cols={4} />
       ) : records.length === 0 ? (
         <Empty>{"No resumptions recorded in this range yet."}</Empty>
       ) : (
@@ -559,7 +561,18 @@ const MyChildrenAttendance = ({ schoolId }) => {
       .finally(() => setLoading(false));
   }, [schoolId, user?.id, setError]);
 
-  if (loading) return <Empty>{"Loading..."}</Empty>;
+  if (loading) return (
+    <>
+      <Card>
+        <h3 style={{ marginTop: 0 }}>{"Class attendance"}</h3>
+        <SkeletonTable rows={4} cols={4} />
+      </Card>
+      <Card style={{ marginTop: 16 }}>
+        <h3 style={{ marginTop: 0 }}>{"School attendance (resumption)"}</h3>
+        <SkeletonTable rows={4} cols={3} />
+      </Card>
+    </>
+  );
 
   return (
     <>
@@ -635,7 +648,7 @@ const MyAttendance = ({ schoolId }) => {
       .finally(() => setLoading(false));
   }, [schoolId, user?.id, setError]);
 
-  if (loading) return <Empty>{"Loading..."}</Empty>;
+  if (loading) return <Card><SkeletonTable rows={4} cols={3} /></Card>;
 
   return (
     <Card>

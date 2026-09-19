@@ -11,6 +11,7 @@ import {
   Grid,
   Button,
   Empty,
+  SkeletonCards,
   Badge,
   displayName,
   initials,
@@ -120,7 +121,7 @@ const Reports = () => {
             : "How your students are progressing"
         }
       >
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonCards count={4} lines={2} /> : null}
 
         {/* Children first — a parent who also teaches should not have to hunt
             for their own child in a list of students. */}

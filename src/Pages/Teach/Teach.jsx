@@ -12,6 +12,7 @@ import {
   Badge,
   Button,
   Empty,
+  SkeletonCards,
   } from "../../Components/UI";
 
 const Teach = () => {
@@ -70,7 +71,7 @@ const Teach = () => {
           </Link>
         }
       >
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonCards count={4} lines={2} /> : null}
         {!loading && courses.length === 0 ? (
           <Empty>{"You have not created any courses yet."}</Empty>
         ) : null}

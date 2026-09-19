@@ -5,7 +5,7 @@ import {
   updatePaymentGatewaySetting,
   connectPaymentGateway,
 } from "../../lib/api";
-import { Card, Field, Button, Notice, Empty, Tabs, Select } from "../../Components/UI";
+import { Card, Field, Button, Notice, Tabs, Select, SkeletonText } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 // Every provider with a working checkout/webhook adapter (see
@@ -204,7 +204,7 @@ const PaymentGatewaySettingsPanel = () => {
     }
   };
 
-  if (loading) return <Empty>{"Loading..."}</Empty>;
+  if (loading) return <SkeletonText lines={6} />;
 
   const activeFields = provider === OTHER_PROVIDER ? OTHER_FIELDS : (IMPLEMENTED_PROVIDERS[provider] || IMPLEMENTED_PROVIDERS.paystack).fields;
 

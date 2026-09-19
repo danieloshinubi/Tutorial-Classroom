@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { fetchPlatformAdmins, addPlatformAdmin, removePlatformAdmin } from "../lib/platformApi";
-import { Page, Card, Button, Badge, Empty, Field, Modal, formatDate } from "../Components/UI";
+import { Page, Card, Button, Badge, Empty, Field, Modal, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import { downloadCsv } from "../lib/csv";
 
@@ -81,7 +81,7 @@ const PlatformTeam = () => {
         </div>
       }
     >
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={5} cols={4} /> : null}
 
       {!loading && admins.length === 0 ? <Empty>{"Nobody has console access yet."}</Empty> : null}
 

@@ -18,6 +18,7 @@ import {
   Button,
   Notice,
   Select,
+  SkeletonText,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -192,7 +193,7 @@ const CourseForm = () => {
       <Page title={isEditing ? "Edit course" : "Create a course"}>
         <Card style={{ maxWidth: "620px" }}>
           {loading ? (
-            <p>{"Loading..."}</p>
+            <SkeletonText lines={5} />
           ) : isEditing && !loaded ? (
             <>
               <Notice tone="error">

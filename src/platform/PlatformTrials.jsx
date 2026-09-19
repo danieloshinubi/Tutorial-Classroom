@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchTenants } from "../lib/platformApi";
-import { Page, Card, Badge, Empty, Select, Button, formatDate } from "../Components/UI";
+import { Page, Card, Badge, Empty, Select, Button, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import ExtendTrialModal from "./ExtendTrialModal";
 import { downloadCsv } from "../lib/csv";
@@ -83,7 +83,7 @@ const PlatformTrials = () => {
         </div>
       }
     >
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={6} cols={5} /> : null}
       {!loading && filtered.length === 0 ? <Empty>{"No trial matches."}</Empty> : null}
 
       {filtered.length > 0 ? (

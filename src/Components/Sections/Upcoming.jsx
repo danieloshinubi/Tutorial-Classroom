@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchUpcomingAssignments } from "../../lib/api";
-import { Card, Empty, formatDate } from "../UI";
+import { Card, Empty, SkeletonList, formatDate } from "../UI";
 import { useActionFeedback } from "../Toast";
 
 const Upcoming = ({ courseId }) => {
@@ -33,7 +33,7 @@ const Upcoming = ({ courseId }) => {
     <Card>
       <h3 style={{ marginTop: 0 }}>{"Upcoming"}</h3>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonList rows={3} avatar={false} /> : null}
       {!loading && !error && assignments.length === 0 ? (
         <Empty>{"Woohoo, no work due soon!"}</Empty>
       ) : null}

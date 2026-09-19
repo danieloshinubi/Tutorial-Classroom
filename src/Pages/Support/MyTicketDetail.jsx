@@ -5,7 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchTicket, fetchTicketMessages, addTicketMessage } from "../../lib/api";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
-import { Page, Card, Button, Badge, Empty, displayName, formatDate } from "../../Components/UI";
+import { Page, Card, Button, Badge, SkeletonList, displayName, formatDate } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 // A ticket raised by email can carry the sender's real formatting (a
@@ -84,7 +84,9 @@ const MyTicketDetail = () => {
       <div className="shell">
         <Navbar />
         <Page>
-          <Empty>{"Loading..."}</Empty>
+          <Card>
+            <SkeletonList rows={3} avatar={false} />
+          </Card>
         </Page>
       </div>
     );

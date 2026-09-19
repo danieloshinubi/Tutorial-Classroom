@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   Empty,
+  SkeletonList,
   displayName,
   initials,
   formatDate,
@@ -113,7 +114,7 @@ const PeopleTab = ({ course, canManage, schoolId }) => {
               </span>
             ) : null}
           </h3>
-          {loading ? <Empty>{"Loading..."}</Empty> : null}
+          {loading ? <SkeletonList rows={2} avatar={true} /> : null}
           {!loading && pending.length === 0 ? (
             <Empty>{"No one is waiting for approval."}</Empty>
           ) : null}
@@ -159,7 +160,7 @@ const PeopleTab = ({ course, canManage, schoolId }) => {
         </span>
       </h3>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonList rows={4} avatar={true} /> : null}
       {/* Row level security only returns the full roster to the course's own
           tutor or an admin, so explain an empty list rather than implying
           nobody has joined. */}

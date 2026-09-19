@@ -27,6 +27,7 @@ import {
   Empty,
   Select,
   displayName,
+  SkeletonCards,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -239,7 +240,7 @@ const ClassesPanel = () => {
       <div className="split" style={{ alignItems: "start" }}>
         <div>
           <h3>{"Classes"}</h3>
-          {loading ? <Empty>{"Loading..."}</Empty> : null}
+          {loading ? <SkeletonCards count={3} lines={2} /> : null}
           {!loading && classes.length === 0 ? (
             <Empty>{"No classes yet."}</Empty>
           ) : null}

@@ -53,6 +53,9 @@ import {
   initials,
   bandClass,
   formatDate,
+  SkeletonTable,
+  SkeletonText,
+  SkeletonList,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -519,7 +522,7 @@ const PeoplePanel = () => {
         </Card>
       ) : null}
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={6} cols={4} /> : null}
       {!loading && filtered.length === 0 ? <Empty>{"Nobody matches."}</Empty> : null}
 
       {filtered.length > 0 ? (
@@ -740,7 +743,7 @@ const SettingsPanel = () => {
     }
   };
 
-  if (!school) return <Empty>{"Loading..."}</Empty>;
+  if (!school) return <SkeletonText lines={8} />;
 
   if (previewStatus) {
     const enrolled = previewStatus === "enrolled";
@@ -1234,7 +1237,7 @@ const MailboxesPanel = () => {
         />
       ) : null}
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonList rows={3} avatar={false} /> : null}
       {!loading && mailboxes.length === 0 ? <Empty>{"No mailbox connected yet."}</Empty> : null}
 
       {mailboxes.map((mb) => (

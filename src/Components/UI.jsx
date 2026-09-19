@@ -775,6 +775,92 @@ export const ChecklistBox = ({ title, children }) => (
 
 export const Empty = ({ children }) => <div className="empty">{children}</div>;
 
+// ---- Skeleton loaders --------------------------------------------------
+// One shape per thing a page is about to show — a stat tile, a table row, a
+// card, a list row — so loading reads as "the page is arriving" instead of
+// a spinner or a bare "Loading..." string with no sense of what's coming.
+// `aria-hidden` throughout: a screen reader has nothing useful to read out
+// of a shape that isn't there yet; `role="status"`/label lives on whichever
+// wrapper the page itself already announces loading with.
+
+// A single block — a line of text, an avatar, anything rectangular.
+// `width` takes any CSS width (e.g. "60%", "120px"); defaults fill their container.
+export const Skeleton = ({ width, height = 14, radius, style, className = "" }) => (
+  <span
+    aria-hidden="true"
+    className={`skeleton ${className}`}
+    style={{ width: width ?? "100%", height, borderRadius: radius, ...style }}
+  />
+);
+
+// Stacked lines of decreasing width — reads like a paragraph or a heading
+// plus caption, rather than identical bars.
+export const SkeletonText = ({ lines = 3, lastLineWidth = "60%" }) => (
+  <div className="skeleton-text" aria-hidden="true">
+    {Array.from({ length: lines }).map((_, i) => (
+      <Skeleton key={i} width={i === lines - 1 ? lastLineWidth : "100%"} />
+    ))}
+  </div>
+);
+
+// Matches StatRow's own .stat-row/.stat grid exactly, so the transition
+// from skeleton to real numbers doesn't shift the layout at all.
+export const SkeletonStatRow = ({ count = 4 }) => (
+  <div className="skeleton-stat-row" aria-hidden="true">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="skeleton-stat">
+        <Skeleton width="50%" height={12} />
+        <Skeleton width="70%" height={24} />
+      </div>
+    ))}
+  </div>
+);
+
+// Matches table.data's own row height/padding — drop straight in wherever
+// a page currently renders <Empty>{"Loading..."}</Empty> in place of a
+// <table class="data">.
+export const SkeletonTable = ({ rows = 5, cols = 4 }) => (
+  <div className="table-wrap" aria-hidden="true">
+    <table className="data">
+      <tbody>
+        {Array.from({ length: rows }).map((_, r) => (
+          <tr key={r}>
+            {Array.from({ length: cols }).map((_, c) => (
+              <td key={c}><Skeleton /></td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+// A grid of card-shaped blocks — for a page whose loaded content is a
+// .grid of .card elements (feature/summary cards, not a table).
+export const SkeletonCards = ({ count = 4, lines = 2 }) => (
+  <div className="skeleton-card-grid" aria-hidden="true">
+    {Array.from({ length: count }).map((_, i) => (
+      <div key={i} className="skeleton-card">
+        <Skeleton width="60%" height={16} />
+        <SkeletonText lines={lines} />
+      </div>
+    ))}
+  </div>
+);
+
+// A vertical list of avatar+text rows — notices, chat messages, tickets,
+// anything that reads top-to-bottom as one item per row rather than a table.
+export const SkeletonList = ({ rows = 4, avatar = true }) => (
+  <div aria-hidden="true">
+    {Array.from({ length: rows }).map((_, i) => (
+      <div key={i} className="skeleton-list-row">
+        {avatar ? <Skeleton width={34} height={34} radius={999} style={{ flex: "none" }} /> : null}
+        <SkeletonText lines={2} lastLineWidth="40%" />
+      </div>
+    ))}
+  </div>
+);
+
 // A row of tabs that can outgrow its width — School Administration alone has
 // nine of them. Rather than leave the browser's own scrollbar as the only
 // sign there's more, this tracks which edge still has something to scroll to

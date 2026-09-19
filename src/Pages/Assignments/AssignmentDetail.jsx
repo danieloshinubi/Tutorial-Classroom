@@ -21,6 +21,8 @@ import {
   Empty,
   displayName,
   formatDate,
+  SkeletonText,
+  SkeletonCards,
 } from "../../Components/UI";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 import { useActionFeedback } from "../../Components/Toast";
@@ -191,7 +193,7 @@ const SubmitPanel = ({ assignment, userId }) => {
     }
   };
 
-  if (loading) return <Empty>{"Loading your submission..."}</Empty>;
+  if (loading) return <Card style={{ maxWidth: "640px" }}><SkeletonText lines={4} /></Card>;
 
   const isGraded = submission && submission.grade !== null;
 
@@ -347,7 +349,7 @@ const GradePanel = ({ assignment, graderId }) => {
     }
   };
 
-  if (loading) return <Empty>{"Loading submissions..."}</Empty>;
+  if (loading) return <SkeletonCards count={3} lines={3} />;
 
   return (
     <>
@@ -491,7 +493,7 @@ const AssignmentDetail = () => {
     <div className="shell">
       <Navbar />
       <Page title={assignment?.title || "Assignment"}>
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonText lines={4} /> : null}
 
         {assignment ? (
           <>

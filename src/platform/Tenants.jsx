@@ -13,6 +13,7 @@ import {
   Badge,
   Empty,
   formatDate,
+  SkeletonTable,
 } from "../Components/UI";
 import { downloadCsv } from "../lib/csv";
 import { useActionFeedback } from "../Components/Toast";
@@ -213,7 +214,7 @@ const Tenants = () => {
         />
       </div>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={6} cols={8} /> : null}
       {!loading && filtered.length === 0 ? (
         <Empty>{tenants.length ? "No school matches." : "No schools yet."}</Empty>
       ) : null}

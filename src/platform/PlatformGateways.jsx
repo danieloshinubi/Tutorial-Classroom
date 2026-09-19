@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchPlatformGateways } from "../lib/platformApi";
-import { Page, Card, Badge, Empty, Select, Modal, Button, formatDate } from "../Components/UI";
+import { Page, Card, Badge, Empty, Select, Modal, Button, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import { downloadCsv } from "../lib/csv";
 
@@ -83,7 +83,7 @@ const PlatformGateways = () => {
         </div>
       }
     >
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={6} cols={6} /> : null}
       {!loading && filtered.length === 0 ? <Empty>{"No gateway matches."}</Empty> : null}
 
       {filtered.length > 0 ? (

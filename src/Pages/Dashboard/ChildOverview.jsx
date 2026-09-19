@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   Empty,
+  SkeletonList,
   displayName,
   initials,
   formatDate,
@@ -149,7 +150,7 @@ const ChildOverview = ({ child, relationship, schoolId }) => {
         </Link>
       </div>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonList rows={3} avatar={false} /> : null}
 
       {!loading && courses.length === 0 ? (
         <Empty>{"Not enrolled in any course yet."}</Empty>

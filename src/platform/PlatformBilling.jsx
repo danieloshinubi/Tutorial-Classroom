@@ -8,7 +8,7 @@ import {
   BILLING_STATUSES,
   PLANS,
 } from "../lib/platformApi";
-import { Page, Card, Badge, Empty, Select, Modal, Button, Field, MoneyInput, formatDate } from "../Components/UI";
+import { Page, Card, Badge, Empty, Select, Modal, Button, Field, MoneyInput, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import { downloadCsv } from "../lib/csv";
 
@@ -194,7 +194,7 @@ const PlatformBilling = () => {
         </div>
       }
     >
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={6} cols={6} /> : null}
       {!loading && filtered.length === 0 ? <Empty>{"No billing records match."}</Empty> : null}
 
       {filtered.length > 0 ? (

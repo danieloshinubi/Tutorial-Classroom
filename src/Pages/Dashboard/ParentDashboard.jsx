@@ -15,6 +15,7 @@ import {
   Badge,
   Button,
   Empty,
+  SkeletonCards,
   displayName,
   formatDate,
 } from "../../Components/UI";
@@ -71,7 +72,7 @@ const ParentDashboard = () => {
       title={`Welcome back, ${profile ? displayName(profile) : ""}`}
       subtitle={school ? school.name : undefined}
     >
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonCards count={3} lines={3} /> : null}
 
       <section>
         <h2 style={{ fontSize: 19, marginTop: 8 }}>

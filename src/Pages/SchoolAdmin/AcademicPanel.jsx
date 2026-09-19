@@ -9,7 +9,7 @@ import {
   deleteTerm,
   setCurrentTerm,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Notice, Empty, formatDate, Select, DatePicker } from "../../Components/UI";
+import { Card, Field, Button, Badge, Notice, Empty, formatDate, Select, DatePicker, SkeletonCards } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 // A school runs sessions made of terms. Fees, results and attendance are all
@@ -169,7 +169,7 @@ const AcademicPanel = () => {
       <div className="split" style={{ alignItems: "start" }}>
         <div>
           <h3>{"Sessions"}</h3>
-          {loading ? <Empty>{"Loading..."}</Empty> : null}
+          {loading ? <SkeletonCards count={3} lines={3} /> : null}
           {!loading && sessions.length === 0 ? (
             <Empty>{"No sessions yet. Add one to begin."}</Empty>
           ) : null}

@@ -14,6 +14,7 @@ import {
   Badge,
   Empty,
   Select,
+  SkeletonList,
   displayName,
   initials,
 } from "../../Components/UI";
@@ -128,7 +129,7 @@ const GuardiansPanel = () => {
         {"Choose which children each parent account can see. A parent with no children linked sees nothing at all."}
       </p>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonList rows={4} avatar={true} /> : null}
 
       {!loading && parents.length === 0 ? (
         <Empty>

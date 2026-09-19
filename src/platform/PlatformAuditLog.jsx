@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { fetchPlatformAuditLog } from "../lib/platformApi";
-import { Page, Card, Badge, Empty, Button, formatDate } from "../Components/UI";
+import { Page, Card, Badge, Empty, Button, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import { downloadCsv } from "../lib/csv";
 
@@ -46,7 +46,7 @@ const PlatformAuditLog = () => {
       subtitle="What this console's own actions have changed, across every school"
       action={<Button variant="secondary" disabled={!rows.length} onClick={exportCsv}>{"Export CSV"}</Button>}
     >
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={8} cols={6} /> : null}
       {!loading && rows.length === 0 ? <Empty>{"Nothing recorded yet."}</Empty> : null}
 
       {rows.length > 0 ? (

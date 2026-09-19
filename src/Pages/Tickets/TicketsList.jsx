@@ -9,7 +9,7 @@ import {
   createTicket,
   updateTicket,
 } from "../../lib/api";
-import { Page, Button, Empty, Select, displayName, initials } from "../../Components/UI";
+import { Page, Button, Empty, Select, SkeletonList, displayName, initials } from "../../Components/UI";
 import { useLiveTicketsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -309,7 +309,7 @@ const TicketsList = () => {
 
           <div className="tix-body">
             <div className="tix-list">
-              {loading ? <Empty>{"Loading..."}</Empty> : null}
+              {loading ? <SkeletonList rows={5} avatar={true} /> : null}
               {!loading && tickets.length === 0 ? (
                 <Empty>{"Nothing here. Everyone's caught up."}</Empty>
               ) : null}

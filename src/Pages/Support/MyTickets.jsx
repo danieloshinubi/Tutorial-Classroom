@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchTickets, createTicket, fetchTicketGroups } from "../../lib/api";
-import { Page, Card, Field, Button, Badge, Empty, Select, formatDate } from "../../Components/UI";
+import { Page, Card, Field, Button, Badge, Empty, SkeletonList, Select, formatDate } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 const STATUS_TONE = { open: "brand", pending: "warn", resolved: "success", closed: undefined };
@@ -128,7 +128,7 @@ const MyTickets = () => {
       >
         {showNew ? <NewTicketForm groups={groups} onCreate={handleCreate} onCancel={() => setShowNew(false)} /> : null}
 
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonList rows={4} avatar={false} /> : null}
         {!loading && tickets.length === 0 ? (
           <Empty>{"You haven't raised anything yet."}</Empty>
         ) : null}

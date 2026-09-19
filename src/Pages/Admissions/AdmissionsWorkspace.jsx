@@ -42,6 +42,8 @@ import {
   Select,
   DateTimePicker,
   Modal,
+  SkeletonStatRow,
+  SkeletonText,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
@@ -205,7 +207,15 @@ const AdmissionsWorkspace = () => {
       <div className="shell">
         <Navbar />
         <Page>
-          <Empty>{"Loading workspace..."}</Empty>
+          <Card style={{ marginBottom: 16 }}>
+            <SkeletonStatRow count={6} />
+          </Card>
+          <Card style={{ marginBottom: 16 }}>
+            <SkeletonText lines={5} />
+          </Card>
+          <Card>
+            <SkeletonText lines={4} />
+          </Card>
         </Page>
       </div>
     );

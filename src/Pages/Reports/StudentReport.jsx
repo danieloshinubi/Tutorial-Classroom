@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { Icon } from "react-icons-kit";
+import { printer } from "react-icons-kit/feather/printer";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
@@ -174,7 +176,8 @@ const StudentReport = () => {
         title={name}
         subtitle={`Report across ${report.courses.length} course${report.courses.length === 1 ? "" : "s"}`}
         action={
-          <Button variant="secondary" onClick={() => window.print()}>
+          <Button onClick={() => window.print()} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <Icon icon={printer} size={16} />
             {"Print"}
           </Button>
         }

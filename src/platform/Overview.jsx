@@ -6,7 +6,7 @@ import {
   fetchPlatformGateways,
   fetchPlatformMailboxHealth,
 } from "../lib/platformApi";
-import { Page, Card, Empty, Badge, Button, formatDate } from "../Components/UI";
+import { Page, Card, Badge, Button, formatDate, SkeletonStatRow, SkeletonTable } from "../Components/UI";
 import { StatRow } from "../Components/Charts";
 import { useActionFeedback } from "../Components/Toast";
 import ExtendTrialModal from "./ExtendTrialModal";
@@ -64,7 +64,12 @@ const Overview = () => {
 
   return (
     <Page title="Platform" subtitle="Every school on Schoolivio">
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? (
+        <>
+          <SkeletonStatRow count={4} />
+          <SkeletonTable rows={6} cols={6} />
+        </>
+      ) : null}
 
       {stats ? (
         <StatRow

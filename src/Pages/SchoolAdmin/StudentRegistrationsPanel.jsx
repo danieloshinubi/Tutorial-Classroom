@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchStudentRegistrations, updateStudentRegistration } from "../../lib/api";
-import { Card, Button, Badge, Empty, formatDate, displayName, Select } from "../../Components/UI";
+import { Card, Button, Badge, Empty, formatDate, displayName, Select, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 const STATUS_LABEL = {
@@ -106,7 +106,7 @@ const StudentRegistrationsPanel = () => {
         />
       </div>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={6} cols={7} /> : null}
       {!loading && rows.length === 0 ? (
         <Empty>{"Nobody has been registered yet — that happens from an accepted, cleared application's workspace."}</Empty>
       ) : null}

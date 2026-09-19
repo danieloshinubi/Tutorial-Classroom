@@ -16,6 +16,7 @@ import {
   Badge,
   Empty,
   formatDate,
+  SkeletonCards,
 } from "../../Components/UI";
 
 // One row per application the signed-in applicant holds against this
@@ -74,7 +75,7 @@ const Applications = () => {
           </Link>
         }
       >
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonCards count={4} lines={2} /> : null}
 
         {!loading && !account ? (
           <Card style={{ maxWidth: 640 }}>

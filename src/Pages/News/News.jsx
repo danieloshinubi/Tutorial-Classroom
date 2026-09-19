@@ -25,6 +25,7 @@ import {
   Badge,
   Empty,
   Select,
+  SkeletonCards,
   DateTimePicker,
   displayName,
   formatDate,
@@ -577,7 +578,7 @@ const News = () => {
           </Card>
         ) : null}
 
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonCards count={3} lines={3} /> : null}
         {!loading && notices.length === 0 ? (
           <Empty>
             {canPost

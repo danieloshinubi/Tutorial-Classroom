@@ -15,7 +15,7 @@ import {
   upsertDocumentRequirement,
   deleteDocumentRequirement,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput, Select } from "../../Components/UI";
+import { Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput, Select, SkeletonText, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import ClearanceDepartmentsPanel from "./ClearanceDepartmentsPanel";
 
@@ -108,7 +108,13 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
     }
   };
 
-  if (loading) return <Empty>{"Loading..."}</Empty>;
+  if (loading) return (
+    <>
+      <Card style={{ marginBottom: 16, maxWidth: 640 }}><SkeletonText lines={4} /></Card>
+      <Card style={{ marginBottom: 16, maxWidth: 640 }}><SkeletonText lines={3} /></Card>
+      <Card style={{ marginBottom: 16, maxWidth: 640 }}><SkeletonText lines={5} /></Card>
+    </>
+  );
 
   return (
     <form onSubmit={save}>
@@ -291,7 +297,7 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
         </form>
       </Card>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={4} cols={5} /> : null}
       {!loading && rows.length === 0 ? <Empty>{"No programmes yet for this session."}</Empty> : null}
 
       {rows.length > 0 ? (
@@ -420,7 +426,7 @@ const ChecklistPanel = ({
         </form>
       </Card>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={4} cols={4} /> : null}
       {!loading && rows.length === 0 ? (
         <Empty>{`No ${title.toLowerCase()} configured — none of this is required until you add at least one.`}</Empty>
       ) : null}

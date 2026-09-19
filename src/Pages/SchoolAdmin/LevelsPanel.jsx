@@ -7,7 +7,7 @@ import {
   deleteLevel,
   countCoursesOnLevel,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Empty } from "../../Components/UI";
+import { Card, Field, Button, Badge, Empty, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 // Suggestions only — a school picks whatever it actually calls its classes.
@@ -214,7 +214,7 @@ const LevelsPanel = () => {
       </Card>
       </div>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={5} cols={4} /> : null}
       {!loading && levels.length === 0 ? (
         <Empty>{"No class levels yet. Add one above before creating courses."}</Empty>
       ) : null}

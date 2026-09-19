@@ -41,6 +41,10 @@ import {
   DatePicker,
   displayName,
   formatDate,
+  SkeletonStatRow,
+  SkeletonTable,
+  SkeletonCards,
+  SkeletonList,
 } from "../../Components/UI";
 import { StatRow } from "../../Components/Charts";
 
@@ -919,7 +923,17 @@ const Bursary = () => {
         }
       >
 
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading && tab === "overview" ? (
+          <>
+            <div className="panel-top">
+              <SkeletonStatRow count={4} />
+            </div>
+            <SkeletonTable rows={5} cols={7} />
+          </>
+        ) : null}
+        {loading && tab === "structures" ? <SkeletonCards count={3} lines={3} /> : null}
+        {loading && tab === "invoices" ? <SkeletonTable rows={5} cols={7} /> : null}
+        {loading && tab === "queue" ? <SkeletonList rows={4} avatar={false} /> : null}
 
         {!loading && tab === "overview" ? (
           <Overview summary={summary} debtors={debtors} money={money} termName={termName} />

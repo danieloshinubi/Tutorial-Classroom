@@ -17,6 +17,8 @@ import {
   Button,
   Badge,
   Empty,
+  SkeletonTable,
+  SkeletonCards,
   displayName,
   formatDate,
 } from "../../Components/UI";
@@ -35,7 +37,7 @@ const ProctorLog = ({ attemptId, schoolId }) => {
       .finally(() => setLoading(false));
   }, [attemptId, schoolId]);
 
-  if (loading) return <Empty>{"Loading activity..."}</Empty>;
+  if (loading) return <SkeletonTable rows={4} cols={3} />;
   if (events.length === 0) return <Empty>{"No activity recorded."}</Empty>;
 
   return (
@@ -119,7 +121,7 @@ const AttemptDetail = ({ attempt, schoolId, onGraded }) => {
     }
   };
 
-  if (loading) return <Empty>{"Loading paper..."}</Empty>;
+  if (loading) return <SkeletonCards count={4} lines={3} />;
 
   return (
     <div style={{ marginTop: 14 }}>
@@ -229,7 +231,7 @@ const ExamResults = () => {
           ) : null
         }
       >
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonCards count={4} lines={2} /> : null}
 
         {!loading && attempts.length === 0 ? (
           <Empty>{"Nobody has sat this exam yet."}</Empty>

@@ -27,6 +27,9 @@ import {
   MoneyInput,
   Section,
   formatDate,
+  SkeletonStatRow,
+  SkeletonText,
+  SkeletonList,
 } from "../Components/UI";
 import { StatRow } from "../Components/Charts";
 import { useActionFeedback } from "../Components/Toast";
@@ -163,7 +166,7 @@ const BillingSection = ({ schoolId, currency }) => {
         {"A manual ledger — not automated billing. This school is never charged from here; it's a record of what was invoiced and whether it was paid."}
       </p>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonList rows={3} avatar={false} /> : null}
       {!loading && records.length === 0 ? <Empty>{"Nothing recorded yet."}</Empty> : null}
 
       {records.length > 0 ? (
@@ -353,8 +356,16 @@ const TenantDetail = () => {
 
   if (loading) {
     return (
-      <Page>
-        <Empty>{"Loading school..."}</Empty>
+      <Page title="School">
+        <SkeletonStatRow count={4} />
+        <div className="split" style={{ marginTop: 26 }}>
+          <Card>
+            <SkeletonText lines={8} />
+          </Card>
+          <Card>
+            <SkeletonText lines={4} />
+          </Card>
+        </div>
       </Page>
     );
   }

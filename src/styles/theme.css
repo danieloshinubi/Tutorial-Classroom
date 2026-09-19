@@ -1128,6 +1128,63 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 .notice.success { color: var(--success); }
 .notice.muted { color: var(--ink-3); }
 
+/* ==========================================================================
+   Skeleton loaders — Components/UI.jsx's Skeleton/SkeletonText/SkeletonTable/
+   SkeletonCards/SkeletonStatRow/SkeletonList. Replace a page's own content
+   with shapes matching what's about to render (a stat tile, a table row, a
+   card) instead of a spinner or a bare "Loading..." string, so a person
+   sees the shape of the page arriving rather than a blank wait with no
+   sense of what's coming or how much of it there is.
+   ========================================================================== */
+.skeleton {
+  display: block;
+  border-radius: var(--r-sm);
+  background: linear-gradient(100deg, var(--line) 30%, var(--bg) 50%, var(--line) 70%);
+  background-size: 300% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; background: var(--line); }
+}
+
+.skeleton-text { display: flex; flex-direction: column; gap: 9px; }
+
+.skeleton-stat-row {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-bottom: 22px;
+}
+.skeleton-stat {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.skeleton-table-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 10px; border-bottom: 1px solid var(--line);
+}
+.skeleton-table-row:last-child { border-bottom: none; }
+.skeleton-table-row .skeleton { flex: 1 1 0; min-width: 0; }
+
+.skeleton-card-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+.skeleton-card {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-lg); padding: 18px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.skeleton-list-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 13px 0; border-bottom: 1px solid var(--line);
+}
+.skeleton-list-row:last-child { border-bottom: none; }
+.skeleton-list-row .skeleton-text { flex: 1; }
+
 .empty {
   color: var(--ink-3);
   font-size: 14.5px;

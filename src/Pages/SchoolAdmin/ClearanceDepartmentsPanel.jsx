@@ -8,7 +8,7 @@ import {
   deleteClearanceDepartment,
   countClearanceChecklistItems,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Empty } from "../../Components/UI";
+import { Card, Field, Button, Badge, Empty, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 // Who has to sign off before an accepted applicant clears — Bursary, the
@@ -144,7 +144,7 @@ const ClearanceDepartmentsPanel = () => {
         </form>
       </Card>
 
-      {loading ? <Empty>{"Loading..."}</Empty> : null}
+      {loading ? <SkeletonTable rows={5} cols={4} /> : null}
       {!loading && rows.length === 0 ? (
         <Empty>{"No clearance departments yet — every accepted applicant will pass clearance automatically until you add one."}</Empty>
       ) : null}

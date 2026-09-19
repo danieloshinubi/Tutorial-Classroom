@@ -22,6 +22,8 @@ import {
   Button,
   Select,
   formatDate,
+  SkeletonCards,
+  SkeletonTable,
 } from "../../Components/UI";
 import { useLiveApplicationsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
@@ -213,7 +215,7 @@ const AdmissionsQueues = () => {
         </Card>
         </div>
 
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonCards count={4} lines={2} /> : null}
 
         {!loading && totalOpen === 0 ? (
           <Empty>{"Queues are empty. Nothing needs action right now."}</Empty>
@@ -288,6 +290,8 @@ const AdmissionsQueues = () => {
               ]}
             />
           </div>
+
+          {loading ? <SkeletonTable rows={5} cols={6} /> : null}
 
           {!loading && applications.length === 0 ? (
             <Empty>{"No applications yet. Share the link above and they will appear here."}</Empty>

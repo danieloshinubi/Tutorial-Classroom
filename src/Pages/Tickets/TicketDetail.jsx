@@ -15,7 +15,7 @@ import {
   fetchSchoolMembers,
   fetchTicketGroupHistory,
 } from "../../lib/api";
-import { Page, Empty, Select, displayName, initials, formatDate } from "../../Components/UI";
+import { Page, Select, SkeletonList, displayName, initials, formatDate } from "../../Components/UI";
 import { useLiveTicketThreadUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -234,7 +234,7 @@ const TicketDetail = () => {
     return (
       <div className="shell">
         <Navbar />
-        <Page wide><Empty>{"Loading ticket..."}</Empty></Page>
+        <Page wide><SkeletonList rows={4} avatar={true} /></Page>
       </div>
     );
   }

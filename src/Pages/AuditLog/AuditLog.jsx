@@ -13,6 +13,7 @@ import {
   formatDate,
   Select,
   DateTimePicker,
+  SkeletonList,
 } from "../../Components/UI";
 
 const ACTION_VERB = { INSERT: "Created", UPDATE: "Updated", DELETE: "Deleted" };
@@ -296,7 +297,7 @@ const AuditLog = () => {
           {count > 0 ? `${count.toLocaleString()} recorded action${count === 1 ? "" : "s"}` : ""}
         </p>
 
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <SkeletonList rows={6} avatar={false} /> : null}
         {!loading && rows.length === 0 ? (
           <Empty>{hasFilters ? "Nothing matches those filters." : "Nothing recorded yet."}</Empty>
         ) : null}

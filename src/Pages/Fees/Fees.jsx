@@ -27,6 +27,8 @@ import {
   DatePicker,
   displayName,
   formatDate,
+  SkeletonStatRow,
+  SkeletonCards,
 } from "../../Components/UI";
 import { StatRow } from "../../Components/Charts";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
@@ -158,7 +160,12 @@ const Fees = () => {
           isParent ? "What your children owe, and what you have paid" : "Your school fees"
         }
       >
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? (
+          <>
+            <SkeletonStatRow count={4} />
+            <SkeletonCards count={3} lines={3} />
+          </>
+        ) : null}
 
         {!loading && invoices.length === 0 ? (
           <Empty>
