@@ -350,6 +350,8 @@ const PLANS = [
     features: [
       "Everything in Growth",
       "Unlimited students",
+      "Schoolivio Chat — messaging across your whole tenant",
+      "Schoolivio Meet — built-in video conferencing",
       "Dedicated onboarding",
       "Priority support",
     ],
