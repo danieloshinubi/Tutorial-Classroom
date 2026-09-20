@@ -363,21 +363,6 @@ const Nav = () => {
   const [slug, setSlug] = useState("");
   const [checking, setChecking] = useState(false);
   const [notFound, setNotFound] = useState("");
-  const [hidden, setHidden] = useState(false);
-  const lastScrollY = useRef(0);
-
-  useEffect(() => {
-    const onScroll = () => {
-      const current = window.scrollY;
-      const delta = current - lastScrollY.current;
-      if (current < 90) setHidden(false);
-      else if (delta > 4) setHidden(true);
-      else if (delta < -4) setHidden(false);
-      lastScrollY.current = current;
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   const goToLogin = async (e) => {
     e.preventDefault();
@@ -402,7 +387,7 @@ const Nav = () => {
 
   return (
     <div className="mkt-nav-wrap">
-      <header className={`mkt-nav${hidden ? " hidden" : ""}`}>
+      <header className="mkt-nav">
         <Link to="/" className="mkt-nav-logo">
           <Mark size={22} />{"Schoolivio"}
         </Link>

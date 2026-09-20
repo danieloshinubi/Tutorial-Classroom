@@ -5,6 +5,19 @@
    Schoolivio's purple brand, not Topiadesk's orange.
    ───────────────────────────────────────────────────────────────────────── */
 
+/* Horizontal-scroll guard belongs on the real document scrolling box, not
+   on .mkt itself: overflow-x set on a plain wrapper div forces the browser
+   to compute its overflow-y as "auto" too (a CSS spec quirk — one axis
+   can't stay "visible" once the other isn't), which turns .mkt into a
+   scroll container of its own. That silently breaks position:sticky for
+   anything inside it, .mkt-nav-wrap included: sticky positions against the
+   nearest scrolling ancestor, so the nav would stick to the top of .mkt's
+   own (never-actually-scrolling) box instead of the viewport, and the
+   hide-on-scroll nav below would never stay pinned in view. :has() scopes
+   this to only the marketing page, without touching body for the rest of
+   the app.               */
+body:has(.mkt) { overflow-x: hidden; }
+
 .mkt {
   /* Brand */
   --mkt-brand:        #7c4fe0;
@@ -39,7 +52,6 @@
   font-family: "Poppins", system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--mkt-ink);
   background: var(--mkt-cream);
-  overflow-x: hidden;
 }
 
 .mkt * { box-sizing: border-box; }
@@ -52,8 +64,10 @@
 @media (min-width: 640px) { .mkt-wrap-lg { padding: 0 32px; } }
 
 /* ─────────────────────────────────────────────────────────────────── nav ── */
-/* Auto-hide pill nav — same behaviour as Topiadesk: always visible near top,
-   slides out on scroll-down, back in on scroll-up. */
+/* Sticky pill nav — same behaviour as Topiadesk: pins to the top of the
+   viewport once scrolled past it, and stays visible there for the rest of
+   the page (verified directly against topiadesk.com — its header never
+   hides on scroll-down, at any scroll depth). */
 .mkt-nav-wrap {
   position: sticky; top: 0; z-index: 50;
   padding: 12px 16px 0;
@@ -70,9 +84,7 @@
   box-shadow: 0 10px 35px rgba(0,0,0,.14);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  transition: transform .4s cubic-bezier(.22,1,.36,1), opacity .4s ease;
 }
-.mkt-nav.hidden { transform: translateY(-110%); opacity: 0; }
 
 .mkt-nav-logo {
   display: flex; align-items: center; gap: 9px;
