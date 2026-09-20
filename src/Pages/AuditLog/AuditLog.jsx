@@ -110,7 +110,7 @@ const AuditRow = ({ row }) => {
             {formatDate(row.created_at, { withTime: true })}
             {row.ip_address ? ` · ${row.ip_address}` : ""}
             {row.country ? ` (${row.country})` : ""}
-          </div>
+          </div>  
         </div>
         <Button size="sm" variant="secondary" onClick={() => setOpen((v) => !v)}>
           {open ? "Hide detail" : "See detail"}
