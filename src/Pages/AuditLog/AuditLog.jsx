@@ -100,7 +100,7 @@ const AuditRow = ({ row }) => {
         <div>
           <div className="btn-row" style={{ marginBottom: 6, flexWrap: "wrap" }}>
             <Badge tone={ACTION_TONE[row.action]}>{row.action}</Badge>
-            <strong>{describe(row)}</strong>
+            <strong>{describe(row)}</strong>  
           </div>
           <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
             {row.actor_label}
