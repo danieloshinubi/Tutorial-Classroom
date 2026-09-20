@@ -465,9 +465,10 @@ const Hero = () => {
 
   return (
     <section className="mkt-hero">
+      <div className="mkt-hero-glow" aria-hidden="true" />
       <div className="mkt-wrap">
         <span className="mkt-chip"><span className="mkt-chip-dot" />{"School operations, simplified"}</span>
-        <h1>{"Run your entire school year in one calm workspace"}</h1>
+        <h1>{"Run your entire school year in "}<span className="mkt-grad">{"one calm workspace"}</span></h1>
         <p className="mkt-hero-sub">
           {"Admissions, fees, exams and results in one place — built for how your school actually runs, not the other way round."}
         </p>
