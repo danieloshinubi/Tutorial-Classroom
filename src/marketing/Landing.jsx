@@ -311,7 +311,7 @@ const PLANS = [
     key: "starter",
     name: "Starter",
     tagline: "For a single school finding its feet online.",
-    price: "₦25,000",
+    price: "₦450,000",
     period: "/month",
     note: "Billed monthly · up to 200 students",
     features: [
@@ -326,7 +326,7 @@ const PLANS = [
     key: "growth",
     name: "Growth",
     tagline: "For a school running its whole year on one platform.",
-    price: "₦65,000",
+    price: "₦950,000",
     period: "/month",
     note: "Billed monthly · up to 800 students",
     features: [

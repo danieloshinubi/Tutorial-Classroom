@@ -55,7 +55,18 @@ body:has(.mkt) { overflow-x: hidden; }
 }
 
 .mkt * { box-sizing: border-box; }
-.mkt a { text-decoration: none; color: inherit; }
+/* color: inherit is only meant for plain inline text links (nav dropdown
+   items, footer links) so they don't turn the browser's default blue —
+   scoped off .mkt-btn so it can't beat a button's own color rule. Both
+   selectors tie at (0,1,1) specificity with .mkt-btn-ghost-dark/.mkt-btn-
+   primary's (0,1,0), and .mkt a happens to come first in the cascade, so
+   without this exclusion every button rendered as an <a> (every CTA on
+   this page) loses its own text colour to whatever it inherits from its
+   section — invisible white-on-white or, worse, black-on-black on the
+   dark panels, confirmed live (computed color was rgb(17,17,17) on a
+   solid #111 background). */
+.mkt a { text-decoration: none; }
+.mkt a:not(.mkt-btn):not(.mkt-btn-dark-primary) { color: inherit; }
 .mkt img { max-width: 100%; display: block; }
 .mkt button { font-family: inherit; }
 
