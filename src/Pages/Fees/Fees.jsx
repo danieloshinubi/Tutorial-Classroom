@@ -14,6 +14,7 @@ import {
   startOnlinePayment,
   PAYMENT_METHODS,
 } from "../../lib/api";
+import { openPaystackPopup } from "../../lib/paystack";
 import {
   Page,
   Card,
@@ -254,11 +255,18 @@ const InvoiceCard = ({
     onError("");
     setPayingOnline(true);
     try {
-      const { authorizationUrl } = await startOnlinePayment({
+      const { authorizationUrl, reference } = await startOnlinePayment({
         invoiceId: invoice.invoice_id,
       });
-      window.location.href = authorizationUrl;
+      const tx = await openPaystackPopup(authorizationUrl);
+      // Webhook credits the invoice; redirect to the return page so it can
+      // poll for the payment row and show a confirmed receipt.
+      window.location.href = `/Fees/Paid?reference=${tx.reference || reference}&trxref=${tx.reference || reference}`;
     } catch (err) {
+      if (err?.message === "cancelled") {
+        setPayingOnline(false);
+        return;
+      }
       onError(err.message || "Could not start that payment.");
       setPayingOnline(false);
     }

@@ -28,6 +28,7 @@ import {
   fetchMyApplicationScreening,
   fetchMyApplicationLetter,
 } from "../../lib/api";
+import { openPaystackPopup } from "../../lib/paystack";
 import {
   Page,
   Card,
@@ -596,9 +597,16 @@ const ApplicationDashboard = () => {
     setPayingOnline(true);
     try {
       await markApplicationPaymentInitiated(application.id);
-      const { authorizationUrl } = await startOnlinePayment({ invoiceId: targetInvoice.id });
-      window.location.href = authorizationUrl;
+      const { authorizationUrl, reference } = await startOnlinePayment({ invoiceId: targetInvoice.id });
+      const tx = await openPaystackPopup(authorizationUrl);
+      window.location.href = `/Fees/Paid?reference=${tx.reference || reference}&trxref=${tx.reference || reference}`;
     } catch (err) {
+      // User closed the Paystack popup — revert state silently.
+      if (err?.message === "cancelled") {
+        try { setApplication(await cancelApplicationPayment(application.id)); } catch { /* best effort */ }
+        setPayingOnline(false);
+        return;
+      }
       setError(err.message || "Could not start that payment.");
       // The attempt never reached the gateway — leaving payment_state at
       // "processing" here is exactly how it gets stuck forever. Revert so
