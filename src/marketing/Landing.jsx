@@ -651,9 +651,9 @@ const Features = () => (
       <div className="mkt-reveal" style={{ textAlign: "center", maxWidth: 650, margin: "0 auto 56px" }}>
         <div className="mkt-eyebrow">{"ONE PLATFORM"}</div>
         <h2 className="mkt-h2" style={{ maxWidth: 560, margin: "0 auto 20px" }}>
-          {"The school stack your staff "}
+          {"The stack your staff "}
           <span className="mkt-underline-wrap">
-            {"actually want to use"}
+            {"actually use"}
             <HandDrawnUnderline color="#7c4fe0" />
           </span>
         </h2>
@@ -694,7 +694,7 @@ const Capabilities = () => {
         <div className="mkt-reveal" style={{ textAlign: "center", maxWidth: 640, margin: "0 auto 56px" }}>
           <div className="mkt-eyebrow">{"CAPABILITIES"}</div>
           <h2 className="mkt-h2" style={{ maxWidth: 560, margin: "0 auto 20px" }}>
-            {"Built for the way schools "}
+            {"Built for how schools "}
             <span className="mkt-underline-wrap">
               {"actually run"}
               <HandDrawnUnderline color="#7c4fe0" />
@@ -765,9 +765,9 @@ const ConfigureSection = () => {
               {"No code, no developer"}
             </span>
             <h2 className="mkt-h2" style={{ maxWidth: 480 }}>
-              {"Not every school works the same — so yours "}
+              {"Your school, "}
               <span className="mkt-underline-wrap">
-                {"doesn't have to"}
+                {"your rules"}
                 <HandDrawnUnderline color="#7c4fe0" />
               </span>
             </h2>
@@ -829,7 +829,7 @@ const Pricing = () => (
     <div className="mkt-wrap">
       <div className="mkt-reveal" style={{ marginBottom: 52 }}>
         <div className="mkt-eyebrow">{"PRICING"}</div>
-        <h2 className="mkt-h2">{"Simple pricing that grows with your school"}</h2>
+        <h2 className="mkt-h2">{"Simple pricing, one platform"}</h2>
         <p className="mkt-lede">
           {"Every plan includes the full platform — admissions, fees, exams, results and the audit trail. Pricing scales with how many students you run it for."}
         </p>
@@ -877,12 +877,12 @@ const FinalCta = () => (
           </div>
 
           <h2 className="mkt-final-h2">
-            {"Give your school a "}
+            {"One "}
             <span className="mkt-underline-wrap">
-              {"calmer"}
+              {"calm workspace"}
               <HandDrawnUnderline color="#7c4fe0" />
             </span>
-            {" place to run its year"}
+            {" for your whole year"}
           </h2>
 
           <p className="mkt-final-sub">
