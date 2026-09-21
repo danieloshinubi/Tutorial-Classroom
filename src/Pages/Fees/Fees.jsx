@@ -255,10 +255,12 @@ const InvoiceCard = ({
     onError("");
     setPayingOnline(true);
     try {
-      const { authorizationUrl } = await startOnlinePayment({
+      const paymentData = await startOnlinePayment({
         invoiceId: invoice.invoice_id,
       });
-      openPaystackPayment(authorizationUrl);
+      // eslint-disable-next-line no-console
+      console.log("[pay-init response]", paymentData);
+      openPaystackPayment(paymentData?.authorizationUrl);
     } catch (err) {
       onError(err.message || "Could not start that payment.");
       setPayingOnline(false);
