@@ -343,6 +343,7 @@ body:has(.mkt) { overflow-x: hidden; }
   box-shadow: 0 15px 40px rgba(0,0,0,.09);
   animation: mkt-float 4.5s ease-in-out infinite;
   display: flex; flex-direction: column; align-items: flex-start;
+  text-align: left;
 }
 .mkt-stat-card.yellow { background: var(--mkt-yellow); }
 .mkt-stat-card.brand  { background: var(--mkt-brand); color: #fff; }
@@ -383,6 +384,7 @@ body:has(.mkt) { overflow-x: hidden; }
   display: flex; align-items: center; gap: 10px;
   animation: mkt-float 4.8s ease-in-out infinite;
   animation-delay: .1s;
+  text-align: left;
 }
 .mkt-notif-icon {
   width: 36px; height: 36px; border-radius: 50%;
@@ -411,11 +413,11 @@ body:has(.mkt) { overflow-x: hidden; }
   font-size: 6px; font-weight: 700;
 }
 
-/* Position helpers for the 4 floating cards — staggered diagonally */
-.mkt-sc-1 { top: 40px;     left: 12px;  width: 176px; }
-.mkt-sc-2 { top: 150px;    right: 12px; width: 176px; }
-.mkt-sc-3 { bottom: 150px; left: 12px;  width: 200px; }
-.mkt-sc-4 { bottom: 32px;  right: 12px; width: 180px; }
+/* Position helpers for the 4 floating cards — paired at same vertical levels */
+.mkt-sc-1 { top: 50px;    left: 12px;  width: 176px; }
+.mkt-sc-2 { top: 50px;    right: 12px; width: 176px; }
+.mkt-sc-3 { bottom: 50px; left: 12px;  width: 200px; }
+.mkt-sc-4 { bottom: 50px; right: 12px; width: 180px; }
 
 @media (max-width: 1000px) {
   .mkt-sc-1, .mkt-sc-2, .mkt-sc-3, .mkt-sc-4 { display: none; }
