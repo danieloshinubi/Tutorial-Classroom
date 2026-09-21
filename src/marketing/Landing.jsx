@@ -66,6 +66,7 @@ function HandDrawnUnderline({ color = "#7c4fe0", className = "" }) {
         stroke={color}
         strokeWidth="5"
         strokeLinecap="round"
+        pathLength="1"
         className="mkt-underline-path"
       />
     </svg>

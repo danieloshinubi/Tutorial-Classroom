@@ -66,7 +66,10 @@ body:has(.mkt) { overflow-x: hidden; }
    dark panels, confirmed live (computed color was rgb(17,17,17) on a
    solid #111 background). */
 .mkt a { text-decoration: none; }
-.mkt a:not(.mkt-btn):not(.mkt-btn-dark-primary) { color: inherit; }
+.mkt a:not(.mkt-btn):not(.mkt-btn-dark-primary):not([class*="mkt-nav-cta"]) { color: inherit; }
+.mkt .mkt-nav-cta,
+.mkt .mkt-btn-primary,
+.mkt .mkt-btn-dark-primary { color: #fff; }
 .mkt img { max-width: 100%; display: block; }
 .mkt button { font-family: inherit; }
 
@@ -330,7 +333,7 @@ body:has(.mkt) { overflow-x: hidden; }
    white or accent-coloured cards that float around the product mockup. */
 .mkt-hero-mockup-area {
   position: relative; max-width: 1040px; margin: 56px auto 0;
-  overflow: hidden;
+  padding-bottom: 80px;
 }
 
 .mkt-stat-card {
@@ -402,11 +405,11 @@ body:has(.mkt) { overflow-x: hidden; }
   font-size: 6px; font-weight: 700;
 }
 
-/* Position helpers for the 4 floating cards */
-.mkt-sc-1 { top: 20px; left: 0; width: 180px; }
-.mkt-sc-2 { top: 0;    right: 0; width: 168px; }
-.mkt-sc-3 { bottom: 60px; left: 8px; width: 200px; }
-.mkt-sc-4 { bottom: 20px; right: 20px; width: 156px; }
+/* Position helpers for the 4 floating cards — staggered diagonally */
+.mkt-sc-1 { top: 40px;   left: 12px;  width: 172px; }
+.mkt-sc-2 { top: 140px;  right: 12px; width: 164px; }
+.mkt-sc-3 { bottom: 140px; left: 12px;  width: 196px; }
+.mkt-sc-4 { bottom: 32px;  right: 12px; width: 152px; }
 
 @media (max-width: 1000px) {
   .mkt-sc-1, .mkt-sc-2, .mkt-sc-3, .mkt-sc-4 { display: none; }
