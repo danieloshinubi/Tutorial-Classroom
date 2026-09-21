@@ -970,7 +970,7 @@ const Landing = () => {
   <div className="mkt">
     <Nav />
     <Hero />
-    <CustomerStrip />
+    {/* <CustomerStrip /> */}
     <Stats />
     <Features />
     <Capabilities />
