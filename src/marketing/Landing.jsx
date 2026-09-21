@@ -607,6 +607,7 @@ const Hero = () => {
 };
 
 /* ── Customer Strip ─────────────────────────────────────────────────────── */
+// eslint-disable-next-line no-unused-vars
 const CustomerStrip = () => (
   <section className="mkt-strip">
     <div className="mkt-wrap">
