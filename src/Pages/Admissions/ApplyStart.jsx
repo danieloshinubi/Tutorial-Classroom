@@ -70,12 +70,12 @@ const ApplyStart = () => {
   }, [slug]);
 
   useEffect(() => {
-    if (!schoolId) return;
+    if (!schoolId || !user?.id) return;
     (async () => {
       try {
         const [open, acct] = await Promise.all([
           fetchPublicAdmissionSessions(schoolId),
-          fetchMyApplicantAccount(schoolId).catch(() => null),
+          fetchMyApplicantAccount(schoolId, user.id).catch(() => null),
         ]);
         setSessions(open);
         setAccount(acct);

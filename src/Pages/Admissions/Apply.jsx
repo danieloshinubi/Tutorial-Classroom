@@ -227,7 +227,7 @@ const Apply = () => {
             <Link to="/Apply/Status" className="btn btn-primary">
               {"Check the status"}
             </Link>
-            <Link to="/Login" className="btn btn-secondary">
+            <Link to="/Apply/Login" className="btn btn-secondary">
               {"Go to sign in"}
             </Link>
           </div>

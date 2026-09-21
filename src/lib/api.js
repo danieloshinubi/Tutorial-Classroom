@@ -965,6 +965,275 @@ export const subscribeToTicketThread = (ticketId, onChange) =>
     )
     .subscribe();
 
+/* ---------------------------------------------------------------------------
+   Schoolivio Chat — tenant-scoped DMs and group channels.
+   --------------------------------------------------------------------------- */
+
+export const fetchChatOverview = async (schoolId) => {
+  const { data, error } = await supabase.rpc("chat_overview", { target_school: schoolId });
+  if (error) throw error;
+  return data || [];
+};
+
+export const openDirectMessage = async ({ schoolId, otherUserId }) => {
+  const { data, error } = await supabase.rpc("open_dm", {
+    target_school: schoolId,
+    other_user: otherUserId,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const createGroupChannel = async ({ schoolId, name, memberIds }) => {
+  const { data, error } = await supabase.rpc("create_group_channel", {
+    target_school: schoolId,
+    channel_name: name,
+    member_ids: memberIds,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const addChatMembers = async ({ channelId, memberIds }) => {
+  const { error } = await supabase.rpc("add_chat_members", {
+    target_channel: channelId,
+    member_ids: memberIds,
+  });
+  if (error) throw error;
+};
+
+export const removeChatMember = async ({ channelId, userId }) => {
+  const { error } = await supabase.rpc("remove_chat_member", {
+    target_channel: channelId,
+    target_user: userId,
+  });
+  if (error) throw error;
+};
+
+// author:profiles needs its FK constraint named explicitly — adding
+// chat_message_reactions (itself FK'd to both chat_messages and profiles)
+// gave PostgREST a second path from chat_messages to profiles to consider
+// once a reactions embed sits alongside this one, so the old bare
+// "profiles" reference started failing with "more than one relationship
+// was found for 'chat_messages' and 'profiles'".
+// reply_to is deliberately NOT embedded here — PostgREST couldn't resolve a
+// self-referencing chat_messages!chat_messages_reply_to_id_fkey embed
+// ("could not find a relationship between 'chat_messages' and
+// 'chat_messages'", confirmed live even after a schema reload). Instead
+// fetchChatMessages resolves it client-side from the same batch it just
+// loaded, and sendChatMessage's caller (ChatPage) already holds the exact
+// message object being replied to, so it never needs a lookup at all.
+const CHAT_MESSAGE_SELECT = `
+  id, channel_id, author_id, body, reply_to_id, edited_at, deleted_at, created_at,
+  attachment_path, attachment_name, attachment_size, attachment_mime,
+  author:profiles!chat_messages_author_id_fkey ( id, first_name, surname, username, email ),
+  reactions:chat_message_reactions ( user_id, emoji )
+`;
+
+export const fetchChatMessages = async (channelId, { before, limit = 50 } = {}) => {
+  let q = supabase
+    .from("chat_messages")
+    .select(CHAT_MESSAGE_SELECT)
+    .eq("channel_id", channelId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (before) q = q.lt("created_at", before);
+  const { data, error } = await q;
+  if (error) throw error;
+  const rows = (data || []).reverse();
+  const byId = new Map(rows.map((m) => [m.id, m]));
+  rows.forEach((m) => { m.reply_to = m.reply_to_id ? byId.get(m.reply_to_id) || null : null; });
+  return rows;
+};
+
+// Path convention <channel_id>/<uuid>-<filename> — see 162_chat_attachments.sql
+// for the storage RLS this scopes to. Uploaded before the message row exists
+// (same order TicketDetail's own attachments follow): the composer needs the
+// path/name/size to hand to sendChatMessage.
+export const uploadChatAttachment = async ({ channelId, file }) => {
+  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const path = `${channelId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage
+    .from("chat-attachments")
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+  if (error) throw error;
+  return { path, name: file.name, size: file.size, mime: file.type || null };
+};
+
+// Private bucket — same signed-URL-on-demand pattern as signedMaterialUrl.
+export const signedChatAttachmentUrl = async (path, seconds = 300) => {
+  const { data, error } = await supabase.storage
+    .from("chat-attachments")
+    .createSignedUrl(path, seconds);
+  if (error) throw error;
+  return data.signedUrl;
+};
+
+// Forwarding a file to another channel needs its own copy under that
+// channel's own path prefix — the storage RLS on chat-attachments checks
+// path segment [1] against is_chat_member, so a file still living under its
+// original channel's prefix would stay unreadable to the new channel's
+// members no matter what the forwarded message row itself says.
+export const copyChatAttachment = async ({ fromPath, toChannelId, fileName }) => {
+  const safeName = fileName.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
+  const toPath = `${toChannelId}/${uuidV4()}-${safeName}`;
+  const { error } = await supabase.storage.from("chat-attachments").copy(fromPath, toPath);
+  if (error) throw error;
+  return toPath;
+};
+
+export const sendChatMessage = async ({ channelId, authorId, body, replyToId, attachment }) => {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .insert({
+      channel_id: channelId,
+      author_id: authorId,
+      body,
+      reply_to_id: replyToId || null,
+      attachment_path: attachment?.path || null,
+      attachment_name: attachment?.name || null,
+      attachment_size: attachment?.size || null,
+      attachment_mime: attachment?.mime || null,
+    })
+    .select(CHAT_MESSAGE_SELECT)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const editChatMessage = async ({ messageId, body }) => {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .update({ body, edited_at: new Date().toISOString() })
+    .eq("id", messageId)
+    .select(CHAT_MESSAGE_SELECT)
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+export const deleteChatMessage = async (messageId) => {
+  const { error } = await supabase
+    .from("chat_messages")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", messageId);
+  if (error) throw error;
+};
+
+export const markChannelRead = async ({ channelId, userId }) => {
+  const { error } = await supabase
+    .from("chat_channel_members")
+    .update({ last_read_at: new Date().toISOString() })
+    .eq("channel_id", channelId)
+    .eq("user_id", userId);
+  if (error) throw error;
+};
+
+// event: "*" (not INSERT-only) is deliberate — an edit or a soft-delete has
+// to reach every open thread, not just the author's own screen. Deletes are
+// soft (an UPDATE setting deleted_at), so payload.new always arrives
+// complete without needing replica identity full on the table.
+export const subscribeToChatChannel = (channelId, onChange) =>
+  supabase
+    .channel(`chat_channel:${channelId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "classroom", table: "chat_messages", filter: `channel_id=eq.${channelId}` },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
+// Sidebar-level: which of my channels just got a new message, anywhere.
+// Filtered on user_id via the membership table (postgres_changes only
+// supports one filter column), same shape subscribeToNotifications uses.
+//
+// `topic` lets two callers watch the exact same rows without colliding —
+// supabase-js keys a channel by its topic string and returns the SAME
+// underlying channel object for a repeated one, so ChatPage and Navbar
+// both calling this with the default topic would have the second .on()
+// land on an already-.subscribe()'d channel and throw. Each caller that
+// isn't ChatPage's own thread view should pass its own topic suffix.
+export const subscribeToMyChannels = (userId, onChange, topic = "chat_channels") =>
+  supabase
+    .channel(`${topic}:${userId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "classroom", table: "chat_channel_members", filter: `user_id=eq.${userId}` },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
+// Thread-level: every membership row for the OPEN channel, not just mine —
+// this is what tells the sender "seen" once the other member's own
+// last_read_at moves past a message's created_at. Same "*, single filter
+// column" shape as subscribeToMyChannels above, just filtered by channel
+// instead of by user.
+export const subscribeToChannelMembers = (channelId, onChange) =>
+  supabase
+    .channel(`chat_channel_members:${channelId}`)
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "classroom", table: "chat_channel_members", filter: `channel_id=eq.${channelId}` },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
+export const fetchChannelMembers = async (channelId) => {
+  const { data, error } = await supabase
+    .from("chat_channel_members")
+    .select("user_id, last_read_at")
+    .eq("channel_id", channelId);
+  if (error) throw error;
+  return data || [];
+};
+
+export const addReaction = async ({ messageId, userId, emoji }) => {
+  const { error } = await supabase
+    .from("chat_message_reactions")
+    .insert({ message_id: messageId, user_id: userId, emoji });
+  if (error) throw error;
+};
+
+export const removeReaction = async ({ messageId, userId, emoji }) => {
+  const { error } = await supabase
+    .from("chat_message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+  if (error) throw error;
+};
+
+// Reactions have no channel_id of their own to filter postgres_changes on,
+// so this listens unfiltered and the caller checks payload.message_id
+// against the messages it actually has loaded — the same tradeoff
+// subscribeToNotifications' client-side school_id check makes, just for a
+// column postgres_changes can't filter on at all rather than one it won't
+// combine with another.
+export const subscribeToMessageReactions = (onChange) =>
+  supabase
+    .channel("chat_message_reactions")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "classroom", table: "chat_message_reactions" },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
+// Typing presence is deliberately never written to Postgres — it is stale
+// the instant it lands, so it travels as an ephemeral broadcast on its own
+// channel instead of a row anything has to clean up. `self: false` means
+// the sender never has to filter its own echo back out.
+export const subscribeToTyping = (channelId, onTyping) =>
+  supabase
+    .channel(`chat_typing:${channelId}`, { config: { broadcast: { self: false } } })
+    .on("broadcast", { event: "typing" }, ({ payload }) => onTyping(payload))
+    .subscribe();
+
+export const sendTyping = (channel, userId) => {
+  channel?.send({ type: "broadcast", event: "typing", payload: { userId } });
+};
+
 // Realtime's postgres_changes filter only reliably supports one column, so
 // the school check happens client-side — same reason fetchNotifications
 // above needs its own .eq("school_id", ...): RLS/the channel filter only
@@ -1263,7 +1532,7 @@ export const fetchSchoolMembers = async (schoolId) => {
     // user_id is what invoices and payments and every other table joins on;
     // without it the Bursary invoice table falls back to "Student" instead
     // of the child's name.
-    .select(`id, user_id, role, is_active, created_at, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`id, user_id, role, is_active, created_at, manager_id, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -1274,6 +1543,20 @@ export const updateMemberRole = async ({ schoolId, memberId, role }) => {
   const { error } = await supabase
     .from("school_members")
     .update({ role })
+    .eq("id", memberId)
+    .eq("school_id", schoolId);
+  if (error) throw error;
+};
+
+// managerId is a school_members.user_id, or null to clear "reports to".
+// The manager_id column itself points at classroom.profiles (shared 1:1
+// with auth.users), same convention as every other author/user column —
+// the DB trigger (school_members_manager_check) is what actually enforces
+// "same school, active, not yourself", not this call.
+export const updateMemberManager = async ({ schoolId, memberId, managerId }) => {
+  const { error } = await supabase
+    .from("school_members")
+    .update({ manager_id: managerId || null })
     .eq("id", memberId)
     .eq("school_id", schoolId);
   if (error) throw error;
@@ -2644,11 +2927,38 @@ export const fetchApplicantAccount = async (id, schoolId) => {
   return data;
 };
 
-export const fetchMyApplicantAccount = async (schoolId) => {
+// user_id is required, not just left to RLS — "applicant reads own
+// account"'s SELECT policy also lets owner/admin/principal/admissions read
+// EVERY applicant account at their school (so they can review one), so a
+// staff member calling this without the filter got back every applicant's
+// row at once. .maybeSingle() then threw "JSON object requested, multiple
+// (or no) rows returned" instead of "this staff member has no applicant
+// account of their own" (the true, and completely unremarkable, answer) —
+// confirmed live, a real admin visiting /Applications hit this exact error.
+export const fetchMyApplicantAccount = async (schoolId, userId) => {
   const { data, error } = await supabase
     .from("applicant_accounts")
     .select("*")
     .eq("school_id", schoolId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+// Whether this signed-in person is a real tenant member at this school —
+// used by ApplicantLogin.jsx to refuse a staff/student/parent account
+// signing in through the applicant-only door. Safe to call for someone
+// with no membership at all: "members read the roster"'s own RLS policy
+// allows reading your OWN row (user_id = auth.uid()) regardless of whether
+// you belong to the school, so this just comes back empty rather than
+// erroring for a true applicant.
+export const fetchMySchoolMembership = async (schoolId, userId) => {
+  const { data, error } = await supabase
+    .from("school_members")
+    .select("id, role, is_active")
+    .eq("school_id", schoolId)
+    .eq("user_id", userId)
     .maybeSingle();
   if (error) throw error;
   return data;

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ApplicantShell } from "../../Components/ApplicantShell";
 import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
+import { useAuth } from "../../context/AuthContext";
 import { useActionFeedback } from "../../Components/Toast";
 import {
   fetchMyApplications,
@@ -26,6 +27,7 @@ import {
 // (public_school()) rather than through useSchool(), which depends on
 // membership the applicant will never have.
 const Applications = () => {
+  const { user } = useAuth();
   const [school, setSchool] = useState(null);
   const schoolId = school?.id || null;
   const [account, setAccount] = useState(null);
@@ -34,11 +36,11 @@ const Applications = () => {
   const { setError } = useActionFeedback();
 
   const load = useCallback(async () => {
-    if (!schoolId) return;
+    if (!schoolId || !user?.id) return;
     setLoading(true);
     try {
       const [acct, apps] = await Promise.all([
-        fetchMyApplicantAccount(schoolId),
+        fetchMyApplicantAccount(schoolId, user.id),
         fetchMyApplications(schoolId),
       ]);
       setAccount(acct);
@@ -48,7 +50,7 @@ const Applications = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, setError]);
+  }, [schoolId, user?.id, setError]);
 
   useEffect(() => {
     load();

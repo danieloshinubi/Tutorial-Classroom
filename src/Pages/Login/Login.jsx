@@ -73,12 +73,27 @@ const Login = () => {
   return (
     <AuthLayout
       title="Sign in"
+      badge="Staff · Student · Parent sign in"
       subtitle="Use the email address your school gave you."
       footer={
-        <p>
-          {"New here? "}
-          <Link to="/Signup">{"Create an account"}</Link>
-        </p>
+        <>
+          <p>
+            {"New here? "}
+            <Link to="/Signup">{"Create an account"}</Link>
+          </p>
+          {/* A dedicated URL, not a badge/copy switch on this same form —
+              that used to change what this page SAID without changing
+              where sign-in actually SENT you, which is exactly what made
+              an admin who once clicked through from ApplyAccount land back
+              in their applicant portal on a completely unrelated later
+              visit. /Apply/Login is its own page with its own fixed
+              "always land on /Applications" behaviour, not this one
+              wearing a different label. */}
+          <p>
+            {"Applying for admission instead? "}
+            <Link to="/Apply/Login">{"Sign in to your application"}</Link>
+          </p>
+        </>
       }
     >
       <form onSubmit={handleSubmit}>

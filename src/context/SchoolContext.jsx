@@ -39,6 +39,23 @@ export const SchoolProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Resets `loading` to true THE MOMENT userId changes, during render
+  // rather than from inside the effect below. Without this, the render
+  // where userId first flips from null to a real id (right after signing
+  // in) still shows the PREVIOUS effect run's settled state — loading:
+  // false, membership: null, left over from mounting with no user at all
+  // — for one frame before the new effect has even started. That frame is
+  // enough for a consumer checking "loading is done and there's no
+  // membership" (ProtectedRoute) to act on it as final and navigate away,
+  // which is exactly what confirmed live: a real member's own sign-in
+  // occasionally got bounced to /Applications, correctly-resolved
+  // membership arriving a moment too late to stop it.
+  const lastUserIdRef = useRef(undefined);
+  if (lastUserIdRef.current !== userId) {
+    lastUserIdRef.current = userId;
+    if (!loading) setLoading(true);
+  }
+
   const load = useCallback(async () => {
     if (!userId) {
       loadedRef.current = false;
@@ -130,13 +147,24 @@ export const SchoolProvider = ({ children }) => {
   // applicant-only surfaces (Login, /Apply*, the applicant's own portal)
   // never reach this membership-gated fetch, so they each call the same
   // applyTenantBranding() from their own independent public_school() lookup.
+  //
+  // Skipped entirely while `school` is null — not "reset to default",
+  // just leave whatever's already applied alone. This context's own
+  // membership fetch briefly clearing `school` (e.g. the instant someone
+  // signs out, or ApplicantLogin.jsx rejecting a staff account mid-page)
+  // used to blank the tenant's colour back to Schoolivio's default purple
+  // right on top of whichever page was showing — confirmed live, on
+  // ApplicantLogin, which had already applied the correct colour itself
+  // moments earlier and was never going to re-fetch and reapply it again
+  // to win the argument back.
   useEffect(() => {
+    if (!school) return;
     applyTenantBranding({
-      name: school?.name,
-      logoUrl: school?.logo_url,
-      themeColor: school?.theme_color,
+      name: school.name,
+      logoUrl: school.logo_url,
+      themeColor: school.theme_color,
     });
-  }, [school?.name, school?.logo_url, school?.theme_color]);
+  }, [school]);
 
   // A school stays fully usable while plan === 'trial' and trial_ends_at is
   // in the future (or unset — a school the platform console created

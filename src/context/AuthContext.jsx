@@ -158,7 +158,7 @@ export const AuthProvider = ({ children }) => {
   }, [session]);
 
   const signUp = useCallback(
-    async ({ email, password, firstName, surname, username, role }) => {
+    async ({ email, password, firstName, surname, username, role, pendingApplicantSchoolId }) => {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -169,6 +169,13 @@ export const AuthProvider = ({ children }) => {
             surname,
             username,
             role,
+            // Set only by /Apply/Account. Lets ApplicantLogin tell "just
+            // signed up here as an applicant, hasn't started an application
+            // yet" apart from an unrelated account with the same shape (no
+            // membership, no applicant_accounts row) at first login, when
+            // email confirmation delays the real applicant_accounts row
+            // past signup — see ApplicantLogin.jsx.
+            pending_applicant_school_id: pendingApplicantSchoolId || null,
           },
         },
       });

@@ -38,11 +38,27 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false 
     if (!top || !page || typeof ResizeObserver === "undefined") return undefined;
 
     const publish = () => {
-      page.style.setProperty("--page-top-h", `${top.offsetHeight}px`);
+      const topH = top.offsetHeight;
+      page.style.setProperty("--page-top-h", `${topH}px`);
+      // A bounded panel below the header (.tix-shell — Tickets, Chat) wants
+      // to fill exactly what's left of *this* page's own real, grid-
+      // stretched height, not a hand-rolled 100vh calculation — that has to
+      // separately guess every ancestor's height (the sticky .topbar above
+      // .page, browser chrome, zoom) and reliably comes up a little off,
+      // which .shell's own overflow-y:auto then quietly turns into a
+      // page-length scrollbar even when nothing below the fold needs one
+      // (confirmed live on /Chat). Measuring the real box directly is exact
+      // by construction and self-corrects if any of those change.
+      const paddingBottom = parseFloat(getComputedStyle(page).paddingBottom) || 0;
+      const body = page.querySelector(":scope > .page-body");
+      const bodyPaddingTop = body ? parseFloat(getComputedStyle(body).paddingTop) || 0 : 0;
+      const avail = page.clientHeight - topH - bodyPaddingTop - paddingBottom;
+      page.style.setProperty("--page-avail-h", `${Math.max(avail, 0)}px`);
     };
     publish();
     const observer = new ResizeObserver(publish);
     observer.observe(top);
+    observer.observe(page);
     return () => observer.disconnect();
   });
 

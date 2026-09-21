@@ -19,6 +19,7 @@ import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
 import {
   fetchSchoolMembers,
   updateMemberRole,
+  updateMemberManager,
   setMemberActive,
   removeMember,
   addSchoolUser,
@@ -197,6 +198,24 @@ const PeoplePanel = () => {
       setError(err.message);
     } finally {
       setInviting(false);
+    }
+  };
+
+  const changeManager = async (row, managerUserId) => {
+    setBusyId(row.id);
+    setError("");
+    try {
+      await updateMemberManager({ schoolId, memberId: row.id, managerId: managerUserId || null });
+      setNotice(
+        managerUserId
+          ? `${displayName(row.profiles)} now reports to ${displayName(members.find((m) => m.user_id === managerUserId)?.profiles)}.`
+          : `${displayName(row.profiles)} no longer has a manager set.`
+      );
+      load();
+    } catch (err) {
+      setError(err.message || "Could not set who that person reports to.");
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -522,7 +541,7 @@ const PeoplePanel = () => {
         </Card>
       ) : null}
 
-      {loading ? <SkeletonTable rows={6} cols={4} /> : null}
+      {loading ? <SkeletonTable rows={6} cols={5} /> : null}
       {!loading && filtered.length === 0 ? <Empty>{"Nobody matches."}</Empty> : null}
 
       {filtered.length > 0 ? (
@@ -536,6 +555,7 @@ const PeoplePanel = () => {
                 <tr>
                   <th>{"Person"}</th>
                   <th>{"Role"}</th>
+                  <th>{"Reports to"}</th>
                   <th>{"Added"}</th>
                   <th>{""}</th>
                 </tr>
@@ -584,6 +604,21 @@ const PeoplePanel = () => {
                             options={ROLES.map(([value, label]) => ({ value, label }))}
                           />
                         )}
+                      </td>
+                      <td>
+                        <Select
+                          className="select"
+                          style={{ width: "auto", minWidth: 160, padding: "6px 8px" }}
+                          value={row.manager_id || ""}
+                          disabled={rowBusy}
+                          onChange={(v) => changeManager(row, v)}
+                          options={[
+                            { value: "", label: "Not set" },
+                            ...members
+                              .filter((m) => m.user_id !== row.user_id && m.is_active)
+                              .map((m) => ({ value: m.user_id, label: displayName(m.profiles) })),
+                          ]}
+                        />
                       </td>
                       <td style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>
                         {formatDate(row.created_at, { withTime: false })}

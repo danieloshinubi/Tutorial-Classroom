@@ -4,6 +4,7 @@ import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
 import { applyTenantBranding } from "../../lib/branding";
+import { createApplicantAccount } from "../../lib/api";
 import { Field, Button } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -89,9 +90,24 @@ const ApplyAccount = () => {
         surname: form.surname.trim(),
         username,
         role: "student",
+        pendingApplicantSchoolId: school?.id || null,
       });
 
       if (result.session) {
+        // A session exists right away (no email confirmation required) —
+        // create the real applicant_accounts row now, while we still have
+        // the name they just typed, rather than waiting for them to reach
+        // /Apply/Start. Without this, ApplicantLogin's "must already be an
+        // applicant here" check would have nothing to find on their very
+        // next sign-in.
+        if (school?.id) {
+          await createApplicantAccount({
+            schoolId: school.id,
+            firstName: form.firstName.trim(),
+            surname: form.surname.trim(),
+            email: form.email.trim(),
+          }).catch(() => {});
+        }
         navigate("/Apply/Start", { replace: true });
       } else {
         setAwaitingConfirmation(true);
@@ -117,7 +133,7 @@ const ApplyAccount = () => {
             {`We sent a confirmation link to ${form.email}. Click it, then come back and sign in to start your application.`}
           </p>
           <div className="btn-row" style={{ justifyContent: "center" }}>
-            <Link to="/Login" className="btn btn-primary">{"Go to sign in"}</Link>
+            <Link to="/Apply/Login" className="btn btn-primary">{"Go to sign in"}</Link>
           </div>
         </div>
       </div>
@@ -169,12 +185,13 @@ const ApplyAccount = () => {
             <Button type="submit" disabled={submitting}>
               {submitting ? "Creating account..." : "Create account and continue"}
             </Button>
-            {/* Login.jsx redirects to location.state.from.pathname after a
-                successful sign-in, defaulting to /Dashboard otherwise — the
-                member-only home an applicant (no school_members row) can't
-                use. Naming /Applications here sends a returning applicant
-                back to their own portal instead. */}
-            <Link to="/Login" state={{ from: { pathname: "/Applications" } }} style={{ fontSize: 14 }}>
+            {/* /Apply/Login, not /Login — its own URL that always lands on
+                /Applications, rather than smuggling that destination
+                through location.state on the shared staff/student/parent
+                login (which used to leak: the exact same state could sit
+                in browser history and silently redirect an unrelated later
+                staff sign-in). See ApplicantLogin.jsx. */}
+            <Link to="/Apply/Login" style={{ fontSize: 14 }}>
               {"Already have an account? Sign in"}
             </Link>
           </div>

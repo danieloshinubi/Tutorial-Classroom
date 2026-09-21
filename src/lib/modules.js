@@ -60,6 +60,17 @@ export const MODULES = [
     roles: ROLES,
   },
   {
+    id: "chat",
+    priority: 27,
+    group: "Overview",
+    path: "/Chat",
+    label: "Chat",
+    // Tenant-wide DMs and group channels — everyone, same reasoning as News
+    // and Help Desk: a parent should be able to message the school same as
+    // any staff member can message a colleague.
+    roles: ROLES,
+  },
+  {
     id: "courses",
     priority: 30,
     group: "Teaching",

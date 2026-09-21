@@ -11,16 +11,19 @@ import { fileText } from "react-icons-kit/feather/fileText";
 import { settings as settingsIcon } from "react-icons-kit/feather/settings";
 import { bell } from "react-icons-kit/feather/bell";
 import { helpCircle } from "react-icons-kit/feather/helpCircle";
+import { messageSquare } from "react-icons-kit/feather/messageSquare";
 import { user as userIcon } from "react-icons-kit/feather/user";
 import { chevronsLeft } from "react-icons-kit/feather/chevronsLeft";
 import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
 import { menu as menuIcon } from "react-icons-kit/feather/menu";
+import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import Notifications from "../Notifications";
 import AccountMenu from "./AccountMenu";
 import GlobalSearch from "../GlobalSearch";
 import Logo from "../Logo";
 import { modulesFor, groupModules } from "../../lib/modules";
+import { fetchChatOverview, subscribeToMyChannels } from "../../lib/api";
 
 // The application shell: a sidebar of modules on the left, a slim bar across
 // the top for search and the account.
@@ -37,6 +40,7 @@ import { modulesFor, groupModules } from "../../lib/modules";
 const ICONS = {
   dashboard: grid,
   news: bell,
+  chat: messageSquare,
   courses: bookOpen,
   teach: bookOpen,
   results: award,
@@ -50,8 +54,27 @@ const ICONS = {
 };
 
 const Navbar = () => {
-  const { school, roles } = useSchool();
+  const { user } = useAuth();
+  const { school, roles, schoolId } = useSchool();
   const location = useLocation();
+
+  // Every chat's own unread_count, summed — the same "how many are waiting
+  // on me" a phone's app-icon badge shows, surfaced next to the sidebar
+  // link since Chat has no other permanently-visible spot for it.
+  const [chatUnread, setChatUnread] = useState(0);
+  useEffect(() => {
+    if (!user?.id || !schoolId) { setChatUnread(0); return undefined; }
+    const load = () =>
+      fetchChatOverview(schoolId)
+        .then((rows) => setChatUnread(rows.reduce((sum, r) => sum + (r.unread_count || 0), 0)))
+        .catch(() => {});
+    load();
+    // Own topic suffix — ChatPage's own thread view watches the same rows
+    // under the default topic, and two callers on one topic would collide
+    // (see subscribeToMyChannels in api.js).
+    const channel = subscribeToMyChannels(user.id, load, "chat_channels_nav");
+    return () => channel.unsubscribe();
+  }, [user?.id, schoolId]);
 
   // Remembered between visits: someone on a laptop who collapses it once
   // should not have to do it again every time they open the app.
@@ -116,17 +139,23 @@ const Navbar = () => {
               {collapsed ? <div className="side-rule" /> : (
                 <div className="side-group-name">{group.name}</div>
               )}
-              {group.modules.map((module) => (
-                <NavLink
-                  key={module.path}
-                  to={module.path}
-                  title={module.label}
-                  className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
-                >
-                  <Icon icon={ICONS[module.id] || grid} size={17} />
-                  {collapsed ? null : <span>{module.label}</span>}
-                </NavLink>
-              ))}
+              {group.modules.map((module) => {
+                const unread = module.id === "chat" ? chatUnread : 0;
+                return (
+                  <NavLink
+                    key={module.path}
+                    to={module.path}
+                    title={unread > 0 ? `${module.label} (${unread} unread)` : module.label}
+                    className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
+                  >
+                    <Icon icon={ICONS[module.id] || grid} size={17} />
+                    {collapsed ? null : <span>{module.label}</span>}
+                    {unread > 0 ? (
+                      <span className="bell-count side-link-badge">{unread > 9 ? "9+" : unread}</span>
+                    ) : null}
+                  </NavLink>
+                );
+              })}
             </div>
           ))}
         </nav>

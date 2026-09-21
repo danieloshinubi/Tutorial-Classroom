@@ -14,6 +14,7 @@ import ConfigNotice from "./Components/ConfigNotice";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import SchoolRoute from "./Components/SchoolRoute";
 import Login from "./Pages/Login/Login";
+import ApplicantLogin from "./Pages/Login/ApplicantLogin";
 import Signup from "./Pages/Signup/Signup";
 import SignupTutor from "./Pages/Signup/SignupTutor";
 import ForgotPassword from "./Pages/ForgotPassword/ForgotPassword";
@@ -45,6 +46,7 @@ import TicketsList from "./Pages/Tickets/TicketsList";
 import TicketDetail from "./Pages/Tickets/TicketDetail";
 import MyTickets from "./Pages/Support/MyTickets";
 import MyTicketDetail from "./Pages/Support/MyTicketDetail";
+import ChatPage from "./Pages/Chat/ChatPage";
 import PlatformApp from "./platform/PlatformApp";
 import MarketingApp from "./marketing/MarketingApp";
 import TrialGate from "./Components/TrialGate";
@@ -119,6 +121,11 @@ function App() {
               off to /Apply/Start. Deliberately its own page rather than the
               general /Signup, which has no way to land back here. */}
           <Route path="/Apply/Account" element={<ApplyAccount />} />
+          {/* A separate URL from /Login on purpose — always lands on
+              /Applications after signing in, no "from" state to quietly
+              redirect somewhere else depending on how you arrived. See
+              ApplicantLogin.jsx. */}
+          <Route path="/Apply/Login" element={<ApplicantLogin />} />
           {/* Links an application submitted through /Apply (no account) to a
               signed-in one — from "Check an application"'s new prompts. */}
           <Route path="/Apply/Claim" element={<ApplyClaim />} />
@@ -138,6 +145,11 @@ function App() {
                 tickets; the staff-side queue at /Tickets is separate. */}
             <Route path="/Support" element={<MyTickets />} />
             <Route path="/Support/:ticketId" element={<MyTicketDetail />} />
+            {/* Tenant-wide DMs and group channels — every signed-in role,
+                same reach as News/Support. RLS scopes each channel to its
+                own members. */}
+            <Route path="/Chat" element={<ChatPage />} />
+            <Route path="/Chat/:channelId" element={<ChatPage />} />
             {/* Where the gateway returns a family. It reports the outcome and
                 credits nothing — the signed webhook does that. */}
             <Route path="/Fees/Paid" element={<PaymentReturn />} />

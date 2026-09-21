@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -24,7 +24,18 @@ const ToolbarButton = ({ active, onClick, label, children }) => (
   </button>
 );
 
-export const RichTextEditor = ({ value, onChange, placeholder }) => {
+// onSubmitEditor is optional — only a chat-style composer (Enter sends,
+// Shift+Enter for a newline) passes it. A ticket reply stays plain Enter-for-
+// newline, since that one is composing something closer to an email.
+export const RichTextEditor = ({ value, onChange, placeholder, onSubmitEditor }) => {
+  // A ref, not a plain closure over the prop — editorProps.handleKeyDown is
+  // captured once when Tiptap builds the view, and onSubmitEditor is a fresh
+  // arrow function on every parent render (it closes over the latest
+  // composeBody/sending state), so calling the prop directly here would
+  // permanently invoke whatever it was on the very first render.
+  const onSubmitRef = useRef(onSubmitEditor);
+  onSubmitRef.current = onSubmitEditor;
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -34,7 +45,17 @@ export const RichTextEditor = ({ value, onChange, placeholder }) => {
     ],
     content: value || "",
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
-    editorProps: { attributes: { class: "rte-prose" } },
+    editorProps: {
+      attributes: { class: "rte-prose" },
+      handleKeyDown: (_view, event) => {
+        if (!onSubmitRef.current) return false;
+        const isEnter = event.key === "Enter" || event.code === "Enter" || event.keyCode === 13 || event.which === 13;
+        if (!isEnter || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return false;
+        event.preventDefault();
+        onSubmitRef.current();
+        return true;
+      },
+    },
   });
 
   // The caller clears `value` back to "" after a successful send — Tiptap

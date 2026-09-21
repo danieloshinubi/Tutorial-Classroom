@@ -101,7 +101,7 @@ const PITCHES = [
   },
 ];
 
-const AuthLayout = ({ title, subtitle, children, footer }) => {
+const AuthLayout = ({ title, subtitle, badge, children, footer }) => {
   const [school, setSchool] = useState(null);
   const [slide, setSlide] = useState(0);
   const slug = resolveSlug();
@@ -185,6 +185,12 @@ const AuthLayout = ({ title, subtitle, children, footer }) => {
               )}
             </div>
 
+            {/* Which door this is — the sign-in form itself is identical
+                either way (same email/password fields, same table), so
+                without this someone could easily land on the wrong one and
+                only find out after typing credentials that go nowhere
+                useful for them. */}
+            {badge ? <span className="auth-audience-badge">{badge}</span> : null}
             <h1>{title}</h1>
             {school ? <p className="auth-school-name">{school.name}</p> : null}
             {subtitle ? <p className="auth-sub">{subtitle}</p> : null}
