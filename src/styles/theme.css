@@ -264,14 +264,27 @@ a { color: var(--brand); }
   white-space: nowrap;
 }
 .side-link svg { flex: 0 0 auto; }
-/* Reuses .bell-count's shape/colour, but inline at the end of the row
-   instead of pinned to a button's corner — collapsed mode switches it back
-   to a small corner dot since there's no label row left to sit at the end
-   of. */
-.side-link-badge { position: static; margin-left: auto; border: none; }
-.side.collapsed .side-link-badge {
-  position: absolute; top: 4px; right: 4px; min-width: 0; width: 9px; height: 9px;
-  padding: 0; font-size: 0; border: 2px solid var(--surface);
+/* Teams-style presence dot, not a numbered bubble — a small solid circle
+   in the tenant's own accent colour. As a flex item in .side-link's own
+   `align-items: center` row it centers on the row's height by construction,
+   rather than needing to be pinned to a corner with a manual offset (the
+   old .bell-count-based badge sat absolutely positioned at top/right,
+   which read as stuck in the corner instead of sitting with the label).
+   Collapsed mode has no label row for it to sit at the end of, so it goes
+   back to a small corner dot on the icon itself there. */
+.side-link-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-left: auto;
+  background: var(--brand);
+}
+.side.collapsed .side-link-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin-left: 0;
 }
 .side-link:hover { background: var(--bg); color: var(--ink); }
 /* Sign out (PlatformApp.jsx's PlatformNav) is the one .side-link that's a
@@ -841,6 +854,25 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
   border-color: var(--brand);
   box-shadow: 0 0 0 3px var(--brand-soft);
 }
+
+/* iOS/Android auto-zoom the whole page the instant a text field under
+   16px gets focus, on the assumption that text that small was never
+   meant to be read — every input/textarea/select in this product sits at
+   14.5px on purpose, this design system's own control size, so typing
+   anywhere (a login field, the chat composer, a search box) yanked the
+   whole viewport in and out on a phone, which reads as a website, not
+   the "proper mobile app" feel asked for. Scoped to touch devices
+   (pointer: coarse) or a narrow viewport — never on a desktop with a
+   mouse, where this browser behaviour doesn't exist in the first place,
+   so there is nothing to prevent and no reason to touch the type scale
+   there. Tiptap's contenteditable (.rte-prose, the chat composer and
+   ticket replies) isn't a real <input>, so it needs the same rule
+   spelled out explicitly. */
+@media (max-width: 900px), (pointer: coarse) {
+  input, textarea, .rte-prose {
+    font-size: 16px !important;
+  }
+}
 .textarea { min-height: 110px; resize: vertical; }
 
 /* ==========================================================================
@@ -1384,6 +1416,105 @@ table.data tr:last-child td { border-bottom: none; }
   color: var(--danger);
   border-color: transparent;
 }
+
+/* ==========================================================================
+   Org chart (SchoolAdmin.jsx OrganogramPanel) — the classic pure-CSS
+   technique: the tree is a nested <ul>/<li>, and the connector lines are
+   drawn by ::before/::after borders on each <li> rather than anything
+   computing pixel positions. Multiple root trees (nobody above them) sit
+   side by side in the same scrollable row.
+   ========================================================================== */
+.org-chart-wrap {
+  display: flex;
+  gap: 48px;
+  overflow-x: auto;
+  padding: 24px 20px;
+}
+.org-tree,
+.org-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+.org-tree ul {
+  display: flex;
+  padding-top: 28px;
+  position: relative;
+}
+.org-tree li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 28px 10px 0;
+  position: relative;
+}
+.org-tree li::before,
+.org-tree li::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 50%;
+  width: 50%;
+  height: 28px;
+  border-top: 2px solid var(--line);
+}
+.org-tree li::after {
+  right: auto;
+  left: 50%;
+  border-top: none;
+  border-left: 2px solid var(--line);
+}
+.org-tree li:only-child { padding-top: 0; }
+.org-tree li:only-child::before,
+.org-tree li:only-child::after { display: none; }
+.org-tree li:first-child::before,
+.org-tree li:last-child::after { border: none; }
+.org-tree li:last-child::before { border-right: 2px solid var(--line); border-radius: 0 6px 0 0; }
+.org-tree li:first-child::after { border-radius: 6px 0 0 0; }
+.org-tree > li { padding-top: 0; }
+.org-tree > li::before,
+.org-tree > li::after { display: none; }
+/* The vertical stub connecting a parent card down to the row of its
+   children's horizontal line — one per <ul>, not per <li>. */
+.org-tree ul::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 0;
+  height: 28px;
+  border-left: 2px solid var(--line);
+}
+
+.org-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px 10px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.org-node:hover { border-color: var(--brand); box-shadow: var(--shadow-2); }
+.org-node-avatar {
+  flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+.org-node-avatar-photo { object-fit: cover; }
+.org-node-text { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.org-node-name { font-weight: 600; color: var(--ink); font-size: 13.5px; white-space: nowrap; }
 
 /* Chat */
 .chat-list { list-style: none; margin: 14px 0 0; padding: 0; }
@@ -4233,6 +4364,13 @@ table.data tr:last-child td { border-bottom: none; }
    ========================================================================== */
 .chat-detail { grid-template-columns: 300px 1fr; }
 
+.chat-search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  font-size: 13.5px;
+}
+
 .chat-list-item {
   display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
   padding: 9px 8px; border-radius: 8px; border: none; cursor: pointer;
@@ -4255,26 +4393,72 @@ table.data tr:last-child td { border-bottom: none; }
   font-size: 12px; color: var(--tix-ink-3); overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap;
 }
+.chat-list-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--tix-brand); }
 
 .chat-thread { display: flex; flex-direction: column; padding: 0; overflow-y: hidden; }
 .chat-thread-head {
-  flex: none; display: flex; align-items: center; gap: 10px;
-  padding: 14px 20px; border-bottom: 1px solid var(--tix-line);
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px; border-bottom: 1px solid var(--tix-line); min-height: 30px;
 }
-.chat-thread-head h1 { font-size: 16px; margin: 0; color: var(--tix-ink); font-family: inherit; }
+.chat-thread-head .tix-avatar { width: 38px; height: 38px; font-size: 13.5px; box-shadow: var(--shadow-1); }
+.chat-thread-head h1 { font-size: 16px; margin: 0; color: var(--tix-ink); font-family: inherit; line-height: 1.3; }
+/* Only meaningful once mobile hides the list behind the open thread (see
+   the .chat-detail 900px rule) — display:none the rest of the time so it
+   never doubles up with the list's own always-visible "New" button on a
+   wide screen where both panes already show at once. */
+.chat-mobile-back {
+  display: none; flex: none; width: 32px; height: 32px; border-radius: 50%;
+  border: none; background: none; align-items: center; justify-content: center;
+  color: var(--tix-ink-2); cursor: pointer; margin-right: 2px;
+}
+.chat-mobile-back:hover { background: var(--tix-surface-2); }
 .chat-thread-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 22px; }
 .chat-thread-empty { flex: 1; display: flex; align-items: center; justify-content: center; }
 
 .chat-msg-row { display: flex; gap: 10px; max-width: 74%; margin: 3px 0; }
-.chat-msg-row.grouped { margin-top: -6px; }
+/* Tighter than the gap between two different moments in the conversation
+   (the plain 3px+3px above) — grouped messages are one continued turn from
+   the same person and should read closer together, the way iMessage/
+   WhatsApp both do it. Removing the name/timestamp meta line for grouped
+   rows already shrank most of that gap on its own; this only needs to trim
+   the rest, not the large negative offset an earlier version used to
+   compensate for a meta line that no longer renders at all. */
+.chat-msg-row.grouped { margin-top: 0; }
 .chat-msg-row.mine { margin-left: auto; flex-direction: row-reverse; }
 .chat-msg-row .tix-avatar { margin-top: 2px; flex: none; }
 .chat-msg-row .tix-avatar.spacer { visibility: hidden; }
-.chat-msg-col { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.chat-msg-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .chat-msg-row.mine .chat-msg-col { align-items: flex-end; }
-.chat-msg-meta { display: flex; align-items: baseline; gap: 8px; }
+.chat-msg-meta { display: flex; align-items: baseline; gap: 8px; margin-bottom: 1px; }
 .chat-msg-meta strong { font-size: 12.5px; color: var(--tix-ink); }
 .chat-msg-meta span { font-size: 11px; color: var(--tix-ink-3); }
+
+/* The bubble and its "⋮" trigger as one row, not the bubble alone with the
+   menu on a separate meta line above it — a grouped message (no name/time
+   row at all) used to still cost a whole extra line of vertical space just
+   to hold that one small button. row-reverse on "mine" puts the trigger on
+   the OUTER edge (away from the bubble's own corner) on both sides, so it
+   never crowds the text itself. */
+.chat-msg-bubble-row { display: flex; align-items: flex-end; gap: 2px; min-width: 0; }
+.chat-msg-row.mine .chat-msg-bubble-row { flex-direction: row-reverse; }
+.chat-msg-bubble-stack { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.chat-msg-row.mine .chat-msg-bubble-stack { align-items: flex-end; }
+
+/* WhatsApp's swipe-to-reply (see SwipeToReply in ChatPage.jsx) — the reply
+   arrow lives in the space the bubble vacates as it's dragged right,
+   fading in with the drag instead of just appearing at full strength.
+   touch-action: pan-y is what actually lets this coexist with the
+   thread's own vertical scrolling: it tells the browser only vertical
+   panning is its native gesture here, leaving a mostly-horizontal drag
+   free for the component's own touchmove handler without a
+   preventDefault() call (which React's own passive touch listeners
+   would silently ignore anyway). */
+.chat-swipe-wrap { position: relative; min-width: 0; }
+.chat-swipe-content { touch-action: pan-y; }
+.chat-swipe-reply-icon {
+  position: absolute; left: -26px; top: 50%; transform: translateY(-50%);
+  color: var(--tix-brand); font-size: 17px; pointer-events: none;
+}
 
 .chat-bubble {
   border-radius: 14px; padding: 8px 13px; background: var(--tix-surface-2); color: var(--tix-ink-2);
@@ -4288,16 +4472,18 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-msg-row.mine .chat-msg-actions { justify-content: flex-end; }
 
 /* The "⋮" menu — anchored to its own trigger, same click-away popup
-   pattern as the reaction picker. Sits at the end of the meta row so it
-   reads as "this message's menu", not a stray button floating nearby. */
-.chat-menu-wrap { position: relative; margin-left: auto; }
+   pattern as the reaction picker. Visible on every message, not just on
+   hover, since this is a touch-first product now and there's no hover on
+   a phone; kept small and low-contrast so it reads as a quiet affordance
+   rather than another thing competing with the message itself. */
+.chat-menu-wrap { position: relative; flex: none; align-self: flex-end; padding-bottom: 6px; }
 .chat-menu-btn {
   border: none; background: transparent; color: var(--tix-ink-3); cursor: pointer;
-  font-size: 15px; line-height: 1; padding: 2px 6px; border-radius: 6px;
+  font-size: 15px; line-height: 1; padding: 2px 6px; border-radius: 6px; opacity: .6;
 }
-.chat-menu-btn:hover { background: var(--tix-surface-2); color: var(--tix-ink); }
+.chat-menu-btn:hover { background: var(--tix-surface-2); color: var(--tix-ink); opacity: 1; }
 .chat-menu-panel {
-  position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; min-width: 140px;
+  position: absolute; bottom: 0; right: 0; z-index: 30; min-width: 140px;
   display: flex; flex-direction: column; padding: 4px; border: 1px solid var(--tix-line);
   border-radius: 10px; background: var(--tix-surface); box-shadow: var(--shadow-1);
 }
@@ -4308,13 +4494,6 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-menu-panel button:hover { background: var(--tix-surface-2); color: var(--tix-ink); }
 .chat-menu-panel button.danger { color: var(--tix-urgent); }
 .chat-menu-panel button.danger:hover { background: color-mix(in srgb, var(--tix-urgent) 10%, transparent); }
-/* .chat-menu-wrap sits at the end of its row either way (margin-left:auto),
-   including for "mine" rows which are themselves pushed flush to the
-   container's right edge — so the panel must always open LEFTWARD from
-   that trigger (right:0, the default). A "mine"-specific left:0 override
-   used to flip that, opening the panel rightward from a trigger already
-   sitting at the right edge and pushing it straight off the viewport —
-   confirmed live, the panel rendered half off-screen. */
 
 /* A quoted reply — above the bubble it belongs to, or above the composer
    while you're still composing one. A hairline left border reads as "this
@@ -4345,15 +4524,42 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-composer {
   flex: none; border-top: 1px solid var(--tix-line); padding: 12px 20px 16px; background: var(--tix-surface);
 }
-.chat-composer-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-.chat-composer-attach {
-  flex: none; width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center; background: transparent; color: var(--tix-ink-3);
+
+/* The single-row pill (image 2's reference: Teams' own compact composer) —
+   the text area and every action (formatting, emoji, attach, send) live in
+   one bordered capsule instead of a toolbar bar sitting above a separate
+   input box. Formatting stays reachable (the "Aa" icon), just hidden by
+   default rather than always taking up a row nobody asked for. */
+.chat-composer-pill {
+  display: flex; align-items: flex-end; gap: 6px;
+  border: 1px solid var(--tix-line); border-radius: 22px;
+  padding: 6px 8px 6px 16px; background: var(--tix-surface-2);
 }
-.chat-composer-attach:hover:not(:disabled) { background: var(--tix-surface-2); color: var(--tix-ink); }
-.chat-composer-attach:disabled { opacity: .5; cursor: not-allowed; }
+.chat-composer-pill:focus-within { border-color: var(--tix-brand); }
+.chat-composer-input { flex: 1; min-width: 0; }
+.chat-composer-input .rte-compact .rte-prose { min-height: 1.5em; max-height: 30vh; padding: 7px 0; }
+.chat-composer-icons { display: flex; align-items: center; gap: 2px; flex: none; padding-bottom: 2px; }
+.chat-composer-icon-btn {
+  flex: none; width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; background: transparent;
+  color: var(--tix-ink-3); font-size: 16px; line-height: 1;
+}
+.chat-composer-icon-btn:hover:not(:disabled) { background: var(--tix-surface); color: var(--tix-ink); }
+.chat-composer-icon-btn:disabled { opacity: .5; cursor: not-allowed; }
+.chat-composer-icon-btn.active { background: color-mix(in srgb, var(--tix-brand) 16%, transparent); color: var(--tix-brand); }
+.chat-emoji-wrap { position: relative; display: inline-flex; }
+.chat-emoji-picker {
+  position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 30;
+  display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px;
+  padding: 8px; border: 1px solid var(--tix-line); border-radius: 10px; background: var(--tix-surface);
+  box-shadow: var(--shadow-1);
+}
+.chat-emoji-picker button {
+  border: none; background: transparent; font-size: 18px; padding: 4px; cursor: pointer; border-radius: 6px;
+}
+.chat-emoji-picker button:hover { background: var(--tix-surface-2); }
 .chat-composer-send {
-  flex: none; width: 38px; height: 38px; border-radius: 50%; border: none; cursor: pointer;
+  flex: none; width: 34px; height: 34px; border-radius: 50%; border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   background: var(--tix-brand); color: #fff;
 }
@@ -4385,19 +4591,11 @@ table.data tr:last-child td { border-bottom: none; }
 }
 .chat-reaction-chip.mine { border-color: var(--tix-brand); background: color-mix(in srgb, var(--tix-brand) 12%, transparent); }
 .chat-reaction-chip:hover { filter: brightness(0.97); }
-.chat-reaction-add-wrap { position: relative; }
-.chat-reaction-add {
-  border: 1px dashed var(--tix-line); border-radius: 999px; background: transparent; color: var(--tix-ink-3);
-  font-size: 12px; padding: 3px 7px; cursor: pointer; line-height: 1;
-}
-.chat-reaction-add:hover { border-color: var(--tix-ink-3); color: var(--tix-ink-2); }
+/* Opened via the "⋮" menu's own "React" item now, not a permanently-visible
+   dashed "+" under every message — reuses .chat-menu-wrap's own
+   position:relative, so this anchors the same way .chat-menu-panel does. */
 .chat-reaction-picker {
-  /* right:0, not left:0 — this trigger sits inside a "mine" row pushed
-     flush to the container's right edge same as the message menu (see its
-     own comment), so opening rightward pushed the picker straight off the
-     viewport. right:0 opens it leftward from the trigger instead, which
-     never runs past the edge on either side. */
-  position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 30; display: flex; gap: 4px;
+  position: absolute; bottom: calc(100% + 4px); right: 0; z-index: 30; display: flex; gap: 4px;
   padding: 6px; border: 1px solid var(--tix-line); border-radius: 10px; background: var(--tix-surface);
   box-shadow: var(--shadow-1);
 }
@@ -4424,6 +4622,67 @@ table.data tr:last-child td { border-bottom: none; }
 .person-field label { display: block; font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
 .person-field-value { font-size: 13.5px; color: var(--ink-2); }
 
+.person-modal-avatar-photo { border-radius: 50%; object-fit: cover; }
+
+/* The Organisation section — a Manager card, then a horizontal, scrollable
+   row of every direct report, the same layout a Teams profile card uses.
+   Every card is a click-through target that re-points the SAME modal at
+   that person (see PersonModal's own comment) — nothing here is a link to
+   another page, just this one card walking the chain. */
+.person-org-groups { display: flex; flex-direction: column; gap: 16px; }
+.person-org-group-label { font-size: 12px; color: var(--ink-3); margin-bottom: 8px; }
+.person-org-row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 2px; }
+.person-org-card {
+  flex: 0 0 auto; width: 84px;
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px;
+  border: none; background: none; padding: 6px; border-radius: 10px; cursor: pointer; font: inherit;
+}
+.person-org-card:hover { background: var(--bg); }
+.person-org-card:hover .person-org-card-name { color: var(--brand-dark); }
+.person-org-avatar { width: 52px; height: 52px; font-size: 16px; }
+.person-org-avatar-photo { object-fit: cover; }
+.person-org-card-name {
+  font-size: 12.5px; font-weight: 600; color: var(--ink);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.person-org-card-role {
+  font-size: 11px; color: var(--ink-3); text-transform: capitalize;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+
+/* Mobile: a real phone chat app shows one pane at a time — the chat list,
+   or (once you tap into one) that conversation full-screen with a back
+   arrow, never both stacked on the same page. The generic .tix-detail
+   900px rule two-column-stacks list-then-thread instead (fine for
+   Tickets' own layout, which this shares the base classes with), which
+   for Chat meant scrolling past the entire chat list just to reach the
+   conversation you opened, in a squeezed non-full-height box — not a
+   "proper chat" by any reading. Every selector here is scoped under
+   .chat-detail specifically so Tickets' own mobile behaviour is
+   untouched. */
 @media (max-width: 900px) {
-  .chat-detail { grid-template-columns: 1fr; }
+  .tix-shell.chat-detail {
+    height: var(--page-avail-h, calc(100vh - 68px - var(--page-top-h, 0px) - 40px));
+  }
+  .chat-detail { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr); }
+  .chat-detail .tix-detail-list,
+  .chat-detail .chat-thread {
+    height: 100%; overflow-y: auto; border-right: none; border-bottom: none;
+  }
+  /* Only the list shows until a chat is opened (channelId present, see
+     ChatPage's own chat-mobile-open class); then only that thread does. */
+  .chat-detail .chat-thread { display: none; }
+  .chat-detail.chat-mobile-open .tix-detail-list { display: none; }
+  .chat-detail.chat-mobile-open .chat-thread { display: flex; }
+
+  .chat-mobile-back { display: inline-flex !important; }
+
+  /* Your own messages don't need your own avatar repeated next to every
+     bubble on a narrow phone screen — the bubble's own colour and right
+     alignment already say "this one's mine". The other person's avatar
+     stays, since on a phone it's the one identifying detail doing real
+     work (who said this). Removing it (not just hiding it) lets the
+     bubble use the freed width instead of leaving an empty gap where the
+     avatar used to sit. */
+  .chat-msg-row.mine .tix-avatar { display: none; }
 }

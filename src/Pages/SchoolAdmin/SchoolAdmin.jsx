@@ -16,6 +16,9 @@ import ClassesPanel from "./ClassesPanel";
 import AdmissionsSettingsPanel from "./AdmissionsSettingsPanel";
 import PaymentGatewaySettingsPanel from "./PaymentGatewaySettingsPanel";
 import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
+import OrganogramPanel from "./OrganogramPanel";
+import { STAFF_ROLES } from "../../lib/orgChart";
+import { ROLES, ROLE_LABEL, toneFor, roleAccent } from "../../lib/roles";
 import {
   fetchSchoolMembers,
   updateMemberRole,
@@ -60,22 +63,6 @@ import {
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
-const ROLES = [
-  ["owner", "Proprietor"],
-  ["admin", "Administrator"],
-  // Approves and releases results. Kept separate from Administrator on
-  // purpose: whoever enters marks must not be the one who signs them off, so
-  // the database refuses an approval from the person who submitted it.
-  ["principal", "Principal"],
-  ["bursar", "Bursar"],
-  ["admissions", "Admissions"],
-  ["teacher", "Teacher"],
-  ["student", "Student"],
-  ["parent", "Parent"],
-];
-
-const ROLE_LABEL = Object.fromEntries(ROLES);
-
 const PEOPLE_EXPORT_COLUMNS = [
   { key: "profiles.first_name", label: "First name" },
   { key: "profiles.surname", label: "Surname" },
@@ -85,23 +72,6 @@ const PEOPLE_EXPORT_COLUMNS = [
   { key: "is_active", label: "Active" },
   { key: "created_at", label: "Joined" },
 ];
-
-const toneFor = (role) => {
-  if (role === "owner" || role === "admin" || role === "principal") return "danger";
-  if (role === "teacher") return "brand";
-  if (role === "bursar" || role === "admissions") return "warn";
-  return undefined;
-};
-
-// Same grouping as toneFor, as a CSS colour instead of a badge tone — used
-// to give the role picker itself a coloured edge, so a row's seniority
-// reads at a glance without having to read the word.
-const roleAccent = (role) => {
-  if (role === "owner" || role === "admin" || role === "principal") return "var(--danger)";
-  if (role === "teacher") return "var(--brand)";
-  if (role === "bursar" || role === "admissions") return "var(--warn-ink)";
-  return "var(--line)";
-};
 
 /* ------------------------------------------------------------------ people */
 const PeoplePanel = () => {
@@ -606,19 +576,28 @@ const PeoplePanel = () => {
                         )}
                       </td>
                       <td>
-                        <Select
-                          className="select"
-                          style={{ width: "auto", minWidth: 160, padding: "6px 8px" }}
-                          value={row.manager_id || ""}
-                          disabled={rowBusy}
-                          onChange={(v) => changeManager(row, v)}
-                          options={[
-                            { value: "", label: "Not set" },
-                            ...members
-                              .filter((m) => m.user_id !== row.user_id && m.is_active)
-                              .map((m) => ({ value: m.user_id, label: displayName(m.profiles) })),
-                          ]}
-                        />
+                        {/* Reporting lines are a staff concept only — a
+                            student or parent has nobody to report to, and
+                            can't be picked as someone else's manager
+                            either (see STAFF_ROLES, shared with the org
+                            chart panel so both agree on who counts). */}
+                        {STAFF_ROLES.includes(row.role) ? (
+                          <Select
+                            className="select"
+                            style={{ width: "auto", minWidth: 160, padding: "6px 8px" }}
+                            value={row.manager_id || ""}
+                            disabled={rowBusy}
+                            onChange={(v) => changeManager(row, v)}
+                            options={[
+                              { value: "", label: "Not set" },
+                              ...members
+                                .filter((m) => m.user_id !== row.user_id && m.is_active && STAFF_ROLES.includes(m.role))
+                                .map((m) => ({ value: m.user_id, label: displayName(m.profiles) })),
+                            ]}
+                          />
+                        ) : (
+                          <span style={{ color: "var(--ink-3)" }}>{"—"}</span>
+                        )}
                       </td>
                       <td style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>
                         {formatDate(row.created_at, { withTime: false })}
@@ -1318,7 +1297,7 @@ const MailboxesPanel = () => {
   );
 };
 
-const TABS = ["people", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "settings"];
+const TABS = ["people", "organogram", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "settings"];
 
 const SchoolAdmin = () => {
   const { school } = useSchool();
@@ -1366,6 +1345,7 @@ const SchoolAdmin = () => {
           <Tabs
             tabs={[
               { id: "people", label: "People" },
+              { id: "organogram", label: "Org chart" },
               { id: "academic", label: "Calendar" },
               { id: "classes", label: "Classes & subjects" },
               { id: "levels", label: "Classes & departments" },
@@ -1383,6 +1363,7 @@ const SchoolAdmin = () => {
       >
 
         {tab === "people" ? <PeoplePanel /> : null}
+        {tab === "organogram" ? <OrganogramPanel /> : null}
         {tab === "academic" ? <AcademicPanel /> : null}
         {tab === "classes" ? <ClassesPanel /> : null}
         {tab === "levels" ? <LevelsPanel /> : null}

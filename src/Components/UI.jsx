@@ -972,7 +972,16 @@ export const displayName = (profile) => {
 };
 
 export const initials = (profile) => {
-  const name = displayName(profile);
+  // displayName() already strips a REAL profile's own email fallback down
+  // to its local part — but a caller can also pass an already-resolved
+  // display string straight in as { first_name: someName } (chat's channel
+  // list does this with the DM's other-member name, which can itself be an
+  // email address when that person's own name fields are blank). Splitting
+  // that on "." the same way a real name splits on it read "danieloshinubi
+  // @gmail" and "com" as two words and initialed them "DC" — strip the
+  // domain first so an email always initials from its local part only.
+  const raw = displayName(profile);
+  const name = raw.includes("@") ? raw.split("@")[0] : raw;
   const parts = name.split(/[\s._-]+/).filter(Boolean);
   const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : name.slice(0, 2);
   return letters.toUpperCase();

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { send as sendIcon } from "react-icons-kit/feather/send";
@@ -6,10 +6,13 @@ import { check } from "react-icons-kit/feather/check";
 import { paperclip } from "react-icons-kit/feather/paperclip";
 import { fileText } from "react-icons-kit/feather/fileText";
 import { x as xIcon } from "react-icons-kit/feather/x";
+import { type as formatIcon } from "react-icons-kit/feather/type";
+import { arrowLeft } from "react-icons-kit/feather/arrowLeft";
 import Navbar from "../../Components/Navbar/Navbar";
 import { RichTextEditor } from "../../Components/RichTextEditor";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
 import DocumentPreviewModal from "../../Components/DocumentPreview";
+import PersonModal from "../../Components/PersonModal";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import {
@@ -23,6 +26,7 @@ import {
   markChannelRead,
   subscribeToChatChannel,
   subscribeToMyChannels,
+  subscribeToSchoolChatActivity,
   subscribeToChannelMembers,
   fetchChannelMembers,
   subscribeToMessageReactions,
@@ -35,7 +39,7 @@ import {
   signedChatAttachmentUrl,
   fetchSchoolMembers,
 } from "../../lib/api";
-import { Page, Button, Notice, Empty, Modal, displayName, initials, formatDate } from "../../Components/UI";
+import { Page, Button, Notice, Empty, Modal, displayName, initials } from "../../Components/UI";
 
 // An empty Tiptap document still serialises to "<p></p>" — the same reason
 // Tickets' own composer checks text content rather than the raw HTML.
@@ -99,6 +103,14 @@ const AttachmentChip = ({ name, size, onOpen, openLabel = "Open", onRemove, busy
 // keyboard — keeps this to a click instead of a whole picker component.
 const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
+// The composer's own emoji picker — a wider curated set than reactions
+// (these get typed INTO a message, not tapped onto someone else's), still
+// a fixed grid rather than a full emoji keyboard/search.
+const COMPOSE_EMOJI = [
+  "😀", "😂", "😉", "😍", "🤔", "😢", "😮", "😡",
+  "👍", "👎", "🙏", "👏", "🎉", "🔥", "❤️", "✅",
+];
+
 // Never send a typing broadcast on every keystroke — once per this window
 // is plenty for "someone is typing" to feel live without flooding the
 // channel.
@@ -108,9 +120,12 @@ const TYPING_BROADCAST_MS = 2500;
 // clears if the other person just closes the tab mid-type.
 const TYPING_EXPIRE_MS = 4000;
 
-const ReactionBar = ({ message, myUserId, onToggle }) => {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const wrapRef = useClickAway(pickerOpen, () => setPickerOpen(false));
+// Existing reactions only — the "add a reaction" control used to live
+// here too, permanently visible under every single message whether or not
+// it had any, which is what made the thread read as cluttered rather than
+// "a professional built this". It's a MessageMenu action now (see below);
+// this renders nothing at all once a message has no reactions yet.
+const ReactionChips = ({ message, myUserId, onToggle }) => {
   const counts = {};
   (message.reactions || []).forEach((r) => {
     if (!counts[r.emoji]) counts[r.emoji] = { count: 0, mine: false };
@@ -118,6 +133,7 @@ const ReactionBar = ({ message, myUserId, onToggle }) => {
     if (r.user_id === myUserId) counts[r.emoji].mine = true;
   });
   const entries = Object.entries(counts);
+  if (entries.length === 0) return null;
 
   return (
     <div className="chat-reactions">
@@ -131,42 +147,19 @@ const ReactionBar = ({ message, myUserId, onToggle }) => {
           {emoji} {count}
         </button>
       ))}
-      <span className="chat-reaction-add-wrap" ref={wrapRef}>
-        <button
-          type="button"
-          className="chat-reaction-add"
-          aria-label="React"
-          onClick={() => setPickerOpen((v) => !v)}
-        >
-          {"🙂+"}
-        </button>
-        {pickerOpen ? (
-          <div className="chat-reaction-picker">
-            {QUICK_REACTIONS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                onClick={() => {
-                  onToggle(emoji);
-                  setPickerOpen(false);
-                }}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        ) : null}
-      </span>
     </div>
   );
 };
 
-// The WhatsApp-style "⋮" on every message — Reply and Forward for anyone,
-// Copy for anyone, Edit/Delete added only for your own and only while it's
-// not already soft-deleted.
-const MessageMenu = ({ message, mine, onReply, onForward, onCopy, onEdit, onDelete }) => {
+// The WhatsApp-style "⋮" on every message — React, Reply and Forward for
+// anyone, Copy for anyone, Edit/Delete added only for your own and only
+// while it's not already soft-deleted. Sits beside the bubble itself (see
+// its render site), not on its own meta line, so a grouped message's menu
+// doesn't cost an extra visible row the way it used to.
+const MessageMenu = ({ message, mine, onReply, onForward, onCopy, onEdit, onDelete, onReact }) => {
   const [open, setOpen] = useState(false);
-  const wrapRef = useClickAway(open, () => setOpen(false));
+  const [reactOpen, setReactOpen] = useState(false);
+  const wrapRef = useClickAway(open || reactOpen, () => { setOpen(false); setReactOpen(false); });
   const act = (fn) => {
     setOpen(false);
     fn();
@@ -179,6 +172,7 @@ const MessageMenu = ({ message, mine, onReply, onForward, onCopy, onEdit, onDele
       </button>
       {open ? (
         <div className="chat-menu-panel" role="menu">
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); setReactOpen(true); }}>{"React"}</button>
           <button type="button" role="menuitem" onClick={() => act(onReply)}>{"Reply"}</button>
           <button type="button" role="menuitem" onClick={() => act(onForward)}>{"Forward"}</button>
           {!message.deleted_at ? (
@@ -192,7 +186,85 @@ const MessageMenu = ({ message, mine, onReply, onForward, onCopy, onEdit, onDele
           ) : null}
         </div>
       ) : null}
+      {reactOpen ? (
+        <div className="chat-reaction-picker">
+          {QUICK_REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => {
+                onReact(emoji);
+                setReactOpen(false);
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </span>
+  );
+};
+
+// How far a message has to be dragged right before letting go of it counts
+// as "reply to this", not just an aborted swipe — WhatsApp's own threshold
+// reads about the same relative to a phone-width message bubble.
+const SWIPE_REPLY_DISTANCE = 56;
+
+// WhatsApp's own signature gesture: drag any message right and let go to
+// reply to it — the same result as the "⋮" menu's "Reply", just faster to
+// reach with a thumb. Touch-only on purpose (a mouse already has "⋮" →
+// Reply, and WhatsApp's own desktop app doesn't do this by dragging with a
+// mouse either — it's a phone-specific shortcut, not a replacement for the
+// menu, which stays as the reliable, discoverable way in for everyone).
+const SwipeToReply = ({ onReply, children }) => {
+  const [dragX, setDragX] = useState(0);
+  const startRef = useRef(null);
+  const draggingRef = useRef(false);
+
+  const onTouchStart = (e) => {
+    const t = e.touches[0];
+    startRef.current = { x: t.clientX, y: t.clientY };
+    draggingRef.current = false;
+  };
+  const onTouchMove = (e) => {
+    if (!startRef.current) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startRef.current.x;
+    const dy = t.clientY - startRef.current.y;
+    if (!draggingRef.current) {
+      // Decided once per touch: a mostly-horizontal, rightward drag claims
+      // the gesture as a reply-swipe. Anything else — scrolling the
+      // thread, a leftward flick — is left alone so it keeps working
+      // exactly as it already did.
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dy) > Math.abs(dx) || dx < 0) {
+        startRef.current = null;
+        return;
+      }
+      draggingRef.current = true;
+    }
+    setDragX(Math.min(dx, SWIPE_REPLY_DISTANCE * 1.4));
+  };
+  const onTouchEnd = () => {
+    if (draggingRef.current && dragX >= SWIPE_REPLY_DISTANCE) onReply();
+    setDragX(0);
+    startRef.current = null;
+    draggingRef.current = false;
+  };
+
+  return (
+    <div className="chat-swipe-wrap" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      <span className="chat-swipe-reply-icon" style={{ opacity: Math.min(dragX / SWIPE_REPLY_DISTANCE, 1) }} aria-hidden="true">
+        {"↩"}
+      </span>
+      <div
+        className="chat-swipe-content"
+        style={{ transform: `translateX(${dragX}px)`, transition: dragX === 0 ? "transform .15s ease" : "none" }}
+      >
+        {children}
+      </div>
+    </div>
   );
 };
 
@@ -228,65 +300,6 @@ const ForwardModal = ({ message, channels, onClose, onForward }) => {
           ))}
         </ul>
       )}
-    </Modal>
-  );
-};
-
-// The Teams-style "who is this" card behind clicking anyone's avatar —
-// role and reporting line come straight out of the same schoolMembers list
-// the page already loaded to resolve message authors, no extra fetch.
-const PersonModal = ({ person, schoolMembers, onClose }) => {
-  const manager = person.manager_id ? schoolMembers.find((m) => m.user_id === person.manager_id) : null;
-  const reports = schoolMembers.filter((m) => m.manager_id === person.user_id);
-
-  return (
-    <Modal title="Profile" onClose={onClose}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-        <span className="tix-avatar" style={{ width: 52, height: 52, fontSize: 18 }}>
-          {initials(person.profiles)}
-        </span>
-        <div>
-          <div style={{ fontSize: 17, fontWeight: 700 }}>{displayName(person.profiles)}</div>
-          <div style={{ fontSize: 13, color: "var(--ink-3)", textTransform: "capitalize" }}>{person.role}</div>
-        </div>
-      </div>
-
-      {person.profiles?.email ? (
-        <div className="person-field">
-          <label>{"Email"}</label>
-          <div className="person-field-value">{person.profiles.email}</div>
-        </div>
-      ) : null}
-
-      <div className="person-field">
-        <label>{"Reports to"}</label>
-        {manager ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span className="tix-avatar sm">{initials(manager.profiles)}</span>
-            <span className="person-field-value">
-              {displayName(manager.profiles)} · <span style={{ textTransform: "capitalize" }}>{manager.role}</span>
-            </span>
-          </div>
-        ) : (
-          <div className="person-field-value">{"Not set"}</div>
-        )}
-      </div>
-
-      {reports.length > 0 ? (
-        <div className="person-field">
-          <label>{`Direct reports (${reports.length})`}</label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {reports.map((r) => (
-              <div key={r.user_id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span className="tix-avatar sm">{initials(r.profiles)}</span>
-                <span className="person-field-value">
-                  {displayName(r.profiles)} · <span style={{ textTransform: "capitalize" }}>{r.role}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
     </Modal>
   );
 };
@@ -452,6 +465,7 @@ const ChatPage = () => {
   const { schoolId } = useSchool();
 
   const [channels, setChannels] = useState([]);
+  const [chatQuery, setChatQuery] = useState("");
   const [schoolMembers, setSchoolMembers] = useState([]);
   const [membersById, setMembersById] = useState({});
   const membersByIdRef = useRef({});
@@ -476,6 +490,10 @@ const ChatPage = () => {
   const [openingAttachmentId, setOpeningAttachmentId] = useState(null);
   const threadEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const composerRef = useRef(null);
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const emojiWrapRef = useClickAway(emojiPickerOpen, () => setEmojiPickerOpen(false));
   const typingChannelRef = useRef(null);
   const lastTypingSentRef = useRef(0);
   const typingTimeoutsRef = useRef({});
@@ -514,11 +532,21 @@ const ChatPage = () => {
   // Any change to any channel I'm in (a new message elsewhere, someone
   // adding me to a group) refreshes the sidebar so unread badges and
   // ordering stay current without a manual reload.
+  //
+  // Two subscriptions, not one: subscribeToMyChannels only ever fires on a
+  // change to MY OWN chat_channel_members row (a membership add/remove, my
+  // own last_read_at), which someone else's new message never touches —
+  // subscribeToSchoolChatActivity is what actually reacts to a new message
+  // arriving in a channel I'm not currently looking at.
   useEffect(() => {
-    if (!user?.id) return undefined;
-    const channel = subscribeToMyChannels(user.id, () => loadOverview());
-    return () => channel.unsubscribe();
-  }, [user?.id, loadOverview]);
+    if (!user?.id || !schoolId) return undefined;
+    const membershipChannel = subscribeToMyChannels(user.id, () => loadOverview());
+    const activityChannel = subscribeToSchoolChatActivity(schoolId, () => loadOverview());
+    return () => {
+      membershipChannel.unsubscribe();
+      activityChannel.unsubscribe();
+    };
+  }, [user?.id, schoolId, loadOverview]);
 
   const loadChannelMembers = useCallback(() => {
     if (!channelId) return;
@@ -782,6 +810,15 @@ const ChatPage = () => {
     loadOverview();
   };
 
+  // chat_overview names a DM by the OTHER person, and a group by its own
+  // name (see its own comment) — one field, one search box, covers "find
+  // someone's name" and "find a group chat" without telling the two apart.
+  const filteredChannels = useMemo(() => {
+    const needle = chatQuery.trim().toLowerCase();
+    if (!needle) return channels;
+    return channels.filter((c) => (c.name || "").toLowerCase().includes(needle));
+  }, [channels, chatQuery]);
+
   const activeChannel = channels.find((c) => c.id === channelId);
   const myProfile = membersById[user?.id];
   // The other side of a DM — chat_overview never names them (it returns
@@ -801,16 +838,26 @@ const ChatPage = () => {
       <Navbar />
       <Page title="Chat" wide>
         <Notice tone="error">{error}</Notice>
-        <div className="tix-shell tix-detail chat-detail">
+        <div className={`tix-shell tix-detail chat-detail${channelId ? " chat-mobile-open" : ""}`}>
           <aside className="tix-detail-list">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <strong>{"Chats"}</strong>
               <Button size="sm" onClick={() => setShowNewChat(true)}>{"New"}</Button>
             </div>
+            {channels.length > 0 ? (
+              <input
+                className="input chat-search"
+                placeholder="Search chats"
+                value={chatQuery}
+                onChange={(e) => setChatQuery(e.target.value)}
+              />
+            ) : null}
             {channels.length === 0 ? (
               <Empty>{"No chats yet. Start one with “New” above."}</Empty>
+            ) : filteredChannels.length === 0 ? (
+              <Empty>{"No chats match that search."}</Empty>
             ) : (
-              channels.map((c) => (
+              filteredChannels.map((c) => (
                 <div
                   key={c.id}
                   role="button"
@@ -833,13 +880,28 @@ const ChatPage = () => {
                         className={`chat-list-item-name${c.unread_count > 0 ? " unread" : ""}${c.other_user_id ? " chat-clickable-name" : ""}`}
                         onClick={c.other_user_id ? (e) => { e.stopPropagation(); openPerson(c.other_user_id); } : undefined}
                       >
-                        {c.name || "Unnamed channel"}
+                        {c.name?.trim() || "Unnamed channel"}
                       </span>
                       <span className="chat-list-item-time">{shortTimestamp(c.last_message_at)}</span>
                     </span>
                     <span className="chat-list-item-preview">
-                      <span>{(c.last_message_preview || "No messages yet").replace(/<[^>]+>/g, "")}</span>
-                      {c.unread_count > 0 ? <span className="bell-count">{c.unread_count}</span> : null}
+                      {/* Typing only ever exists for the channel actually
+                          open right now — subscribeToTyping only listens
+                          on channelId, not every channel in the list — so
+                          this can only ever apply to that one row. */}
+                      {c.id === channelId && typingNames.length > 0 ? (
+                        <span className="chat-typing">{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</span>
+                      ) : (
+                        <span>{(c.last_message_preview || "No messages yet").replace(/<[^>]+>/g, "")}</span>
+                      )}
+                      {/* The bold name alone reads as "different", not
+                          "unread", at a glance — this dot is the actual
+                          unread signal, same shape as the sidebar's own
+                          Chat-link dot, so both places agree on what
+                          "unread" looks like. */}
+                      {c.unread_count > 0 ? (
+                        <span className="chat-list-dot" title={`${c.unread_count} unread`} aria-hidden="true" />
+                      ) : null}
                     </span>
                   </span>
                 </div>
@@ -857,7 +919,15 @@ const ChatPage = () => {
                 <div className="chat-thread-head">
                   <button
                     type="button"
-                    className="tix-avatar sm chat-avatar-btn"
+                    className="chat-mobile-back"
+                    aria-label="Back to chats"
+                    onClick={() => navigate("/Chat")}
+                  >
+                    <Icon icon={arrowLeft} size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="tix-avatar chat-avatar-btn"
                     disabled={!otherMemberId}
                     onClick={() => otherMemberId && openPerson(otherMemberId)}
                   >
@@ -868,7 +938,7 @@ const ChatPage = () => {
                       className={otherMemberId ? "chat-clickable-name" : undefined}
                       onClick={() => otherMemberId && openPerson(otherMemberId)}
                     >
-                      {activeChannel?.name || "Chat"}
+                      {activeChannel?.name?.trim() || "Chat"}
                     </h1>
                     {typingNames.length > 0 ? (
                       <div className="chat-typing">{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</div>
@@ -898,16 +968,73 @@ const ChatPage = () => {
                           {mine ? initials(myProfile) : initials(m.author)}
                         </button>
                         <div className="chat-msg-col">
-                          <div className="chat-msg-meta">
-                            {!grouped ? (
+                          {!grouped ? (
+                            <div className="chat-msg-meta">
                               <strong
                                 className="chat-clickable-name"
                                 onClick={() => openPerson(mine ? user.id : m.author_id)}
                               >
                                 {mine ? "You" : displayName(m.author)}
                               </strong>
-                            ) : null}
-                            {!grouped ? <span>{formatDate(m.created_at)}{m.edited_at ? " · edited" : ""}</span> : null}
+                              <span>{shortTimestamp(m.created_at)}{m.edited_at ? " · edited" : ""}</span>
+                            </div>
+                          ) : null}
+                          {/* The menu sits beside the bubble itself, not on
+                              its own meta line — a grouped message (no name/
+                              time shown above it) used to still get a whole
+                              extra row just to hold this one small button,
+                              which is most of what made the thread read as
+                              cluttered rather than "a professional built
+                              this". row-reverse for "mine" (see CSS) puts it
+                              on the outer edge, away from the bubble's own
+                              corner, on both sides. */}
+                          <div className="chat-msg-bubble-row">
+                            <SwipeToReply onReply={() => setReplyingTo(m)}>
+                              <div className="chat-msg-bubble-stack">
+                                {m.deleted_at ? (
+                                  <div className="chat-bubble deleted">{"Message deleted."}</div>
+                                ) : editingId === m.id ? (
+                                  <div>
+                                    <RichTextEditor
+                                      value={editBody}
+                                      onChange={setEditBody}
+                                      placeholder="Edit message..."
+                                      onSubmitEditor={() => saveEdit(m.id)}
+                                    />
+                                    <div className="btn-row" style={{ marginTop: 6 }}>
+                                      <Button size="sm" onClick={() => saveEdit(m.id)}>{"Save"}</Button>
+                                      <Button size="sm" variant="secondary" onClick={() => setEditingId(null)}>{"Cancel"}</Button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    {m.reply_to ? <ReplyPreview message={m.reply_to} className="chat-reply-quote" /> : null}
+                                    {!isHtmlEmpty(m.body) ? (
+                                      <div
+                                        className="chat-bubble tix-msg-html"
+                                        // Instagram/WhatsApp's other signature
+                                        // gesture — double-tap a message to
+                                        // heart it, the same toggle the "⋮"
+                                        // menu's own React item already
+                                        // calls. A shortcut onto existing
+                                        // behaviour, not a new one.
+                                        onDoubleClick={() => toggleReaction(m, "❤️")}
+                                        dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }}
+                                      />
+                                    ) : null}
+                                    {m.attachment_path ? (
+                                      <AttachmentChip
+                                        name={m.attachment_name}
+                                        size={m.attachment_size}
+                                        busy={openingAttachmentId === m.id}
+                                        onOpen={() => openAttachment(m)}
+                                      />
+                                    ) : null}
+                                    <ReactionChips message={m} myUserId={user?.id} onToggle={(emoji) => toggleReaction(m, emoji)} />
+                                  </>
+                                )}
+                              </div>
+                            </SwipeToReply>
                             {!m.deleted_at ? (
                               <MessageMenu
                                 message={m}
@@ -917,44 +1044,10 @@ const ChatPage = () => {
                                 onCopy={() => copyMessageText(m)}
                                 onEdit={() => { setEditingId(m.id); setEditBody(m.body); }}
                                 onDelete={() => remove(m.id)}
+                                onReact={(emoji) => toggleReaction(m, emoji)}
                               />
                             ) : null}
                           </div>
-                          {m.deleted_at ? (
-                            <div className="chat-bubble deleted">{"Message deleted."}</div>
-                          ) : editingId === m.id ? (
-                            <div>
-                              <RichTextEditor
-                                value={editBody}
-                                onChange={setEditBody}
-                                placeholder="Edit message..."
-                                onSubmitEditor={() => saveEdit(m.id)}
-                              />
-                              <div className="btn-row" style={{ marginTop: 6 }}>
-                                <Button size="sm" onClick={() => saveEdit(m.id)}>{"Save"}</Button>
-                                <Button size="sm" variant="secondary" onClick={() => setEditingId(null)}>{"Cancel"}</Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <>
-                              {m.reply_to ? <ReplyPreview message={m.reply_to} className="chat-reply-quote" /> : null}
-                              {!isHtmlEmpty(m.body) ? (
-                                <div
-                                  className="chat-bubble tix-msg-html"
-                                  dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }}
-                                />
-                              ) : null}
-                              {m.attachment_path ? (
-                                <AttachmentChip
-                                  name={m.attachment_name}
-                                  size={m.attachment_size}
-                                  busy={openingAttachmentId === m.id}
-                                  onOpen={() => openAttachment(m)}
-                                />
-                              ) : null}
-                              <ReactionBar message={m} myUserId={user?.id} onToggle={(emoji) => toggleReaction(m, emoji)} />
-                            </>
-                          )}
                           {seen ? <div className="chat-seen">{"Seen"}</div> : null}
                         </div>
                       </div>
@@ -981,32 +1074,75 @@ const ChatPage = () => {
                       onRemove={clearPendingFile}
                     />
                   ) : null}
-                  <RichTextEditor
-                    value={composeBody}
-                    onChange={(html) => { setComposeBody(html); notifyTyping(); }}
-                    placeholder="Type a message..."
-                    onSubmitEditor={send}
-                  />
                   <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
-                  <div className="chat-composer-row">
-                    <button
-                      type="button"
-                      className="chat-composer-attach"
-                      aria-label="Attach a file"
-                      disabled={!!pendingFile}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Icon icon={paperclip} size={17} />
-                    </button>
-                    <span style={{ flex: 1 }} />
-                    <button
-                      type="submit"
-                      className="chat-composer-send"
-                      disabled={sending || (isHtmlEmpty(composeBody) && !pendingFile)}
-                      aria-label="Send"
-                    >
-                      <Icon icon={sendIcon} size={17} />
-                    </button>
+                  <div className="chat-composer-pill">
+                    <div className="chat-composer-input">
+                      <RichTextEditor
+                        ref={composerRef}
+                        value={composeBody}
+                        onChange={(html) => { setComposeBody(html); notifyTyping(); }}
+                        placeholder="Type a message..."
+                        onSubmitEditor={send}
+                        showToolbar={showFormatting}
+                      />
+                    </div>
+                    <div className="chat-composer-icons">
+                      <button
+                        type="button"
+                        className={`chat-composer-icon-btn${showFormatting ? " active" : ""}`}
+                        aria-label="Formatting"
+                        title="Formatting"
+                        onClick={() => setShowFormatting((v) => !v)}
+                      >
+                        <Icon icon={formatIcon} size={17} />
+                      </button>
+                      <span className="chat-emoji-wrap" ref={emojiWrapRef}>
+                        <button
+                          type="button"
+                          className="chat-composer-icon-btn"
+                          aria-label="Emoji"
+                          title="Emoji"
+                          onClick={() => setEmojiPickerOpen((v) => !v)}
+                        >
+                          {"🙂"}
+                        </button>
+                        {emojiPickerOpen ? (
+                          <div className="chat-emoji-picker">
+                            {COMPOSE_EMOJI.map((emoji) => (
+                              <button
+                                key={emoji}
+                                type="button"
+                                onClick={() => {
+                                  composerRef.current?.insertContent(emoji);
+                                  setEmojiPickerOpen(false);
+                                }}
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        className="chat-composer-icon-btn"
+                        aria-label="Attach a file"
+                        title="Attach a file"
+                        disabled={!!pendingFile}
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        <Icon icon={paperclip} size={17} />
+                      </button>
+                      <button
+                        type="submit"
+                        className="chat-composer-send"
+                        disabled={sending || (isHtmlEmpty(composeBody) && !pendingFile)}
+                        aria-label="Send"
+                        title="Send"
+                      >
+                        <Icon icon={sendIcon} size={16} />
+                      </button>
+                    </div>
                   </div>
                 </form>
               </>

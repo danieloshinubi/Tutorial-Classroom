@@ -23,7 +23,7 @@ import AccountMenu from "./AccountMenu";
 import GlobalSearch from "../GlobalSearch";
 import Logo from "../Logo";
 import { modulesFor, groupModules } from "../../lib/modules";
-import { fetchChatOverview, subscribeToMyChannels } from "../../lib/api";
+import { fetchChatOverview, subscribeToMyChannels, subscribeToSchoolChatActivity } from "../../lib/api";
 
 // The application shell: a sidebar of modules on the left, a slim bar across
 // the top for search and the account.
@@ -72,8 +72,20 @@ const Navbar = () => {
     // Own topic suffix — ChatPage's own thread view watches the same rows
     // under the default topic, and two callers on one topic would collide
     // (see subscribeToMyChannels in api.js).
-    const channel = subscribeToMyChannels(user.id, load, "chat_channels_nav");
-    return () => channel.unsubscribe();
+    //
+    // Both subscriptions are needed, not either/or: subscribeToMyChannels
+    // catches membership changes (added to a group, my own last_read_at
+    // moving after I read something); subscribeToSchoolChatActivity catches
+    // the actual "someone sent me a message" signal, which never touches my
+    // own chat_channel_members row and so this badge never updated for it
+    // before — the exact bug of "the count doesn't show unless I'm already
+    // on Chat".
+    const membershipChannel = subscribeToMyChannels(user.id, load, "chat_channels_nav");
+    const activityChannel = subscribeToSchoolChatActivity(schoolId, load, "chat_activity_nav");
+    return () => {
+      membershipChannel.unsubscribe();
+      activityChannel.unsubscribe();
+    };
   }, [user?.id, schoolId]);
 
   // Remembered between visits: someone on a laptop who collapses it once
@@ -150,9 +162,12 @@ const Navbar = () => {
                   >
                     <Icon icon={ICONS[module.id] || grid} size={17} />
                     {collapsed ? null : <span>{module.label}</span>}
-                    {unread > 0 ? (
-                      <span className="bell-count side-link-badge">{unread > 9 ? "9+" : unread}</span>
-                    ) : null}
+                    {/* Teams' own unread indicator on its left rail is a
+                        plain dot, not a numbered bubble — the count is
+                        still there for anyone who needs it, in the title
+                        tooltip above ("Chat (3 unread)"), just not
+                        competing with the icon and label for space. */}
+                    {unread > 0 ? <span className="side-link-dot" aria-hidden="true" /> : null}
                   </NavLink>
                 );
               })}

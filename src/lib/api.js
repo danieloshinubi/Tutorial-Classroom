@@ -1163,6 +1163,28 @@ export const subscribeToMyChannels = (userId, onChange, topic = "chat_channels")
     )
     .subscribe();
 
+// The other half of "which of my channels just got a new message,
+// anywhere" — subscribeToMyChannels above only fires on a change to MY OWN
+// chat_channel_members row (joining/leaving a channel, my own last_read_at
+// moving), which a message someone else sends never touches. The signal
+// that actually fires on every new message is chat_channels.last_message_at
+// (bumped by chat_messages_bump_channel_trg, 158_chat.sql) — this listens
+// for that instead. postgres_changes can only filter on one column, and
+// chat_channels has no user_id of its own, so this fires for every channel
+// change in the school and leaves "is this one of mine" to the caller's own
+// onChange (which just re-runs chat_overview(), already scoped to the
+// caller) — same "filter broadly, narrow client-side" shape
+// subscribeToNotifications uses for school_id.
+export const subscribeToSchoolChatActivity = (schoolId, onChange, topic = "chat_channels_activity") =>
+  supabase
+    .channel(`${topic}:${schoolId}`)
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "classroom", table: "chat_channels", filter: `school_id=eq.${schoolId}` },
+      (payload) => onChange(payload)
+    )
+    .subscribe();
+
 // Thread-level: every membership row for the OPEN channel, not just mine —
 // this is what tells the sender "seen" once the other member's own
 // last_read_at moves past a message's created_at. Same "*, single filter

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
@@ -27,7 +27,16 @@ const ToolbarButton = ({ active, onClick, label, children }) => (
 // onSubmitEditor is optional — only a chat-style composer (Enter sends,
 // Shift+Enter for a newline) passes it. A ticket reply stays plain Enter-for-
 // newline, since that one is composing something closer to an email.
-export const RichTextEditor = ({ value, onChange, placeholder, onSubmitEditor }) => {
+//
+// showToolbar (default true) lets a compact caller (chat's own pill
+// composer) hide the B/I/U/list/link bar until asked for, instead of
+// showing it permanently the way a ticket reply always does.
+//
+// A ref exposes insertContent/focus so a caller outside the editor (an
+// emoji picker button living in the composer's own icon row, not inside
+// this component) can still put text into it — Tiptap owns its DOM, so
+// there is no other way in from outside.
+export const RichTextEditor = forwardRef(({ value, onChange, placeholder, onSubmitEditor, showToolbar = true }, ref) => {
   // A ref, not a plain closure over the prop — editorProps.handleKeyDown is
   // captured once when Tiptap builds the view, and onSubmitEditor is a fresh
   // arrow function on every parent render (it closes over the latest
@@ -64,6 +73,11 @@ export const RichTextEditor = ({ value, onChange, placeholder, onSubmitEditor })
     if (editor && value === "" && !editor.isEmpty) editor.commands.clearContent();
   }, [value, editor]);
 
+  useImperativeHandle(ref, () => ({
+    insertContent: (text) => editor?.chain().focus().insertContent(text).run(),
+    focus: () => editor?.chain().focus().run(),
+  }), [editor]);
+
   if (!editor) return null;
 
   const setLink = () => {
@@ -78,32 +92,36 @@ export const RichTextEditor = ({ value, onChange, placeholder, onSubmitEditor })
   };
 
   return (
-    <div className="rte">
-      <div className="rte-toolbar">
-        <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
-          <strong>{"B"}</strong>
-        </ToolbarButton>
-        <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
-          <em>{"I"}</em>
-        </ToolbarButton>
-        <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
-          <u>{"U"}</u>
-        </ToolbarButton>
-        <span className="rte-sep" />
-        <ToolbarButton label="Bulleted list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
-          {"• List"}
-        </ToolbarButton>
-        <ToolbarButton label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
-          {"1. List"}
-        </ToolbarButton>
-        <span className="rte-sep" />
-        <ToolbarButton label="Link" active={editor.isActive("link")} onClick={setLink}>
-          {"Link"}
-        </ToolbarButton>
-      </div>
+    <div className={`rte${showToolbar ? "" : " rte-compact"}`}>
+      {showToolbar ? (
+        <div className="rte-toolbar">
+          <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
+            <strong>{"B"}</strong>
+          </ToolbarButton>
+          <ToolbarButton label="Italic" active={editor.isActive("italic")} onClick={() => editor.chain().focus().toggleItalic().run()}>
+            <em>{"I"}</em>
+          </ToolbarButton>
+          <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+            <u>{"U"}</u>
+          </ToolbarButton>
+          <span className="rte-sep" />
+          <ToolbarButton label="Bulleted list" active={editor.isActive("bulletList")} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+            {"• List"}
+          </ToolbarButton>
+          <ToolbarButton label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+            {"1. List"}
+          </ToolbarButton>
+          <span className="rte-sep" />
+          <ToolbarButton label="Link" active={editor.isActive("link")} onClick={setLink}>
+            {"Link"}
+          </ToolbarButton>
+        </div>
+      ) : null}
       <EditorContent editor={editor} />
     </div>
   );
-};
+});
+
+RichTextEditor.displayName = "RichTextEditor";
 
 export default RichTextEditor;
