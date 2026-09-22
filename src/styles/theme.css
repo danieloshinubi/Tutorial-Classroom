@@ -456,11 +456,21 @@ button.side-link {
     box-shadow: var(--shadow-3);
   }
   .side.open { transform: none; }
-  .side.collapsed { width: var(--side-w); }
+  /* No .side.collapsed rule here on purpose: Navbar stops applying that
+     class at this same 900px breakpoint, because collapsing is a desktop
+     concept. Widening a collapsed drawer back out here only ever hid half
+     the problem — the labels were still gone and the icons still centred. */
   .topbar-burger { display: inline-flex; }
   .scrim { display: block; }
   .gsearch { width: 100%; }
   .gsearch-kbd { display: none; }
+  /* The topbar's desktop padding+gap (26px sides, 12px between four items)
+     left barely a hundred-odd px for the search box on a 375px phone,
+     clipping its own placeholder text down to "Searc" — confirmed live.
+     Tighter spacing here, not a narrower search box, is the actual fix:
+     the box already asks for 100% of whatever room it's given. */
+  .topbar { padding: 10px 14px; gap: 8px; min-height: 60px; }
+  .gsearch-input { padding: 9px 12px 9px 34px; font-size: 13.5px; }
 }
 
 .logo { display: inline-flex; align-items: center; gap: 10px; }
@@ -4456,8 +4466,10 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-swipe-wrap { position: relative; min-width: 0; }
 .chat-swipe-content { touch-action: pan-y; }
 .chat-swipe-reply-icon {
-  position: absolute; left: -26px; top: 50%; transform: translateY(-50%);
-  color: var(--tix-brand); font-size: 17px; pointer-events: none;
+  position: absolute; left: -34px; top: 50%; transform: translateY(-50%);
+  width: 26px; height: 26px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--tix-brand); color: #fff; pointer-events: none;
 }
 
 .chat-bubble {
@@ -4482,18 +4494,36 @@ table.data tr:last-child td { border-bottom: none; }
   font-size: 15px; line-height: 1; padding: 2px 6px; border-radius: 6px; opacity: .6;
 }
 .chat-menu-btn:hover { background: var(--tix-surface-2); color: var(--tix-ink); opacity: 1; }
+/* Positioned from JS, not here: .chat-thread-body is a scroll box
+   (overflow-y: auto), and an absolutely-positioned panel inside one is
+   CLIPPED by it — a six-item menu on a message near the top of the thread
+   showed only its last two items, the rest cut off at the scroll box's
+   edge. No amount of top/bottom/transform escapes an ancestor's overflow
+   clip, so these panels render through a portal at the end of <body> and
+   useAnchoredPopover (ChatPage.jsx) places them against their trigger in
+   fixed coordinates. The rules below are appearance only. The heavier
+   shadow is what now separates the panel from the thread — at shadow-1 a
+   white panel over a white thread had only a hairline border to set it
+   apart, which does not read on a phone.
+
+   Global tokens here, NOT --tix-*: those are declared on .tix-shell itself
+   (see its rule above) and only inherit DOWN from it, so a panel portalled
+   out to <body> resolves every one of them to nothing — a transparent box
+   with no border and the wrong text colour. Each --tix-* is a 1:1 alias of
+   the global it is replaced by here, so this renders identically. Same
+   reason PersonModal uses the global tokens. */
 .chat-menu-panel {
-  position: absolute; bottom: 0; right: 0; z-index: 30; min-width: 140px;
-  display: flex; flex-direction: column; padding: 4px; border: 1px solid var(--tix-line);
-  border-radius: 10px; background: var(--tix-surface); box-shadow: var(--shadow-1);
+  position: fixed; z-index: 60; min-width: 140px;
+  display: flex; flex-direction: column; padding: 4px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--surface); box-shadow: var(--shadow-2);
 }
 .chat-menu-panel button {
-  border: none; background: transparent; color: var(--tix-ink-2); font-size: 13px; text-align: left;
+  border: none; background: transparent; color: var(--ink-2); font-size: 13px; text-align: left;
   padding: 7px 10px; border-radius: 6px; cursor: pointer; font-family: inherit;
 }
-.chat-menu-panel button:hover { background: var(--tix-surface-2); color: var(--tix-ink); }
-.chat-menu-panel button.danger { color: var(--tix-urgent); }
-.chat-menu-panel button.danger:hover { background: color-mix(in srgb, var(--tix-urgent) 10%, transparent); }
+.chat-menu-panel button:hover { background: var(--bg); color: var(--ink); }
+.chat-menu-panel button.danger { color: var(--danger); }
+.chat-menu-panel button.danger:hover { background: color-mix(in srgb, var(--danger) 10%, transparent); }
 
 /* A quoted reply — above the bubble it belongs to, or above the composer
    while you're still composing one. A hairline left border reads as "this
@@ -4592,15 +4622,16 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-reaction-chip.mine { border-color: var(--tix-brand); background: color-mix(in srgb, var(--tix-brand) 12%, transparent); }
 .chat-reaction-chip:hover { filter: brightness(0.97); }
 /* Opened via the "⋮" menu's own "React" item now, not a permanently-visible
-   dashed "+" under every message — reuses .chat-menu-wrap's own
-   position:relative, so this anchors the same way .chat-menu-panel does. */
+   dashed "+" under every message. Portalled and JS-positioned for the same
+   reason as .chat-menu-panel above — it opens from the same trigger, inside
+   the same scroll box that would otherwise clip it. */
 .chat-reaction-picker {
-  position: absolute; bottom: calc(100% + 4px); right: 0; z-index: 30; display: flex; gap: 4px;
-  padding: 6px; border: 1px solid var(--tix-line); border-radius: 10px; background: var(--tix-surface);
-  box-shadow: var(--shadow-1);
+  position: fixed; z-index: 60; display: flex; gap: 4px;
+  padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+  box-shadow: var(--shadow-2);
 }
 .chat-reaction-picker button { border: none; background: transparent; font-size: 18px; padding: 2px 4px; cursor: pointer; border-radius: 6px; }
-.chat-reaction-picker button:hover { background: var(--tix-surface-2); }
+.chat-reaction-picker button:hover { background: var(--bg); }
 
 /* New-chat picker — a scrollable list of real rows (mirrors the Group
    member checklist right below it) instead of a dropdown, whose popup panel
@@ -4615,40 +4646,6 @@ table.data tr:last-child td { border-bottom: none; }
 .chat-picker-row.selected { background: color-mix(in srgb, var(--brand) 10%, transparent); }
 .chat-picker-row-label { flex: 1; min-width: 0; font-size: 13.5px; color: var(--ink-2); }
 .chat-picker-empty { padding: 14px 12px; font-size: 13px; color: var(--ink-3); }
-
-/* PersonModal fields — global tokens, not --tix-*, since the modal renders
-   outside .tix-shell (where those local variables are never defined). */
-.person-field { margin-bottom: 16px; }
-.person-field label { display: block; font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
-.person-field-value { font-size: 13.5px; color: var(--ink-2); }
-
-.person-modal-avatar-photo { border-radius: 50%; object-fit: cover; }
-
-/* The Organisation section — a Manager card, then a horizontal, scrollable
-   row of every direct report, the same layout a Teams profile card uses.
-   Every card is a click-through target that re-points the SAME modal at
-   that person (see PersonModal's own comment) — nothing here is a link to
-   another page, just this one card walking the chain. */
-.person-org-groups { display: flex; flex-direction: column; gap: 16px; }
-.person-org-group-label { font-size: 12px; color: var(--ink-3); margin-bottom: 8px; }
-.person-org-row { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 2px; }
-.person-org-card {
-  flex: 0 0 auto; width: 84px;
-  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px;
-  border: none; background: none; padding: 6px; border-radius: 10px; cursor: pointer; font: inherit;
-}
-.person-org-card:hover { background: var(--bg); }
-.person-org-card:hover .person-org-card-name { color: var(--brand-dark); }
-.person-org-avatar { width: 52px; height: 52px; font-size: 16px; }
-.person-org-avatar-photo { object-fit: cover; }
-.person-org-card-name {
-  font-size: 12.5px; font-weight: 600; color: var(--ink);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.person-org-card-role {
-  font-size: 11px; color: var(--ink-3); text-transform: capitalize;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
-}
 
 /* Mobile: a real phone chat app shows one pane at a time — the chat list,
    or (once you tap into one) that conversation full-screen with a back

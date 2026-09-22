@@ -1010,6 +1010,20 @@ export const removeChatMember = async ({ channelId, userId }) => {
   if (error) throw error;
 };
 
+// Promote to admin ("owner") or demote back to "member". An RPC rather than a
+// direct update because the only update policy on chat_channel_members is
+// "user_id = auth.uid()" — editing someone else's row is blocked by design, so
+// there is no client-side path to this. See supabase/169_chat_member_roles.sql,
+// which also refuses to demote the last remaining admin.
+export const setChatMemberRole = async ({ channelId, userId, role }) => {
+  const { error } = await supabase.rpc("set_chat_member_role", {
+    target_channel: channelId,
+    target_user: userId,
+    new_role: role,
+  });
+  if (error) throw error;
+};
+
 // author:profiles needs its FK constraint named explicitly — adding
 // chat_message_reactions (itself FK'd to both chat_messages and profiles)
 // gave PostgREST a second path from chat_messages to profiles to consider
@@ -1203,7 +1217,14 @@ export const subscribeToChannelMembers = (channelId, onChange) =>
 export const fetchChannelMembers = async (channelId) => {
   const { data, error } = await supabase
     .from("chat_channel_members")
-    .select("user_id, last_read_at")
+    // role drives the participants roster (who is an admin, and therefore who
+    // may add/remove/promote). Names and avatars are NOT joined here on
+    // purpose: the caller already holds the school's member list with profiles
+    // attached, so resolving them from that avoids a second join per channel.
+    // joined_at is what orders the group-avatar cluster, matching the same
+    // ordering chat_overview's member_preview uses, so a group shows the same
+    // faces in the thread header as in the list row beside it.
+    .select("user_id, role, joined_at, last_read_at")
     .eq("channel_id", channelId);
   if (error) throw error;
   return data || [];
@@ -1538,6 +1559,7 @@ export const updateSchool = async (id, changes) => {
     .eq("id", id)
     .select(
       `id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency,
+       disabled_modules,
        signature_url, signatory_name, signatory_title,
        admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
     )

@@ -1,0 +1,21 @@
+/* @tailwind base is required, even though this app must NOT get Tailwind's
+   reset. Two separate things ride on this directive:
+
+     1. Preflight — the global reset. That is what would break the rest of
+        the app, and it is switched off in tailwind.config.js via
+        corePlugins.preflight, NOT by dropping this line.
+     2. The "--tw-*" custom property defaults (--tw-translate-x, --tw-blur,
+        --tw-shadow, --tw-ring-*, and friends).
+
+   Point 2 is the reason this line has to be here. Every composite utility —
+   transform, filter, box-shadow, ring, gradients — compiles to something
+   like `filter: var(--tw-blur) var(--tw-brightness) ...`. With no defaults
+   declared, those vars are empty, the whole declaration is invalid, and the
+   utility silently does nothing at all: brightness-110 computed to
+   `filter: none`, -translate-y-1/2 to `transform: none`. No error, no
+   warning — the class is simply inert.
+
+   So: keep this directive, keep preflight off in the config. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

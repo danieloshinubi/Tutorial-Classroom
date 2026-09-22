@@ -16,6 +16,7 @@ import { user as userIcon } from "react-icons-kit/feather/user";
 import { chevronsLeft } from "react-icons-kit/feather/chevronsLeft";
 import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
 import { menu as menuIcon } from "react-icons-kit/feather/menu";
+import { x as xIcon } from "react-icons-kit/feather/x";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import Notifications from "../Notifications";
@@ -55,7 +56,7 @@ const ICONS = {
 
 const Navbar = () => {
   const { user } = useAuth();
-  const { school, roles, schoolId } = useSchool();
+  const { school, roles, schoolId, disabledModules } = useSchool();
   const location = useLocation();
 
   // Every chat's own unread_count, summed — the same "how many are waiting
@@ -99,6 +100,23 @@ const Navbar = () => {
   });
   const [open, setOpen] = useState(false);
 
+  // "Collapse to icons-only" is a desktop-sidebar concept — on a phone the
+  // sidebar is already a full-screen drawer over the page, not a column
+  // sharing space with content, so shrinking it to icons just leaves a
+  // useless sliver of a drawer still covering the screen (confirmed live:
+  // exactly the "makes the site look stupid" result). The same top-left
+  // button instead closes that drawer outright on mobile, matching what
+  // it visually looks like it should do there.
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 900px)");
+    const onChange = (e) => setIsMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem("schoolivio-sidebar", collapsed ? "collapsed" : "open");
@@ -107,18 +125,26 @@ const Navbar = () => {
     }
   }, [collapsed]);
 
+  // `collapsed` is remembered across visits AND across screen sizes, so
+  // anyone who collapsed the sidebar once on a laptop would otherwise open
+  // the phone drawer straight into icons-only — a narrow, unlabelled sliver
+  // covering the page, which is the exact "looks stupid" result the button
+  // behaviour above was meant to end. Collapsing is desktop-only, so the
+  // preference is kept but simply not applied while on a phone.
+  const showCollapsed = collapsed && !isMobile;
+
   // Close the mobile drawer whenever the route changes, so it never covers
   // the page you just navigated to.
   useEffect(() => setOpen(false), [location.pathname]);
 
-  const groups = groupModules(modulesFor(roles));
+  const groups = groupModules(modulesFor(roles, disabledModules));
 
   return (
     <>
       {/* The drawer's backdrop on small screens. */}
       {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
 
-      <aside className={`side${collapsed ? " collapsed" : ""}${open ? " open" : ""}`}>
+      <aside className={`side${showCollapsed ? " collapsed" : ""}${open ? " open" : ""}`}>
         <div className="side-head">
           <Link to="/Dashboard" className="side-brand" title="Schoolivio">
             {school?.logo_url ? (
@@ -126,7 +152,7 @@ const Navbar = () => {
             ) : (
               <Logo size={28} showName={false} />
             )}
-            {collapsed ? null : (
+            {showCollapsed ? null : (
               <span className="side-brand-text">
                 <span className="side-school">{school ? school.name : "Schoolivio"}</span>
                 <span className="side-product">{"Schoolivio"}</span>
@@ -137,18 +163,18 @@ const Navbar = () => {
           <button
             type="button"
             className="side-collapse"
-            aria-label={collapsed ? "Expand menu" : "Collapse menu"}
-            title={collapsed ? "Expand" : "Collapse"}
-            onClick={() => setCollapsed((v) => !v)}
+            aria-label={isMobile ? "Close menu" : collapsed ? "Expand menu" : "Collapse menu"}
+            title={isMobile ? "Close" : collapsed ? "Expand" : "Collapse"}
+            onClick={() => (isMobile ? setOpen(false) : setCollapsed((v) => !v))}
           >
-            <Icon icon={collapsed ? chevronsRight : chevronsLeft} size={16} />
+            <Icon icon={isMobile ? xIcon : collapsed ? chevronsRight : chevronsLeft} size={16} />
           </button>
         </div>
 
         <nav className="side-nav">
           {groups.map((group) => (
             <div key={group.name} className="side-group">
-              {collapsed ? <div className="side-rule" /> : (
+              {showCollapsed ? <div className="side-rule" /> : (
                 <div className="side-group-name">{group.name}</div>
               )}
               {group.modules.map((module) => {
@@ -161,7 +187,7 @@ const Navbar = () => {
                     className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
                   >
                     <Icon icon={ICONS[module.id] || grid} size={17} />
-                    {collapsed ? null : <span>{module.label}</span>}
+                    {showCollapsed ? null : <span>{module.label}</span>}
                     {/* Teams' own unread indicator on its left rail is a
                         plain dot, not a numbered bubble — the count is
                         still there for anyone who needs it, in the title
@@ -181,7 +207,7 @@ const Navbar = () => {
             out of view. As a direct flex sibling of .side-nav they always
             stay visible at the foot of the sidebar. */}
         <div className="side-group side-others">
-          {collapsed ? <div className="side-rule" /> : (
+          {showCollapsed ? <div className="side-rule" /> : (
             <div className="side-group-name">{"Others"}</div>
           )}
           <NavLink
@@ -190,7 +216,7 @@ const Navbar = () => {
             className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
           >
             <Icon icon={userIcon} size={17} />
-            {collapsed ? null : <span>{"Account settings"}</span>}
+            {showCollapsed ? null : <span>{"Account settings"}</span>}
           </NavLink>
           <a
             href="mailto:support@schoolivio.com"
@@ -198,7 +224,7 @@ const Navbar = () => {
             title="Support"
           >
             <Icon icon={helpCircle} size={17} />
-            {collapsed ? null : <span>{"Support"}</span>}
+            {showCollapsed ? null : <span>{"Support"}</span>}
           </a>
         </div>
       </aside>

@@ -183,13 +183,29 @@ const BY_ID = new Map(MODULES.map((m) => [m.id, m]));
 // the labels until "School" reads "Sch...".
 const ACROSS_THE_TOP = 6;
 
-// The modules this person may use. `roles` is every active membership role
-// they hold at this school — usually one, but a proprietor who also teaches
-// holds two and should see the union.
-export const modulesFor = (roles = []) => {
+// Modules a school can never switch off, because /School is where the switches
+// themselves live — turning it off would strand the tenant outside its own
+// settings with no way back in. The database enforces this too (see
+// supabase/172_school_module_toggles.sql); this copy only keeps the admin UI
+// from offering a toggle that would be rejected anyway.
+export const LOCKED_MODULES = ["school"];
+
+// The modules this person may use, at this school.
+//
+// `roles` is every active membership role they hold here — usually one, but a
+// proprietor who also teaches holds two and should see the union. `disabled`
+// is the school's own switched-off list (schools.disabled_modules): a school
+// that doesn't run an admissions office shouldn't have Admissions in anyone's
+// navigation, whatever their role entitles them to.
+//
+// Both are filters, and they answer different questions — "is this person's
+// job any of this?" and "does this school do this at all?" — so a module has
+// to pass both.
+export const modulesFor = (roles = [], disabled = []) => {
   const held = roles.filter(Boolean);
   if (held.length === 0) return [];
-  return MODULES.filter((m) => m.roles.some((r) => held.includes(r))).sort(
+  const off = new Set((disabled || []).filter((id) => !LOCKED_MODULES.includes(id)));
+  return MODULES.filter((m) => !off.has(m.id) && m.roles.some((r) => held.includes(r))).sort(
     (a, b) => a.priority - b.priority
   );
 };
@@ -199,8 +215,8 @@ export const modulesFor = (roles = []) => {
 // The cut is by priority and it is per person: a bursar's six are not a
 // teacher's six. Anyone holding six or fewer sees no More at all, which is
 // most people — it only appears for those who really do run everything.
-export const navFor = (roles = []) => {
-  const mine = modulesFor(roles);
+export const navFor = (roles = [], disabled = []) => {
+  const mine = modulesFor(roles, disabled);
   if (mine.length <= ACROSS_THE_TOP) return { primary: mine, more: [] };
   return { primary: mine.slice(0, ACROSS_THE_TOP), more: mine.slice(ACROSS_THE_TOP) };
 };
@@ -219,9 +235,10 @@ export const groupModules = (modules) => {
     .map((name) => ({ name, modules: groups.get(name) }));
 };
 
-export const canUseModule = (moduleId, roles = []) => {
+export const canUseModule = (moduleId, roles = [], disabled = []) => {
   const module = BY_ID.get(moduleId);
   if (!module) return false;
+  if (!LOCKED_MODULES.includes(moduleId) && (disabled || []).includes(moduleId)) return false;
   return module.roles.some((r) => roles.filter(Boolean).includes(r));
 };
 
@@ -229,7 +246,7 @@ export const moduleById = (moduleId) => BY_ID.get(moduleId) || null;
 
 // Where to send someone who lands somewhere they may not be. Their first
 // module beats a hard-coded /Dashboard, which a role might not even have.
-export const homeFor = (roles = []) => {
-  const mine = modulesFor(roles);
+export const homeFor = (roles = [], disabled = []) => {
+  const mine = modulesFor(roles, disabled);
   return mine.length ? mine[0].path : "/Profile";
 };

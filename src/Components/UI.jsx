@@ -962,6 +962,33 @@ export const bandClass = (seed = "") => {
 
 // Prefers a real name, then the username, then the local part of the email —
 // never the whole address, which used to overflow the header.
+// A floating panel anchored (position: absolute) to a small trigger — a
+// message's "⋮", a chat bubble's own edge, the bell icon — has no idea
+// where that trigger actually sits on the real screen. A wide panel
+// opening "rightward" from a trigger that isn't itself near the true
+// right edge (a message near the middle of a phone-width bubble, say)
+// overshoots straight past the left edge of the viewport — confirmed live
+// on the chat "⋮" menu and the notifications panel, both readable full-
+// width on desktop but clipped off-screen on a phone. Rather than hand-
+// tuning a breakpoint-specific left/right for every popover that can do
+// this, this measures where the panel actually rendered once it opens and
+// nudges it back on-screen with a transform — correct for any trigger
+// position, any screen width, without touching the anchor CSS that
+// already positions it correctly in the common case.
+export const useClampToViewport = (active, ref, margin = 8) => {
+  useEffect(() => {
+    if (!active || !ref.current) return;
+    const el = ref.current;
+    el.style.transform = "";
+    const rect = el.getBoundingClientRect();
+    if (rect.left < margin) {
+      el.style.transform = `translateX(${margin - rect.left}px)`;
+    } else if (rect.right > window.innerWidth - margin) {
+      el.style.transform = `translateX(${window.innerWidth - margin - rect.right}px)`;
+    }
+  }, [active, ref, margin]);
+};
+
 export const displayName = (profile) => {
   if (!profile) return "Someone";
   const full = `${profile.first_name || ""} ${profile.surname || ""}`.trim();

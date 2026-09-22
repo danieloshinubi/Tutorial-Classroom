@@ -9,7 +9,7 @@ import {
   markAllNotificationsRead,
   subscribeToNotifications,
 } from "../lib/api";
-import { formatDate } from "./UI";
+import { formatDate, useClampToViewport } from "./UI";
 
 const Notifications = () => {
   const { user } = useAuth();
@@ -17,6 +17,11 @@ const Notifications = () => {
   const [items, setItems] = useState([]);
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
+  const panelRef = useRef(null);
+  // The bell doesn't sit at the true right edge of the screen on a phone
+  // (the account menu does) — a panel anchored to open rightward FROM the
+  // bell overshoots past the left edge there. See useClampToViewport.
+  useClampToViewport(open, panelRef);
   const navigate = useNavigate();
 
   const load = useCallback(() => {
@@ -115,7 +120,7 @@ const Notifications = () => {
       </button>
 
       {open ? (
-        <div className="notif-panel" role="dialog" aria-label="Notifications">
+        <div className="notif-panel" role="dialog" aria-label="Notifications" ref={panelRef}>
           <div className="notif-head">
             <strong>{"Notifications"}</strong>
             {unread > 0 ? (

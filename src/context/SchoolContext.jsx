@@ -73,7 +73,13 @@ export const SchoolProvider = ({ children }) => {
       const { data: schoolRow, error: schoolError } = await supabase
         .from("schools")
         .select(
+          // disabled_modules drives the navigation and every route guard
+          // (see modulesFor/canUseModule). It is an explicit column list, so
+          // leaving it out here does not fail loudly — the school simply
+          // loads without it, disabledModules reads as empty, and every
+          // module stays visible however the admin sets them.
           `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active,
+           disabled_modules,
            signature_url, signatory_name, signatory_title,
            admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
         )
@@ -203,6 +209,10 @@ export const SchoolProvider = ({ children }) => {
         levels.find((row) => String(row.year) === String(year))?.label ?? String(year),
       reloadLevels: load,
       schoolId: school?.id || null,
+      // Modules this school has switched off. Read straight from the school
+      // row so navigation and route guards cannot disagree about it, and
+      // defaulted to [] for a school row loaded before this column existed.
+      disabledModules: school?.disabled_modules || [],
       membership,
       memberships,
       role,

@@ -15,6 +15,7 @@ import AcademicPanel from "./AcademicPanel";
 import ClassesPanel from "./ClassesPanel";
 import AdmissionsSettingsPanel from "./AdmissionsSettingsPanel";
 import PaymentGatewaySettingsPanel from "./PaymentGatewaySettingsPanel";
+import ModulesPanel from "./ModulesPanel";
 import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
 import OrganogramPanel from "./OrganogramPanel";
 import { STAFF_ROLES } from "../../lib/orgChart";
@@ -1297,7 +1298,7 @@ const MailboxesPanel = () => {
   );
 };
 
-const TABS = ["people", "organogram", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "settings"];
+const TABS = ["people", "organogram", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "modules", "settings"];
 
 const SchoolAdmin = () => {
   const { school } = useSchool();
@@ -1354,6 +1355,7 @@ const SchoolAdmin = () => {
               { id: "guardians", label: "Parents & children" },
               { id: "mailboxes", label: "Mailboxes" },
               { id: "payments", label: "Payments" },
+              { id: "modules", label: "Modules" },
               { id: "settings", label: "School settings" },
             ]}
             active={tab}
@@ -1372,6 +1374,7 @@ const SchoolAdmin = () => {
         {tab === "guardians" ? <GuardiansPanel /> : null}
         {tab === "mailboxes" ? <MailboxesPanel /> : null}
         {tab === "payments" ? <PaymentGatewaySettingsPanel /> : null}
+        {tab === "modules" ? <ModulesPanel /> : null}
         {tab === "settings" ? <SettingsPanel /> : null}
       </Page>
     </div>

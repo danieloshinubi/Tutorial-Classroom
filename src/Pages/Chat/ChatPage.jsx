@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useNavigate } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { send as sendIcon } from "react-icons-kit/feather/send";
@@ -8,6 +9,7 @@ import { fileText } from "react-icons-kit/feather/fileText";
 import { x as xIcon } from "react-icons-kit/feather/x";
 import { type as formatIcon } from "react-icons-kit/feather/type";
 import { arrowLeft } from "react-icons-kit/feather/arrowLeft";
+import { cornerUpLeft } from "react-icons-kit/feather/cornerUpLeft";
 import Navbar from "../../Components/Navbar/Navbar";
 import { RichTextEditor } from "../../Components/RichTextEditor";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
@@ -38,6 +40,9 @@ import {
   copyChatAttachment,
   signedChatAttachmentUrl,
   fetchSchoolMembers,
+  addChatMembers,
+  removeChatMember,
+  setChatMemberRole,
 } from "../../lib/api";
 import { Page, Button, Notice, Empty, Modal, displayName, initials } from "../../Components/UI";
 
@@ -45,21 +50,160 @@ import { Page, Button, Notice, Empty, Modal, displayName, initials } from "../..
 // Tickets' own composer checks text content rather than the raw HTML.
 const isHtmlEmpty = (html) => !html || !html.replace(/<[^>]+>/g, "").trim();
 
+// Utility strings that recur across the list pane, the thread head and every
+// message row. Named here rather than repeated inline so the three places
+// that render an avatar button (or a typing line) cannot drift apart — which
+// is what the shared .chat-* classes these replace were doing for them.
+//
+// Paired with .tix-avatar at each call site: that one stays a real CSS class,
+// since it is used all over the app, well outside the Chat files Tailwind
+// scans.
+const AVATAR_BTN =
+  "tw-border-none tw-p-0 tw-cursor-pointer [font-family:inherit] disabled:tw-cursor-default " +
+  "enabled:hover:tw-brightness-110 focus-visible:tw-outline focus-visible:tw-outline-2 " +
+  "focus-visible:tw-outline-offset-2 focus-visible:tw-outline-tix-brand";
+
+// The name beside a clickable avatar opens the same profile card — one
+// combined target rather than forcing the click onto the small circle.
+const CLICKABLE_NAME = "tw-cursor-pointer hover:tw-underline";
+
+const TYPING = "tw-text-xs tw-text-tix-ink-3 tw-italic tw-mt-0.5";
+
+// A quoted reply. The child [&_strong]/[&_span] rules are arbitrary variants
+// rather than classes on ReplyPreview's own tags, because ReplyPreview is
+// also rendered WITHOUT this quote styling (the Forward modal shows the same
+// markup as a plain line), and the original CSS scoped those child rules to
+// this wrapper for exactly that reason.
+const REPLY_QUOTE =
+  "tw-border-0 tw-border-solid tw-border-l-[3px] tw-border-l-tix-brand tw-py-1 tw-px-2.5 tw-mb-1.5 " +
+  "tw-rounded-[4px] tw-bg-tix-surface-2 tw-text-[12.5px] " +
+  "[&_strong]:tw-block [&_strong]:tw-text-tix-brand [&_strong]:tw-text-xs [&_span]:tw-text-tix-ink-3";
+
+// GLOBAL tokens (--ink/--line/--surface/--bg/--danger), never --tix-*, for
+// everything below: the two popovers are portalled to <body> and the pickers
+// render inside a Modal, and both sit OUTSIDE .tix-shell — which is the only
+// place --tix-* is ever declared. Each of these is the global token that
+// .tix-shell aliases anyway, so the result is identical where it already
+// worked, and correct where it silently did not.
+const MENU_PANEL =
+  "tw-fixed tw-z-[60] tw-min-w-[140px] tw-flex tw-flex-col tw-p-1 tw-border tw-border-solid " +
+  "tw-border-line tw-rounded-[10px] tw-bg-surface tw-shadow-2";
+const MENU_ITEM =
+  "tw-border-none tw-bg-transparent tw-text-ink-2 tw-text-[13px] tw-text-left tw-py-[7px] tw-px-2.5 " +
+  "tw-rounded-md tw-cursor-pointer [font-family:inherit] hover:tw-bg-bg hover:tw-text-ink";
+const MENU_ITEM_DANGER =
+  "tw-border-none tw-bg-transparent tw-text-danger hover:tw-text-danger tw-text-[13px] tw-text-left " +
+  "tw-py-[7px] tw-px-2.5 tw-rounded-md tw-cursor-pointer [font-family:inherit] " +
+  "hover:tw-bg-[color-mix(in_srgb,var(--danger)_10%,transparent)]";
+const REACTION_PICKER =
+  "tw-fixed tw-z-[60] tw-flex tw-gap-1 tw-p-1.5 tw-border tw-border-solid tw-border-line " +
+  "tw-rounded-[10px] tw-bg-surface tw-shadow-2";
+const REACTION_PICKER_BTN =
+  "tw-border-none tw-bg-transparent tw-text-[18px] tw-py-0.5 tw-px-1 tw-cursor-pointer tw-rounded-md hover:tw-bg-bg";
+
+const PICKER_LIST =
+  "tw-list-none tw-m-0 tw-p-0 tw-max-h-[260px] tw-overflow-y-auto tw-border tw-border-solid " +
+  "tw-border-line tw-rounded-[10px]";
+const PICKER_ROW =
+  "tw-flex tw-items-center tw-gap-2.5 tw-w-full tw-text-left tw-cursor-pointer tw-border-none " +
+  "tw-bg-transparent tw-py-2.5 tw-px-3 [font-family:inherit] hover:tw-bg-bg";
+const PICKER_ROW_SELECTED = "tw-bg-[color-mix(in_srgb,var(--brand)_10%,transparent)]";
+const PICKER_ROW_LABEL = "tw-flex-1 tw-min-w-0 tw-text-[13.5px] tw-text-ink-2";
+const PICKER_EMPTY = "tw-py-3.5 tw-px-3 tw-text-[13px] tw-text-ink-3";
+
+// The round icon buttons in the composer pill (formatting, emoji, attach).
+const ICON_BTN =
+  "tw-flex-none tw-w-8 tw-h-8 tw-rounded-full tw-border-none tw-cursor-pointer tw-flex tw-items-center " +
+  "tw-justify-center tw-bg-transparent tw-text-tix-ink-3 tw-text-base tw-leading-none " +
+  "enabled:hover:tw-bg-tix-surface enabled:hover:tw-text-tix-ink " +
+  "disabled:tw-opacity-50 disabled:tw-cursor-not-allowed";
+
 // Shared by the reaction picker and the per-message "⋮" menu — both are a
 // small popup anchored to a trigger button that should vanish the moment
 // you click (or tap) anywhere else, same as Notifications' own bell panel.
-const useClickAway = (active, onAway) => {
+//
+// extraRefs exists because the chat popups are portalled out of the thread
+// (see useAnchoredPopover): a portalled panel is not a DOM descendant of
+// the wrapper, so without naming it here every click INSIDE the menu would
+// count as a click away and close it before the item could fire.
+const useClickAway = (active, onAway, extraRefs = []) => {
   const ref = useRef(null);
+  const extraRef = useRef(extraRefs);
+  extraRef.current = extraRefs;
   useEffect(() => {
     if (!active) return undefined;
     const onPointerDown = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) onAway();
+      const inside = [ref, ...extraRef.current].some(
+        (r) => r.current && r.current.contains(event.target)
+      );
+      if (!inside) onAway();
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
   return ref;
+};
+
+// Places a portalled popup against its trigger in fixed coordinates.
+//
+// These popups live inside .chat-thread-body, which is a scroll box
+// (overflow-y: auto) — and a scroll box CLIPS absolutely-positioned
+// descendants that extend past it. A six-item "⋮" menu opened on a message
+// near the top of the thread had its first four items sliced off at the
+// scroll box's edge, leaving what looked like a stray "Edit / Delete" card.
+// Nothing positional fixes that from inside: transforms, negative offsets
+// and z-index are all still subject to the ancestor's clip. So the panel is
+// portalled to <body> and positioned here instead.
+//
+// Preference is above the trigger (a thumb on a phone covers what's below
+// it), flipping under when there isn't room above, and clamped to the
+// viewport either way so it can never open off-screen. It re-measures on
+// scroll and resize so it tracks the message it belongs to.
+const useAnchoredPopover = (active, anchorRef, panelRef, gap = 6, margin = 8) => {
+  const [style, setStyle] = useState({ visibility: "hidden" });
+
+  useLayoutEffect(() => {
+    if (!active) return undefined;
+    const place = () => {
+      const anchor = anchorRef.current;
+      const panel = panelRef.current;
+      if (!anchor || !panel) return;
+      const a = anchor.getBoundingClientRect();
+      const p = panel.getBoundingClientRect();
+
+      let top = a.top - p.height - gap;
+      if (top < margin) top = a.bottom + gap;
+      if (top + p.height > window.innerHeight - margin) {
+        top = window.innerHeight - margin - p.height;
+      }
+      if (top < margin) top = margin;
+
+      // Right edges aligned with the trigger, which is what the old
+      // right: 0 anchor did, then pulled back inside the viewport.
+      let left = a.right - p.width;
+      if (left + p.width > window.innerWidth - margin) left = window.innerWidth - margin - p.width;
+      if (left < margin) left = margin;
+
+      setStyle({ top, left, visibility: "visible" });
+    };
+
+    place();
+    window.addEventListener("resize", place);
+    // Capture phase: the thread body scrolls, not the window, and a
+    // scroll event on an inner element does not bubble to window.
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [active, anchorRef, panelRef, gap, margin]);
+
+  useEffect(() => {
+    if (!active) setStyle({ visibility: "hidden" });
+  }, [active]);
+
+  return style;
 };
 
 // One line of quoted context above a reply, or above the composer while
@@ -73,6 +217,54 @@ const ReplyPreview = ({ message, className }) => (
   </div>
 );
 
+// One circle — a photo when there is one, initials otherwise. Sizes are
+// computed (the cluster below scales its pieces), so geometry goes in a style
+// prop; a Tailwind class cannot be generated from a runtime number.
+const Avatar = ({ profile, size }) =>
+  profile?.avatar_url ? (
+    <img
+      src={profile.avatar_url}
+      alt=""
+      className="tix-avatar tw-object-cover"
+      style={{ width: size, height: size }}
+    />
+  ) : (
+    <span
+      className="tix-avatar"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.38) }}
+    >
+      {initials(profile)}
+    </span>
+  );
+
+// A group's avatar, the way Teams does it: the first few members' own avatars
+// clustered into one circle, rather than initials taken from the group's name
+// ("Testing one or two" -> "TO", which tells you nothing about who is in it).
+// The viewer is excluded upstream, so these are the other people.
+const GroupAvatar = ({ profiles, size = 34 }) => {
+  const shown = profiles.slice(0, 3);
+  if (shown.length === 0) return <span className="tix-avatar" style={{ width: size, height: size }} />;
+  if (shown.length === 1) return <Avatar profile={shown[0]} size={size} />;
+
+  // Two sit on a diagonal; three make a triangle. Each piece is scaled so the
+  // cluster still reads as one avatar at the size a list row gives it.
+  const piece = shown.length === 2 ? Math.round(size * 0.68) : Math.round(size * 0.6);
+  const spots =
+    shown.length === 2
+      ? [{ top: 0, left: 0 }, { bottom: 0, right: 0 }]
+      : [{ top: 0, left: Math.round((size - piece) / 2) }, { bottom: 0, left: 0 }, { bottom: 0, right: 0 }];
+
+  return (
+    <span className="tw-relative tw-inline-block tw-flex-none" style={{ width: size, height: size }}>
+      {shown.map((p, i) => (
+        <span key={p?.id || i} className="tw-absolute tw-leading-none" style={spots[i]}>
+          <Avatar profile={p} size={piece} />
+        </span>
+      ))}
+    </span>
+  );
+};
+
 const formatBytes = (bytes) => {
   if (!bytes) return "";
   if (bytes < 1024) return `${bytes} B`;
@@ -83,16 +275,22 @@ const formatBytes = (bytes) => {
 // A document/file bubble — download goes through a freshly-signed URL
 // (chat-attachments is a private bucket) rather than a stored public link,
 // fetched only at the moment someone actually clicks.
+const ATTACHMENT_ACTION =
+  "tw-flex-none tw-border-none tw-bg-transparent tw-text-tix-brand tw-text-xs tw-font-semibold " +
+  "tw-cursor-pointer tw-py-0.5 tw-px-1 tw-inline-flex tw-items-center hover:tw-underline";
+
 const AttachmentChip = ({ name, size, onOpen, openLabel = "Open", onRemove, busy }) => (
-  <div className="chat-attachment-chip">
+  <div className="tw-inline-flex tw-items-center tw-gap-2 tw-mt-1.5 tw-py-[7px] tw-px-2.5 tw-border tw-border-solid tw-border-tix-line tw-rounded-[10px] tw-bg-tix-surface tw-max-w-[260px]">
     <Icon icon={fileText} size={16} />
-    <span className="chat-attachment-name">{name}</span>
-    {size ? <span className="chat-attachment-size">{formatBytes(size)}</span> : null}
+    <span className="tw-text-[12.5px] tw-text-tix-ink-2 tw-truncate tw-flex-1 tw-min-w-0">{name}</span>
+    {size ? <span className="tw-text-[11px] tw-text-tix-ink-3 tw-flex-none">{formatBytes(size)}</span> : null}
     {onOpen ? (
-      <button type="button" onClick={onOpen} disabled={busy}>{busy ? "Opening…" : openLabel}</button>
+      <button type="button" className={ATTACHMENT_ACTION} onClick={onOpen} disabled={busy}>
+        {busy ? "Opening…" : openLabel}
+      </button>
     ) : null}
     {onRemove ? (
-      <button type="button" aria-label="Remove attachment" onClick={onRemove}>
+      <button type="button" className={ATTACHMENT_ACTION} aria-label="Remove attachment" onClick={onRemove}>
         <Icon icon={xIcon} size={14} />
       </button>
     ) : null}
@@ -136,12 +334,16 @@ const ReactionChips = ({ message, myUserId, onToggle }) => {
   if (entries.length === 0) return null;
 
   return (
-    <div className="chat-reactions">
+    <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1.5 tw-mt-1.5">
       {entries.map(([emoji, { count, mine }]) => (
         <button
           key={emoji}
           type="button"
-          className={`chat-reaction-chip${mine ? " mine" : ""}`}
+          className={`tw-inline-flex tw-items-center tw-gap-1 tw-text-xs tw-leading-none tw-border tw-border-solid tw-rounded-full tw-py-[3px] tw-px-2 tw-text-tix-ink-2 tw-cursor-pointer hover:tw-brightness-[0.97] ${
+            mine
+              ? "tw-border-tix-brand tw-bg-[color-mix(in_srgb,var(--tix-brand)_12%,transparent)]"
+              : "tw-border-tix-line tw-bg-tix-surface"
+          }`}
           onClick={() => onToggle(emoji)}
         >
           {emoji} {count}
@@ -159,49 +361,73 @@ const ReactionChips = ({ message, myUserId, onToggle }) => {
 const MessageMenu = ({ message, mine, onReply, onForward, onCopy, onEdit, onDelete, onReact }) => {
   const [open, setOpen] = useState(false);
   const [reactOpen, setReactOpen] = useState(false);
-  const wrapRef = useClickAway(open || reactOpen, () => { setOpen(false); setReactOpen(false); });
+  const menuPanelRef = useRef(null);
+  const reactPanelRef = useRef(null);
+  const triggerRef = useRef(null);
+  const wrapRef = useClickAway(
+    open || reactOpen,
+    () => { setOpen(false); setReactOpen(false); },
+    [menuPanelRef, reactPanelRef]
+  );
+  // Both panels hang off the same "⋮" trigger, portalled clear of the
+  // thread's scroll box — see useAnchoredPopover.
+  const menuStyle = useAnchoredPopover(open, triggerRef, menuPanelRef);
+  const reactStyle = useAnchoredPopover(reactOpen, triggerRef, reactPanelRef);
   const act = (fn) => {
     setOpen(false);
     fn();
   };
 
   return (
-    <span className="chat-menu-wrap" ref={wrapRef}>
-      <button type="button" className="chat-menu-btn" aria-label="More actions" onClick={() => setOpen((v) => !v)}>
+    <span className="tw-relative tw-flex-none tw-self-end tw-pb-1.5" ref={wrapRef}>
+      <button
+        type="button"
+        ref={triggerRef}
+        className="tw-border-none tw-bg-transparent tw-text-tix-ink-3 tw-cursor-pointer tw-text-[15px] tw-leading-none tw-py-0.5 tw-px-1.5 tw-rounded-md tw-opacity-60 hover:tw-bg-tix-surface-2 hover:tw-text-tix-ink hover:tw-opacity-100"
+        aria-label="More actions"
+        onClick={() => setOpen((v) => !v)}
+      >
         {"⋮"}
       </button>
-      {open ? (
-        <div className="chat-menu-panel" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); setReactOpen(true); }}>{"React"}</button>
-          <button type="button" role="menuitem" onClick={() => act(onReply)}>{"Reply"}</button>
-          <button type="button" role="menuitem" onClick={() => act(onForward)}>{"Forward"}</button>
-          {!message.deleted_at ? (
-            <button type="button" role="menuitem" onClick={() => act(onCopy)}>{"Copy text"}</button>
-          ) : null}
-          {mine && !message.deleted_at ? (
-            <>
-              <button type="button" role="menuitem" onClick={() => act(onEdit)}>{"Edit"}</button>
-              <button type="button" role="menuitem" className="danger" onClick={() => act(onDelete)}>{"Delete"}</button>
-            </>
-          ) : null}
-        </div>
-      ) : null}
-      {reactOpen ? (
-        <div className="chat-reaction-picker">
-          {QUICK_REACTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => {
-                onReact(emoji);
-                setReactOpen(false);
-              }}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      {open
+        ? createPortal(
+            <div className={MENU_PANEL} role="menu" ref={menuPanelRef} style={menuStyle}>
+              <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => { setOpen(false); setReactOpen(true); }}>{"React"}</button>
+              <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => act(onReply)}>{"Reply"}</button>
+              <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => act(onForward)}>{"Forward"}</button>
+              {!message.deleted_at ? (
+                <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => act(onCopy)}>{"Copy text"}</button>
+              ) : null}
+              {mine && !message.deleted_at ? (
+                <>
+                  <button type="button" role="menuitem" className={MENU_ITEM} onClick={() => act(onEdit)}>{"Edit"}</button>
+                  <button type="button" role="menuitem" className={MENU_ITEM_DANGER} onClick={() => act(onDelete)}>{"Delete"}</button>
+                </>
+              ) : null}
+            </div>,
+            document.body
+          )
+        : null}
+      {reactOpen
+        ? createPortal(
+            <div className={REACTION_PICKER} ref={reactPanelRef} style={reactStyle}>
+              {QUICK_REACTIONS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  className={REACTION_PICKER_BTN}
+                  onClick={() => {
+                    onReact(emoji);
+                    setReactOpen(false);
+                  }}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )
+        : null}
     </span>
   );
 };
@@ -244,7 +470,12 @@ const SwipeToReply = ({ onReply, children }) => {
       }
       draggingRef.current = true;
     }
-    setDragX(Math.min(dx, SWIPE_REPLY_DISTANCE * 1.4));
+    // Clamped at BOTH ends. Once the gesture is claimed, dragging back past
+    // where the finger started makes dx negative, and an unclamped negative
+    // offset slides the message left, out of the thread and off the edge of
+    // the card — which is exactly how a half-swiped message ends up stranded
+    // there. This gesture only ever moves a message right.
+    setDragX(Math.max(0, Math.min(dx, SWIPE_REPLY_DISTANCE * 1.4)));
   };
   const onTouchEnd = () => {
     if (draggingRef.current && dragX >= SWIPE_REPLY_DISTANCE) onReply();
@@ -254,12 +485,33 @@ const SwipeToReply = ({ onReply, children }) => {
   };
 
   return (
-    <div className="chat-swipe-wrap" onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-      <span className="chat-swipe-reply-icon" style={{ opacity: Math.min(dragX / SWIPE_REPLY_DISTANCE, 1) }} aria-hidden="true">
-        {"↩"}
+    // touchcancel matters as much as touchend here: the browser fires it
+    // instead of touchend whenever it takes the gesture over (a scroll
+    // winning, an incoming call, the back-swipe edge). Without it the
+    // release handler never runs, so the message just stays where the
+    // finger left it — permanently offset until something re-renders it.
+    <div
+      className="tw-relative tw-min-w-0"
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onTouchCancel={onTouchEnd}
+    >
+      <span
+        className="tw-absolute tw-left-[-34px] tw-top-1/2 -tw-translate-y-1/2 tw-w-[26px] tw-h-[26px] tw-rounded-full tw-flex tw-items-center tw-justify-center tw-bg-tix-brand tw-text-white tw-pointer-events-none"
+        style={{ opacity: Math.min(dragX / SWIPE_REPLY_DISTANCE, 1) }}
+        aria-hidden="true"
+      >
+        <Icon icon={cornerUpLeft} size={16} />
       </span>
+      {/* touch-action: pan-y is what lets this gesture coexist with the
+          thread's own vertical scrolling — it tells the browser only
+          vertical panning is its to handle, leaving horizontal drags to
+          the handlers above. Written as an arbitrary property, which takes
+          no tw- prefix; easy to drop when rewriting a className by hand,
+          and the gesture breaks silently without it. */}
       <div
-        className="chat-swipe-content"
+        className="[touch-action:pan-y]"
         style={{ transform: `translateX(${dragX}px)`, transition: dragX === 0 ? "transform .15s ease" : "none" }}
       >
         {children}
@@ -284,22 +536,202 @@ const ForwardModal = ({ message, channels, onClose, onForward }) => {
   };
   return (
     <Modal title="Forward message" onClose={onClose}>
-      <ReplyPreview message={message} className="chat-forward-preview" />
+      <ReplyPreview message={message} className="tw-mb-1.5" />
       {channels.length === 0 ? (
-        <p className="chat-picker-empty">{"No other chats to forward to yet."}</p>
+        <p className={PICKER_EMPTY}>{"No other chats to forward to yet."}</p>
       ) : (
-        <ul className="chat-picker-list" style={{ marginTop: 12 }}>
+        <ul className={`${PICKER_LIST} tw-mt-3`}>
           {channels.map((c) => (
             <li key={c.id}>
-              <button type="button" className="chat-picker-row" disabled={busyId === c.id} onClick={() => forward(c.id)}>
+              <button type="button" className={PICKER_ROW} disabled={busyId === c.id} onClick={() => forward(c.id)}>
                 <span className="tix-avatar sm">{initials({ first_name: c.name })}</span>
-                <span className="chat-picker-row-label">{c.name || "Unnamed channel"}</span>
+                <span className={PICKER_ROW_LABEL}>{c.name || "Unnamed channel"}</span>
                 {busyId === c.id ? <span>{"Sending…"}</span> : null}
               </button>
             </li>
           ))}
         </ul>
       )}
+    </Modal>
+  );
+};
+
+// Who is in this group, and — for an admin — the controls to change that.
+//
+// "Admin" here is the 'owner' role on chat_channel_members; the schema has
+// only owner/member, and every server-side gate already reads it. Admins are
+// equal: any of them can promote, demote or remove any other. The one rule
+// the server will not bend on is that a group keeps at least one admin, so
+// the last one cannot be demoted or removed (see 169_chat_member_roles.sql) —
+// the buttons for that are disabled here too, but the server is what actually
+// enforces it.
+const ParticipantsModal = ({
+  channel,
+  members,
+  schoolMembers,
+  myUserId,
+  onClose,
+  onChanged,
+  onError,
+}) => {
+  const [busyId, setBusyId] = useState(null);
+  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState([]);
+
+  const memberIds = new Set(members.map((m) => m.user_id));
+  const iAmAdmin = members.some((m) => m.user_id === myUserId && m.role === "owner");
+  const adminCount = members.filter((m) => m.role === "owner").length;
+
+  const roster = members
+    .map((m) => ({ ...m, profile: schoolMembers.find((s) => s.user_id === m.user_id)?.profiles }))
+    .sort((a, b) => {
+      if (a.role !== b.role) return a.role === "owner" ? -1 : 1;
+      return displayName(a.profile).localeCompare(displayName(b.profile));
+    });
+
+  const candidates = schoolMembers.filter((s) => {
+    if (memberIds.has(s.user_id)) return false;
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return `${displayName(s.profiles)} ${s.role}`.toLowerCase().includes(needle);
+  });
+
+  const run = async (id, fn) => {
+    setBusyId(id);
+    try {
+      await fn();
+      await onChanged();
+    } catch (err) {
+      onError(err.message || "That did not work.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const addPicked = () =>
+    run("add", async () => {
+      await addChatMembers({ channelId: channel.id, memberIds: picked });
+      setPicked([]);
+      setQuery("");
+      setAdding(false);
+    });
+
+  return (
+    <Modal title={channel.name?.trim() || "Group"} subtitle={`${members.length} participants`} onClose={onClose}>
+      <ul className={PICKER_LIST}>
+        {roster.map((m) => {
+          const isMe = m.user_id === myUserId;
+          const isAdmin = m.role === "owner";
+          // Refused by the server anyway; disabled here so the only admin is
+          // not invited to click something that cannot succeed.
+          const lastAdmin = isAdmin && adminCount <= 1;
+          return (
+            <li key={m.user_id}>
+              <div className={`${PICKER_ROW} tw-cursor-default`}>
+                <span className="tix-avatar sm">{initials(m.profile)}</span>
+                <span className={PICKER_ROW_LABEL}>
+                  {displayName(m.profile)}{isMe ? " (you)" : ""}
+                  {isAdmin ? (
+                    <span className="tw-ml-2 tw-text-[11px] tw-font-semibold tw-text-brand-dark">{"Admin"}</span>
+                  ) : null}
+                </span>
+                {iAmAdmin ? (
+                  <span className="tw-flex tw-flex-none tw-gap-1">
+                    <button
+                      type="button"
+                      className={MENU_ITEM}
+                      disabled={busyId !== null || lastAdmin}
+                      onClick={() =>
+                        run(m.user_id, () =>
+                          setChatMemberRole({
+                            channelId: channel.id,
+                            userId: m.user_id,
+                            role: isAdmin ? "member" : "owner",
+                          })
+                        )
+                      }
+                    >
+                      {isAdmin ? "Remove admin" : "Make admin"}
+                    </button>
+                    <button
+                      type="button"
+                      className={MENU_ITEM_DANGER}
+                      disabled={busyId !== null || lastAdmin}
+                      onClick={() =>
+                        run(m.user_id, () => removeChatMember({ channelId: channel.id, userId: m.user_id }))
+                      }
+                    >
+                      {"Remove"}
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      {iAmAdmin ? (
+        <div className="tw-mt-4">
+          {!adding ? (
+            <Button size="sm" onClick={() => setAdding(true)}>{"Add people"}</Button>
+          ) : (
+            <>
+              {schoolMembers.length > 6 ? (
+                <input
+                  className="input tw-w-full tw-mb-2 tw-py-[7px] tw-px-2.5 tw-text-[13.5px]"
+                  placeholder="Search by name or role..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              ) : null}
+              {candidates.length === 0 ? (
+                <p className={PICKER_EMPTY}>{"Everyone here is already in this group."}</p>
+              ) : (
+                <ul className={PICKER_LIST}>
+                  {candidates.map((s) => {
+                    const checked = picked.includes(s.user_id);
+                    return (
+                      <li key={s.user_id}>
+                        <button
+                          type="button"
+                          className={`${PICKER_ROW} ${checked ? PICKER_ROW_SELECTED : ""}`}
+                          onClick={() =>
+                            setPicked((cur) =>
+                              cur.includes(s.user_id)
+                                ? cur.filter((id) => id !== s.user_id)
+                                : [...cur, s.user_id]
+                            )
+                          }
+                        >
+                          <span className="tix-avatar sm">{initials(s.profiles)}</span>
+                          <span className={PICKER_ROW_LABEL}>
+                            {displayName(s.profiles)} · {s.role}
+                          </span>
+                          {checked ? <Icon icon={check} size={16} /> : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <div className="btn-row tw-mt-3">
+                <Button size="sm" disabled={picked.length === 0 || busyId !== null} onClick={addPicked}>
+                  {busyId === "add" ? "Adding..." : `Add ${picked.length || ""}`.trim()}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => { setAdding(false); setPicked([]); setQuery(""); }}
+                >
+                  {"Cancel"}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
     </Modal>
   );
 };
@@ -339,6 +771,19 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
     if (!needle) return true;
     return `${displayName(m.profiles)} ${m.role}`.toLowerCase().includes(needle);
   });
+
+  // What is still missing, in the order someone fills the form in, so the hint
+  // names one thing at a time rather than listing everything at once.
+  const blockedReason =
+    mode === "dm"
+      ? otherUserId
+        ? ""
+        : "Pick someone to message."
+      : !groupName.trim()
+      ? "Give the group a name."
+      : groupMemberIds.length === 0
+      ? "Pick at least one person."
+      : "";
 
   const toggleGroupMember = (userId) =>
     setGroupMemberIds((current) =>
@@ -385,20 +830,20 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
 
         {mode === "dm" ? (
           members.length === 0 ? (
-            <p className="chat-picker-empty">{"No one else here yet."}</p>
+            <p className={PICKER_EMPTY}>{"No one else here yet."}</p>
           ) : visibleMembers.length === 0 ? (
-            <p className="chat-picker-empty">{"No one matches that search."}</p>
+            <p className={PICKER_EMPTY}>{"No one matches that search."}</p>
           ) : (
-            <ul className="chat-picker-list">
+            <ul className={PICKER_LIST}>
               {visibleMembers.map((m) => (
                 <li key={m.user_id}>
                   <button
                     type="button"
-                    className={`chat-picker-row${otherUserId === m.user_id ? " selected" : ""}`}
+                    className={`${PICKER_ROW} ${otherUserId === m.user_id ? PICKER_ROW_SELECTED : ""}`}
                     onClick={() => setOtherUserId(m.user_id)}
                   >
                     <span className="tix-avatar sm">{initials(m.profiles)}</span>
-                    <span className="chat-picker-row-label">
+                    <span className={PICKER_ROW_LABEL}>
                       {displayName(m.profiles)} · {m.role}
                     </span>
                     {otherUserId === m.user_id ? <Icon icon={check} size={16} /> : null}
@@ -411,28 +856,30 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
           <>
             <input
               className="input"
-              placeholder="Channel name"
+              // Named as required: it sits below the search box, so it is easy
+              // to tick people and never notice this was skipped.
+              placeholder="Channel name (required)"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
               style={{ marginBottom: 10 }}
             />
             {members.length === 0 ? (
-              <p className="chat-picker-empty">{"No one else here yet."}</p>
+              <p className={PICKER_EMPTY}>{"No one else here yet."}</p>
             ) : visibleMembers.length === 0 ? (
-              <p className="chat-picker-empty">{"No one matches that search."}</p>
+              <p className={PICKER_EMPTY}>{"No one matches that search."}</p>
             ) : (
-              <ul className="chat-picker-list">
+              <ul className={PICKER_LIST}>
                 {visibleMembers.map((m) => {
                   const checked = groupMemberIds.includes(m.user_id);
                   return (
                     <li key={m.user_id}>
                       <button
                         type="button"
-                        className={`chat-picker-row${checked ? " selected" : ""}`}
+                        className={`${PICKER_ROW} ${checked ? PICKER_ROW_SELECTED : ""}`}
                         onClick={() => toggleGroupMember(m.user_id)}
                       >
                         <span className="tix-avatar sm">{initials(m.profiles)}</span>
-                        <span className="chat-picker-row-label">
+                        <span className={PICKER_ROW_LABEL}>
                           {displayName(m.profiles)} · {m.role}
                         </span>
                         {checked ? <Icon icon={check} size={16} /> : null}
@@ -445,13 +892,17 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
           </>
         )}
 
-        <div style={{ marginTop: 16 }}>
-          <Button
-            type="submit"
-            disabled={busy || (mode === "dm" ? !otherUserId : !groupName.trim() || groupMemberIds.length === 0)}
-          >
+        {/* A disabled button with nothing beside it just reads as broken —
+            with two people already ticked and the name box still empty, the
+            obvious conclusion is that the button itself does not work. Say
+            which part is missing instead. */}
+        <div className="tw-mt-4">
+          <Button type="submit" disabled={busy || !!blockedReason}>
             {busy ? "Starting..." : mode === "dm" ? "Start chat" : "Create group"}
           </Button>
+          {blockedReason ? (
+            <span className="tw-ml-3 tw-text-[12.5px] tw-text-ink-3">{blockedReason}</span>
+          ) : null}
         </div>
       </form>
     </Modal>
@@ -477,6 +928,7 @@ const ChatPage = () => {
   const [editingId, setEditingId] = useState(null);
   const [editBody, setEditBody] = useState("");
   const [showNewChat, setShowNewChat] = useState(false);
+  const [showParticipants, setShowParticipants] = useState(false);
   const [viewingPerson, setViewingPerson] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -548,9 +1000,12 @@ const ChatPage = () => {
     };
   }, [user?.id, schoolId, loadOverview]);
 
+  // Returns the promise so callers that need the roster to be current before
+  // they continue (the participants modal, after an add/remove/promote) can
+  // await it, rather than racing the realtime subscription to the same data.
   const loadChannelMembers = useCallback(() => {
-    if (!channelId) return;
-    fetchChannelMembers(channelId).then(setChannelMembers).catch(() => {});
+    if (!channelId) return Promise.resolve();
+    return fetchChannelMembers(channelId).then(setChannelMembers).catch(() => {});
   }, [channelId]);
 
   useEffect(() => {
@@ -824,7 +1279,31 @@ const ChatPage = () => {
   // The other side of a DM — chat_overview never names them (it returns
   // the channel's display name, not a user id), but the roster fetched for
   // "seen" already has every member of THIS open channel.
-  const otherMemberId = channelMembers.find((m) => m.user_id !== user?.id)?.user_id;
+  //
+  // Only ever meaningful for a DM. Unguarded, "the first member who isn't me"
+  // resolves on a GROUP too, to whichever member the roster happened to return
+  // first — so opening a group called "Testing one or two" and clicking its
+  // header showed one arbitrary participant's profile card.
+  const otherMemberId =
+    activeChannel?.kind === "dm"
+      ? channelMembers.find((m) => m.user_id !== user?.id)?.user_id
+      : undefined;
+  // The open group's own roster is already loaded here, so the header cluster
+  // uses it directly rather than chat_overview's capped member_preview. Same
+  // ordering rule as that column (joined order, then id) so a group looks the
+  // same in the header as it does in the list beside it.
+  const headerGroupProfiles = channelMembers
+    .filter((m) => m.user_id !== user?.id)
+    .slice()
+    .sort(
+      (a, b) =>
+        String(a.joined_at || "").localeCompare(String(b.joined_at || "")) ||
+        String(a.user_id).localeCompare(String(b.user_id))
+    )
+    .slice(0, 3)
+    .map((m) => membersById[m.user_id])
+    .filter(Boolean);
+
   const otherReadAt = channelMembers
     .filter((m) => m.user_id !== user?.id)
     .map((m) => m.last_read_at)
@@ -838,15 +1317,29 @@ const ChatPage = () => {
       <Navbar />
       <Page title="Chat" wide>
         <Notice tone="error">{error}</Notice>
-        <div className={`tix-shell tix-detail chat-detail${channelId ? " chat-mobile-open" : ""}`}>
-          <aside className="tix-detail-list">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        {/* A real phone chat app shows one pane at a time — the chat list, or
+            (once you tap into one) that conversation full-screen with a back
+            arrow, never both stacked down one page, which is what the generic
+            .tix-detail mobile rule does for Tickets. Which pane shows is
+            driven straight off channelId rather than a toggle class with
+            descendant selectors: it is the same signal the old
+            .chat-mobile-open class was derived from, and reading it here
+            means the two panes cannot disagree about which one is visible.
+            Every mobile: utility below is max-width 900px (see
+            tailwind.config.js), matching this app's desktop-first CSS. */}
+        <div className="tix-shell tix-detail tw-grid-cols-[300px_1fr] mobile:tw-grid-cols-[1fr] mobile:tw-grid-rows-[minmax(0,1fr)] mobile:tw-h-[var(--page-avail-h,calc(100vh-68px-var(--page-top-h,0px)-40px))]">
+          <aside
+            className={`tix-detail-list mobile:tw-h-full mobile:tw-overflow-y-auto mobile:tw-border-r-0 mobile:tw-border-b-0 ${
+              channelId ? "mobile:tw-hidden" : ""
+            }`}
+          >
+            <div className="tw-flex tw-justify-between tw-items-center tw-mb-2.5">
               <strong>{"Chats"}</strong>
               <Button size="sm" onClick={() => setShowNewChat(true)}>{"New"}</Button>
             </div>
             {channels.length > 0 ? (
               <input
-                className="input chat-search"
+                className="input tw-w-full tw-mb-2 tw-py-[7px] tw-px-2.5 tw-text-[13.5px]"
                 placeholder="Search chats"
                 value={chatQuery}
                 onChange={(e) => setChatQuery(e.target.value)}
@@ -862,37 +1355,59 @@ const ChatPage = () => {
                   key={c.id}
                   role="button"
                   tabIndex={0}
-                  className={`chat-list-item${c.id === channelId ? " active" : ""}`}
+                  className={`tw-flex tw-items-start tw-gap-2.5 tw-w-full tw-text-left tw-py-[9px] tw-px-2 tw-rounded-[8px] tw-border-0 tw-border-solid tw-border-l-[3px] tw-cursor-pointer [font-family:inherit] hover:tw-bg-tix-surface-2 ${
+                    c.id === channelId
+                      ? "tw-bg-tix-surface-2 tw-border-l-tix-brand"
+                      : "tw-bg-transparent tw-border-l-transparent"
+                  }`}
                   onClick={() => navigate(`/Chat/${c.id}`)}
                   onKeyDown={(e) => { if (e.key === "Enter") navigate(`/Chat/${c.id}`); }}
                 >
-                  <button
-                    type="button"
-                    className="tix-avatar chat-avatar-btn"
-                    disabled={!c.other_user_id}
-                    onClick={(e) => { e.stopPropagation(); if (c.other_user_id) openPerson(c.other_user_id); }}
-                  >
-                    {initials({ first_name: c.name })}
-                  </button>
-                  <span className="chat-list-item-main">
-                    <span className="chat-list-item-top">
+                  {c.kind === "group" ? (
+                    <span className="tw-flex-none tw-mt-0.5">
+                      {/* filter(Boolean): the school roster loads separately,
+                          so before it arrives these ids resolve to undefined
+                          and would each render a "SO" (initials of "Someone")
+                          circle. Dropping them shows fewer faces for a moment
+                          instead of wrong ones. */}
+                      <GroupAvatar
+                        profiles={(c.member_preview || []).map((id) => membersById[id]).filter(Boolean)}
+                        size={34}
+                      />
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`tix-avatar ${AVATAR_BTN}`}
+                      disabled={!c.other_user_id}
+                      onClick={(e) => { e.stopPropagation(); if (c.other_user_id) openPerson(c.other_user_id); }}
+                    >
+                      {initials({ first_name: c.name })}
+                    </button>
+                  )}
+                  <span className="tw-flex-1 tw-min-w-0">
+                    <span className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
                       <span
-                        className={`chat-list-item-name${c.unread_count > 0 ? " unread" : ""}${c.other_user_id ? " chat-clickable-name" : ""}`}
+                        className={`tw-text-[13.5px] tw-truncate ${
+                          c.unread_count > 0 ? "tw-font-bold tw-text-tix-ink" : "tw-text-tix-ink-2"
+                        }${c.other_user_id ? ` ${CLICKABLE_NAME}` : ""}`}
                         onClick={c.other_user_id ? (e) => { e.stopPropagation(); openPerson(c.other_user_id); } : undefined}
                       >
                         {c.name?.trim() || "Unnamed channel"}
                       </span>
-                      <span className="chat-list-item-time">{shortTimestamp(c.last_message_at)}</span>
+                      <span className="tw-flex-none tw-text-[11px] tw-text-tix-ink-3">{shortTimestamp(c.last_message_at)}</span>
                     </span>
-                    <span className="chat-list-item-preview">
+                    <span className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-mt-0.5">
                       {/* Typing only ever exists for the channel actually
                           open right now — subscribeToTyping only listens
                           on channelId, not every channel in the list — so
                           this can only ever apply to that one row. */}
                       {c.id === channelId && typingNames.length > 0 ? (
-                        <span className="chat-typing">{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</span>
+                        <span className={`${TYPING} tw-truncate`}>{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</span>
                       ) : (
-                        <span>{(c.last_message_preview || "No messages yet").replace(/<[^>]+>/g, "")}</span>
+                        <span className="tw-text-xs tw-text-tix-ink-3 tw-truncate">
+                          {(c.last_message_preview || "No messages yet").replace(/<[^>]+>/g, "")}
+                        </span>
                       )}
                       {/* The bold name alone reads as "different", not
                           "unread", at a glance — this dot is the actual
@@ -900,7 +1415,11 @@ const ChatPage = () => {
                           Chat-link dot, so both places agree on what
                           "unread" looks like. */}
                       {c.unread_count > 0 ? (
-                        <span className="chat-list-dot" title={`${c.unread_count} unread`} aria-hidden="true" />
+                        <span
+                          className="tw-flex-none tw-w-2 tw-h-2 tw-rounded-full tw-bg-tix-brand"
+                          title={`${c.unread_count} unread`}
+                          aria-hidden="true"
+                        />
                       ) : null}
                     </span>
                   </span>
@@ -909,44 +1428,79 @@ const ChatPage = () => {
             )}
           </aside>
 
-          <section className="tix-thread chat-thread">
+          <section
+            className={`tix-thread tw-flex tw-flex-col tw-p-0 tw-overflow-y-hidden mobile:tw-h-full mobile:tw-overflow-y-auto mobile:tw-border-r-0 mobile:tw-border-b-0 ${
+              channelId ? "" : "mobile:tw-hidden"
+            }`}
+          >
             {!channelId ? (
-              <div className="chat-thread-empty"><Empty>{"Pick a chat on the left, or start a new one."}</Empty></div>
+              <div className="tw-flex-1 tw-flex tw-items-center tw-justify-center">
+                <Empty>{"Pick a chat on the left, or start a new one."}</Empty>
+              </div>
             ) : loading ? (
-              <div className="chat-thread-empty"><Empty>{"Loading..."}</Empty></div>
+              <div className="tw-flex-1 tw-flex tw-items-center tw-justify-center">
+                <Empty>{"Loading..."}</Empty>
+              </div>
             ) : (
               <>
-                <div className="chat-thread-head">
+                <div className="tw-flex-none tw-flex tw-items-center tw-gap-3 tw-py-3.5 tw-px-5 tw-border-0 tw-border-solid tw-border-b-[1px] tw-border-b-tix-line tw-min-h-[30px]">
+                  {/* Only reachable once mobile hides the list behind the open
+                      thread — on a wide screen both panes already show, so it
+                      would only duplicate the list's own "New" button. */}
                   <button
                     type="button"
-                    className="chat-mobile-back"
+                    className="tw-hidden mobile:tw-inline-flex tw-flex-none tw-w-8 tw-h-8 tw-rounded-full tw-border-none tw-bg-transparent tw-items-center tw-justify-center tw-text-tix-ink-2 tw-cursor-pointer tw-mr-0.5 hover:tw-bg-tix-surface-2"
                     aria-label="Back to chats"
                     onClick={() => navigate("/Chat")}
                   >
                     <Icon icon={arrowLeft} size={18} />
                   </button>
-                  <button
-                    type="button"
-                    className="tix-avatar chat-avatar-btn"
-                    disabled={!otherMemberId}
-                    onClick={() => otherMemberId && openPerson(otherMemberId)}
-                  >
-                    {initials({ first_name: activeChannel?.name })}
-                  </button>
+                  {activeChannel?.kind === "group" ? (
+                    <button
+                      type="button"
+                      className={`tw-flex-none tw-border-none tw-bg-transparent tw-p-0 tw-cursor-pointer [font-family:inherit]`}
+                      aria-label="Participants"
+                      onClick={() => setShowParticipants(true)}
+                    >
+                      <GroupAvatar profiles={headerGroupProfiles} size={38} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={`tix-avatar tw-w-[38px] tw-h-[38px] tw-text-[13.5px] tw-shadow-1 ${AVATAR_BTN}`}
+                      disabled={!otherMemberId}
+                      onClick={() => otherMemberId && openPerson(otherMemberId)}
+                    >
+                      {initials({ first_name: activeChannel?.name })}
+                    </button>
+                  )}
                   <div>
                     <h1
-                      className={otherMemberId ? "chat-clickable-name" : undefined}
+                      className={`tw-text-base tw-m-0 tw-text-tix-ink [font-family:inherit] tw-leading-[1.3] ${
+                        otherMemberId ? CLICKABLE_NAME : ""
+                      }`}
                       onClick={() => otherMemberId && openPerson(otherMemberId)}
                     >
                       {activeChannel?.name?.trim() || "Chat"}
                     </h1>
                     {typingNames.length > 0 ? (
-                      <div className="chat-typing">{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</div>
+                      <div className={TYPING}>{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</div>
                     ) : null}
                   </div>
+                  {/* Groups only — a DM's "participants" are the two people
+                      already named in this header. */}
+                  {activeChannel?.kind === "group" ? (
+                    <button
+                      type="button"
+                      className={`${CLICKABLE_NAME} tw-ml-auto tw-flex-none tw-border-none tw-bg-transparent tw-text-[12.5px] tw-text-tix-ink-3 [font-family:inherit]`}
+                      onClick={() => setShowParticipants(true)}
+                    >
+                      {`${channelMembers.length} participants`}
+                    </button>
+                  ) : null}
                 </div>
 
-                <div className="chat-thread-body">
+                <div className="tw-flex-1 tw-min-h-0 tw-overflow-y-auto tw-py-[18px] tw-px-[22px]">
                   {messages.map((m, i) => {
                     const mine = m.author_id === user?.id;
                     const prev = messages[i - 1];
@@ -959,24 +1513,36 @@ const ChatPage = () => {
                       new Date(m.created_at) - new Date(prev.created_at) < 5 * 60 * 1000;
                     const seen = i === lastMineIndex && mine && otherReadAt && otherReadAt >= m.created_at;
                     return (
-                      <div key={m.id} className={`chat-msg-row${mine ? " mine" : ""}${grouped ? " grouped" : ""}`}>
+                      <div
+                        key={m.id}
+                        className={`tw-flex tw-gap-2.5 tw-max-w-[74%] tw-my-[3px] ${
+                          grouped ? "tw-mt-0" : ""
+                        } ${mine ? "tw-ml-auto tw-flex-row-reverse" : ""}`}
+                      >
+                        {/* Your own avatar is dropped on a phone — the bubble's
+                            own colour and right alignment already say "mine",
+                            and the repeated circle only costs width there. */}
                         <button
                           type="button"
-                          className={`tix-avatar sm chat-avatar-btn${grouped ? " spacer" : ""}`}
+                          className={`tix-avatar sm tw-mt-0.5 tw-flex-none ${AVATAR_BTN} ${
+                            grouped ? "tw-invisible" : ""
+                          } ${mine ? "mobile:tw-hidden" : ""}`}
                           onClick={() => openPerson(mine ? user.id : m.author_id)}
                         >
                           {mine ? initials(myProfile) : initials(m.author)}
                         </button>
-                        <div className="chat-msg-col">
+                        <div className={`tw-flex tw-flex-col tw-gap-0.5 tw-min-w-0 ${mine ? "tw-items-end" : ""}`}>
                           {!grouped ? (
-                            <div className="chat-msg-meta">
+                            <div className="tw-flex tw-items-baseline tw-gap-2 tw-mb-px">
                               <strong
-                                className="chat-clickable-name"
+                                className={`tw-text-[12.5px] tw-text-tix-ink ${CLICKABLE_NAME}`}
                                 onClick={() => openPerson(mine ? user.id : m.author_id)}
                               >
                                 {mine ? "You" : displayName(m.author)}
                               </strong>
-                              <span>{shortTimestamp(m.created_at)}{m.edited_at ? " · edited" : ""}</span>
+                              <span className="tw-text-[11px] tw-text-tix-ink-3">
+                                {shortTimestamp(m.created_at)}{m.edited_at ? " · edited" : ""}
+                              </span>
                             </div>
                           ) : null}
                           {/* The menu sits beside the bubble itself, not on
@@ -985,14 +1551,24 @@ const ChatPage = () => {
                               extra row just to hold this one small button,
                               which is most of what made the thread read as
                               cluttered rather than "a professional built
-                              this". row-reverse for "mine" (see CSS) puts it
-                              on the outer edge, away from the bubble's own
-                              corner, on both sides. */}
-                          <div className="chat-msg-bubble-row">
+                              this". row-reverse for "mine" puts it on the
+                              outer edge, away from the bubble's own corner,
+                              on both sides. */}
+                          <div
+                            className={`tw-flex tw-items-end tw-gap-0.5 tw-min-w-0 ${
+                              mine ? "tw-flex-row-reverse" : ""
+                            }`}
+                          >
                             <SwipeToReply onReply={() => setReplyingTo(m)}>
-                              <div className="chat-msg-bubble-stack">
+                              <div
+                                className={`tw-flex tw-flex-col tw-gap-[3px] tw-min-w-0 ${
+                                  mine ? "tw-items-end" : ""
+                                }`}
+                              >
                                 {m.deleted_at ? (
-                                  <div className="chat-bubble deleted">{"Message deleted."}</div>
+                                  <div className="tw-rounded-[14px] tw-py-2 tw-px-[13px] tw-bg-transparent tw-border tw-border-dashed tw-border-tix-line tw-text-tix-ink-3 tw-italic">
+                                    {"Message deleted."}
+                                  </div>
                                 ) : editingId === m.id ? (
                                   <div>
                                     <RichTextEditor
@@ -1008,10 +1584,21 @@ const ChatPage = () => {
                                   </div>
                                 ) : (
                                   <>
-                                    {m.reply_to ? <ReplyPreview message={m.reply_to} className="chat-reply-quote" /> : null}
+                                    {m.reply_to ? <ReplyPreview message={m.reply_to} className={REPLY_QUOTE} /> : null}
                                     {!isHtmlEmpty(m.body) ? (
                                       <div
-                                        className="chat-bubble tix-msg-html"
+                                        // tix-msg-html stays a real CSS class:
+                                        // it styles the p/ul/a tags Tiptap
+                                        // generates inside this bubble, which
+                                        // have no JSX call site to take a
+                                        // className. The link colour override
+                                        // for "mine" needs the same treatment,
+                                        // hence the [&_a] arbitrary variant.
+                                        className={`tw-rounded-[14px] tw-py-2 tw-px-[13px] tix-msg-html ${
+                                          mine
+                                            ? "tw-bg-tix-brand tw-text-white [&_a]:tw-text-white"
+                                            : "tw-bg-tix-surface-2 tw-text-tix-ink-2"
+                                        }`}
                                         // Instagram/WhatsApp's other signature
                                         // gesture — double-tap a message to
                                         // heart it, the same toggle the "⋮"
@@ -1048,7 +1635,9 @@ const ChatPage = () => {
                               />
                             ) : null}
                           </div>
-                          {seen ? <div className="chat-seen">{"Seen"}</div> : null}
+                          {seen ? (
+                            <div className="tw-text-[11px] tw-text-tix-ink-3 tw-mt-0.5 tw-text-right">{"Seen"}</div>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -1056,11 +1645,19 @@ const ChatPage = () => {
                   <div ref={threadEndRef} />
                 </div>
 
-                <form onSubmit={send} className="chat-composer">
+                <form
+                  onSubmit={send}
+                  className="tw-flex-none tw-border-0 tw-border-solid tw-border-t-[1px] tw-border-t-tix-line tw-pt-3 tw-px-5 tw-pb-4 tw-bg-tix-surface"
+                >
                   {replyingTo ? (
-                    <div className="chat-replying-bar">
-                      <ReplyPreview message={replyingTo} className="chat-reply-quote" />
-                      <button type="button" aria-label="Cancel reply" onClick={() => setReplyingTo(null)}>
+                    <div className="tw-flex tw-items-center tw-gap-2 tw-mb-1.5">
+                      <ReplyPreview message={replyingTo} className={`${REPLY_QUOTE} tw-flex-1 tw-mb-0`} />
+                      <button
+                        type="button"
+                        className="tw-flex-none tw-border-none tw-bg-transparent tw-text-tix-ink-3 tw-cursor-pointer"
+                        aria-label="Cancel reply"
+                        onClick={() => setReplyingTo(null)}
+                      >
                         <Icon icon={xIcon} size={14} />
                       </button>
                     </div>
@@ -1075,8 +1672,12 @@ const ChatPage = () => {
                     />
                   ) : null}
                   <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
-                  <div className="chat-composer-pill">
-                    <div className="chat-composer-input">
+                  <div className="tw-flex tw-items-end tw-gap-1.5 tw-border tw-border-solid tw-border-tix-line tw-rounded-[22px] tw-py-1.5 tw-pr-2 tw-pl-4 tw-bg-tix-surface-2 focus-within:tw-border-tix-brand">
+                    {/* chat-composer-input stays a real class: theme.css uses
+                        it to reach inside RichTextEditor's own markup
+                        (.rte-compact .rte-prose), which has no JSX call site
+                        here to take a className. */}
+                    <div className="chat-composer-input tw-flex-1 tw-min-w-0">
                       <RichTextEditor
                         ref={composerRef}
                         value={composeBody}
@@ -1086,20 +1687,24 @@ const ChatPage = () => {
                         showToolbar={showFormatting}
                       />
                     </div>
-                    <div className="chat-composer-icons">
+                    <div className="tw-flex tw-items-center tw-gap-0.5 tw-flex-none tw-pb-0.5">
                       <button
                         type="button"
-                        className={`chat-composer-icon-btn${showFormatting ? " active" : ""}`}
+                        className={`${ICON_BTN} ${
+                          showFormatting
+                            ? "tw-bg-[color-mix(in_srgb,var(--tix-brand)_16%,transparent)] tw-text-tix-brand"
+                            : ""
+                        }`}
                         aria-label="Formatting"
                         title="Formatting"
                         onClick={() => setShowFormatting((v) => !v)}
                       >
                         <Icon icon={formatIcon} size={17} />
                       </button>
-                      <span className="chat-emoji-wrap" ref={emojiWrapRef}>
+                      <span className="tw-relative tw-inline-flex" ref={emojiWrapRef}>
                         <button
                           type="button"
-                          className="chat-composer-icon-btn"
+                          className={ICON_BTN}
                           aria-label="Emoji"
                           title="Emoji"
                           onClick={() => setEmojiPickerOpen((v) => !v)}
@@ -1107,11 +1712,12 @@ const ChatPage = () => {
                           {"🙂"}
                         </button>
                         {emojiPickerOpen ? (
-                          <div className="chat-emoji-picker">
+                          <div className="tw-absolute tw-bottom-[calc(100%+8px)] tw-right-0 tw-z-30 tw-grid tw-grid-cols-8 tw-gap-0.5 tw-p-2 tw-border tw-border-solid tw-border-tix-line tw-rounded-[10px] tw-bg-tix-surface tw-shadow-1">
                             {COMPOSE_EMOJI.map((emoji) => (
                               <button
                                 key={emoji}
                                 type="button"
+                                className="tw-border-none tw-bg-transparent tw-text-[18px] tw-p-1 tw-cursor-pointer tw-rounded-md hover:tw-bg-tix-surface-2"
                                 onClick={() => {
                                   composerRef.current?.insertContent(emoji);
                                   setEmojiPickerOpen(false);
@@ -1125,7 +1731,7 @@ const ChatPage = () => {
                       </span>
                       <button
                         type="button"
-                        className="chat-composer-icon-btn"
+                        className={ICON_BTN}
                         aria-label="Attach a file"
                         title="Attach a file"
                         disabled={!!pendingFile}
@@ -1135,7 +1741,7 @@ const ChatPage = () => {
                       </button>
                       <button
                         type="submit"
-                        className="chat-composer-send"
+                        className="tw-flex-none tw-w-[34px] tw-h-[34px] tw-rounded-full tw-border-none tw-cursor-pointer tw-flex tw-items-center tw-justify-center tw-bg-tix-brand tw-text-white disabled:tw-opacity-50 disabled:tw-cursor-not-allowed enabled:hover:tw-brightness-[1.08]"
                         disabled={sending || (isHtmlEmpty(composeBody) && !pendingFile)}
                         aria-label="Send"
                         title="Send"
@@ -1163,6 +1769,18 @@ const ChatPage = () => {
 
       {viewingPerson ? (
         <PersonModal person={viewingPerson} schoolMembers={schoolMembers} onClose={() => setViewingPerson(null)} />
+      ) : null}
+
+      {showParticipants && activeChannel ? (
+        <ParticipantsModal
+          channel={activeChannel}
+          members={channelMembers}
+          schoolMembers={schoolMembers}
+          myUserId={user?.id}
+          onClose={() => setShowParticipants(false)}
+          onChanged={loadChannelMembers}
+          onError={setError}
+        />
       ) : null}
 
       {forwardMessage ? (

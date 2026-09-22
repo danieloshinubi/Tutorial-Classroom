@@ -60,6 +60,12 @@ import Reports from "./Pages/Reports/Reports";
 import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
 import "./styles/theme.css";
+// Loaded after theme.css on purpose — Tailwind utilities and theme.css's
+// own single-class rules have equal specificity, so this load order lets a
+// converted element's utility classes win over any not-yet-deleted
+// theme.css rule during the incremental migration (see the Chat module's
+// own migration plan).
+import "./styles/tailwind.css";
 
 // Module-scope, not inside the App component: it has to run no matter which
 // of App/PlatformApp/MarketingApp ends up mounted below, and it watches

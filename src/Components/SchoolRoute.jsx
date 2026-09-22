@@ -20,7 +20,7 @@ import Navbar from "./Navbar/Navbar";
 // decides what the database will hand over, and it applies regardless of
 // anything here.
 const SchoolRoute = ({ module: moduleId }) => {
-  const { school, roles, loading, error, slug } = useSchool();
+  const { school, roles, loading, error, slug, disabledModules } = useSchool();
 
   if (loading) {
     return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Loading school..."}</p>;
@@ -46,11 +46,13 @@ const SchoolRoute = ({ module: moduleId }) => {
     );
   }
 
-  const allowed = canUseModule(moduleId, roles);
+  // Also covers a module the school itself has switched off, so typing the
+  // address reaches no further than following a link that is no longer there.
+  const allowed = canUseModule(moduleId, roles, disabledModules);
 
   // Somewhere they can actually use, rather than a Dashboard their role may
-  // not even have.
-  if (!allowed) return <Navigate to={homeFor(roles)} replace />;
+  // not even have — or that this school has turned off.
+  if (!allowed) return <Navigate to={homeFor(roles, disabledModules)} replace />;
 
   return <Outlet />;
 };
