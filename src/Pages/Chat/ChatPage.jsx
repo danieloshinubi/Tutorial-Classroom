@@ -13,7 +13,7 @@ import { cornerUpLeft } from "react-icons-kit/feather/cornerUpLeft";
 import Navbar from "../../Components/Navbar/Navbar";
 import { RichTextEditor } from "../../Components/RichTextEditor";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
-import DocumentPreviewModal from "../../Components/DocumentPreview";
+import DocumentPreviewModal, { isImagePath } from "../../Components/DocumentPreview";
 import PersonModal from "../../Components/PersonModal";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
@@ -43,6 +43,7 @@ import {
   addChatMembers,
   removeChatMember,
   setChatMemberRole,
+  renameChatChannel,
 } from "../../lib/api";
 import { Page, Button, Notice, Empty, Modal, displayName, initials } from "../../Components/UI";
 
@@ -572,12 +573,14 @@ const ParticipantsModal = ({
   myUserId,
   onClose,
   onChanged,
+  onRenamed,
   onError,
 }) => {
   const [busyId, setBusyId] = useState(null);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState([]);
+  const [name, setName] = useState(channel.name || "");
 
   const memberIds = new Set(members.map((m) => m.user_id));
   const iAmAdmin = members.some((m) => m.user_id === myUserId && m.role === "owner");
@@ -617,8 +620,46 @@ const ParticipantsModal = ({
       setAdding(false);
     });
 
+  const renameDirty = name.trim() !== (channel.name || "").trim();
+
+  const rename = () =>
+    run("rename", async () => {
+      await renameChatChannel({ channelId: channel.id, name });
+      // The header and the list row both read the name from chat_overview,
+      // not from this modal, so the channel list has to be refetched or the
+      // new name only exists in this input.
+      await onRenamed();
+    });
+
   return (
     <Modal title={channel.name?.trim() || "Group"} subtitle={`${members.length} participants`} onClose={onClose}>
+      {iAmAdmin ? (
+        <div className="tw-mb-4">
+          <label className="tw-block tw-text-xs tw-text-ink-3 tw-mb-1.5">{"Group name"}</label>
+          <div className="tw-flex tw-gap-2">
+            <input
+              className="input tw-flex-1 tw-min-w-0"
+              value={name}
+              placeholder="Group name"
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameDirty && name.trim()) {
+                  e.preventDefault();
+                  rename();
+                }
+              }}
+            />
+            <Button
+              size="sm"
+              disabled={!renameDirty || !name.trim() || busyId !== null}
+              onClick={rename}
+            >
+              {busyId === "rename" ? "Saving..." : "Rename"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <ul className={PICKER_LIST}>
         {roster.map((m) => {
           const isMe = m.user_id === myUserId;
@@ -955,9 +996,12 @@ const ChatPage = () => {
     if (person) setViewingPerson(person);
   };
 
+  // Returns the promise so a caller that needs the list to be current before
+  // it continues — renaming a group, which only shows up once chat_overview
+  // is refetched — can await it instead of racing the refresh.
   const loadOverview = useCallback(() => {
-    if (!schoolId) return;
-    fetchChatOverview(schoolId)
+    if (!schoolId) return Promise.resolve();
+    return fetchChatOverview(schoolId)
       .then(setChannels)
       .catch((err) => setError(err.message || "Could not load your chats."));
   }, [schoolId]);
@@ -1196,12 +1240,72 @@ const ChatPage = () => {
 
   // Picking a file only previews it — see send()'s own comment for why the
   // actual upload waits until Send is pressed.
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
+  // One place a file becomes the pending attachment, whether it arrived from
+  // the paperclip or was dropped onto the conversation.
+  const attachFile = (file) => {
     if (!file) return;
     if (pendingFile) URL.revokeObjectURL(pendingFile.previewUrl);
     setPendingFile({ file, name: file.name, size: file.size, previewUrl: URL.createObjectURL(file) });
+    // A caption is optional — an attachment alone is a complete message, and
+    // everything from the send button down already allows that. But picking a
+    // file through the paperclip or a drop leaves focus outside the editor, so
+    // Enter went nowhere and it looked as though a picture could not be sent
+    // until something was typed. Putting the cursor in the composer makes
+    // Enter send the attachment on its own.
+    composerRef.current?.focus();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    attachFile(file);
+  };
+
+  // Drag and drop onto the open conversation.
+  //
+  // dragenter/dragleave fire for every child element the pointer crosses, so
+  // a plain boolean flickers off the moment the cursor passes over a message
+  // bubble. Counting enters against leaves is what keeps the overlay steady
+  // while the pointer moves around inside the thread.
+  const dragDepth = useRef(0);
+  const [dragActive, setDragActive] = useState(false);
+
+  // Only react to an actual file drag. Dragging selected text, or a link from
+  // another tab, should not put the composer into "drop a file here" mode.
+  const isFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+
+  const onDragEnter = (e) => {
+    if (!channelId || !isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragActive(true);
+  };
+
+  const onDragOver = (e) => {
+    if (!channelId || !isFileDrag(e)) return;
+    // Without preventDefault on dragover the browser refuses the drop and
+    // opens the file in a new tab instead.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  };
+
+  const onDragLeave = (e) => {
+    if (!channelId || !isFileDrag(e)) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDragActive(false);
+  };
+
+  const onDrop = (e) => {
+    if (!channelId || !isFileDrag(e)) return;
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragActive(false);
+    // One attachment per message, same as the paperclip allows, so take the
+    // first and say so rather than silently dropping the rest.
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length === 0) return;
+    attachFile(files[0]);
+    if (files.length > 1) setError("One file per message — the first one was attached.");
   };
 
   const clearPendingFile = () => {
@@ -1222,6 +1326,42 @@ const ChatPage = () => {
   // differently (jump to a new tab) from every other document in the app.
   const previewPendingFile = () =>
     setPreviewDoc({ url: pendingFile.previewUrl, path: pendingFile.name, name: pendingFile.name });
+
+  // chat-attachments is a private bucket, so an <img> cannot just point at a
+  // stored path — every picture needs its own signed URL before it will
+  // render. Fetched once per path as messages arrive and kept here, with a
+  // ref tracking what has already been asked for so a re-render (a new
+  // message, a reaction) does not re-sign every image in the thread.
+  //
+  // An hour rather than the 5 minutes openAttachment uses: that one is
+  // fetched at the moment of clicking and used immediately, whereas these sit
+  // on screen for as long as the thread stays open.
+  const [imageUrls, setImageUrls] = useState({});
+  const imageFetchedRef = useRef(new Set());
+
+  useEffect(() => {
+    const todo = messages
+      .filter((m) => !m.deleted_at && m.attachment_path && isImagePath(m.attachment_path))
+      .map((m) => m.attachment_path)
+      .filter((path) => !imageFetchedRef.current.has(path));
+    if (todo.length === 0) return;
+    todo.forEach((path) => imageFetchedRef.current.add(path));
+    Promise.all(
+      todo.map((path) =>
+        signedChatAttachmentUrl(path, 3600)
+          .then((url) => [path, url])
+          .catch(() => [path, null])
+      )
+    ).then((pairs) => {
+      setImageUrls((current) => {
+        const next = { ...current };
+        pairs.forEach(([path, url]) => {
+          if (url) next[path] = url;
+        });
+        return next;
+      });
+    });
+  }, [messages]);
 
   const openAttachment = async (message) => {
     setOpeningAttachmentId(message.id);
@@ -1429,10 +1569,24 @@ const ChatPage = () => {
           </aside>
 
           <section
-            className={`tix-thread tw-flex tw-flex-col tw-p-0 tw-overflow-y-hidden mobile:tw-h-full mobile:tw-overflow-y-auto mobile:tw-border-r-0 mobile:tw-border-b-0 ${
+            className={`tix-thread tw-relative tw-flex tw-flex-col tw-p-0 tw-overflow-y-hidden mobile:tw-h-full mobile:tw-overflow-y-auto mobile:tw-border-r-0 mobile:tw-border-b-0 ${
               channelId ? "" : "mobile:tw-hidden"
             }`}
+            onDragEnter={onDragEnter}
+            onDragOver={onDragOver}
+            onDragLeave={onDragLeave}
+            onDrop={onDrop}
           >
+            {/* Covers the whole conversation, not just the composer: dropping
+                onto the messages is where the hand naturally goes. pointer-
+                events-none so it never swallows the drop it is advertising. */}
+            {dragActive ? (
+              <div className="tw-absolute tw-inset-0 tw-z-50 tw-pointer-events-none tw-flex tw-items-center tw-justify-center tw-bg-[color-mix(in_srgb,var(--tix-brand)_10%,transparent)] tw-border-2 tw-border-dashed tw-border-tix-brand tw-rounded-[10px]">
+                <span className="tw-px-4 tw-py-2 tw-rounded-full tw-bg-tix-surface tw-text-[13.5px] tw-text-tix-ink tw-shadow-2">
+                  {"Drop to attach"}
+                </span>
+              </div>
+            ) : null}
             {!channelId ? (
               <div className="tw-flex-1 tw-flex tw-items-center tw-justify-center">
                 <Empty>{"Pick a chat on the left, or start a new one."}</Empty>
@@ -1609,7 +1763,45 @@ const ChatPage = () => {
                                         dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }}
                                       />
                                     ) : null}
-                                    {m.attachment_path ? (
+                                    {/* A picture shows as a picture. The chip
+                                        is right for a spreadsheet nobody can
+                                        preview from its name, but it made an
+                                        image something you had to open to
+                                        find out what it was. Tapping it still
+                                        opens the same full viewer. */}
+                                    {m.attachment_path && isImagePath(m.attachment_path) ? (
+                                      <button
+                                        type="button"
+                                        className="tw-block tw-mt-1.5 tw-p-0 tw-border-none tw-bg-transparent tw-cursor-pointer tw-rounded-[10px] tw-overflow-hidden tw-max-w-[420px]"
+                                        onClick={() => openAttachment(m)}
+                                        title={m.attachment_name || "Open image"}
+                                      >
+                                        {imageUrls[m.attachment_path] ? (
+                                          // Sized like a shared screenshot
+                                          // rather than a thumbnail — the
+                                          // point of one is usually that it
+                                          // is readable in place. Natural
+                                          // size up to the caps, so a small
+                                          // image is not stretched; max-w
+                                          // also keeps it inside the row's
+                                          // own 74% on a narrow screen, and
+                                          // the height cap stops a tall
+                                          // screenshot taking over the thread.
+                                          <img
+                                            src={imageUrls[m.attachment_path]}
+                                            alt={m.attachment_name || "Image"}
+                                            className="tw-block tw-max-w-full tw-max-h-[360px] tw-object-contain tw-rounded-[10px]"
+                                          />
+                                        ) : (
+                                          // Same footprint as the image that
+                                          // replaces it, so the thread does
+                                          // not jump as pictures resolve.
+                                          <span className="tw-flex tw-items-center tw-justify-center tw-w-[180px] tw-h-[120px] tw-rounded-[10px] tw-bg-tix-surface-2 tw-text-xs tw-text-tix-ink-3">
+                                            {"Loading image…"}
+                                          </span>
+                                        )}
+                                      </button>
+                                    ) : m.attachment_path ? (
                                       <AttachmentChip
                                         name={m.attachment_name}
                                         size={m.attachment_size}
@@ -1711,8 +1903,15 @@ const ChatPage = () => {
                         >
                           {"🙂"}
                         </button>
+                        {/* repeat(8,1fr), NOT Tailwind's grid-cols-8 — that
+                            compiles to repeat(8, minmax(0,1fr)), and a zero
+                            minimum lets the tracks collapse in this panel,
+                            which is absolutely positioned and so sizes to its
+                            content. Plain 1fr means minmax(auto,1fr), so each
+                            track stays at least as wide as the emoji in it and
+                            the grid lays out 8 across as intended. */}
                         {emojiPickerOpen ? (
-                          <div className="tw-absolute tw-bottom-[calc(100%+8px)] tw-right-0 tw-z-30 tw-grid tw-grid-cols-8 tw-gap-0.5 tw-p-2 tw-border tw-border-solid tw-border-tix-line tw-rounded-[10px] tw-bg-tix-surface tw-shadow-1">
+                          <div className="tw-absolute tw-bottom-[calc(100%+8px)] tw-right-0 tw-z-30 tw-grid tw-grid-cols-[repeat(8,1fr)] tw-gap-0.5 tw-p-2 tw-border tw-border-solid tw-border-tix-line tw-rounded-[10px] tw-bg-tix-surface tw-shadow-1">
                             {COMPOSE_EMOJI.map((emoji) => (
                               <button
                                 key={emoji}
@@ -1779,6 +1978,7 @@ const ChatPage = () => {
           myUserId={user?.id}
           onClose={() => setShowParticipants(false)}
           onChanged={loadChannelMembers}
+          onRenamed={loadOverview}
           onError={setError}
         />
       ) : null}

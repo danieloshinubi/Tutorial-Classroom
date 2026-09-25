@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useState } from "react";
 import { signedMaterialUrl } from "../lib/api";
 
 const isPdfPath = (path) => /\.pdf($|\?)/i.test(path || "");
-const isImagePath = (path) => /\.(png|jpe?g|gif|webp|heic|bmp|svg)($|\?)/i.test(path || "");
+// Exported so Chat can decide the same way whether an attachment is a picture
+// worth showing inline — one definition, so a thumbnail and the viewer it
+// opens can never disagree about what counts as an image.
+export const isImagePath = (path) => /\.(png|jpe?g|gif|webp|heic|bmp|svg)($|\?)/i.test(path || "");
 
 const nameFromPath = (path) => (path || "").split("/").pop().replace(/^[0-9a-f-]{20,}-/i, "");
 

@@ -9,6 +9,8 @@ import {
   Field,
   Button,
   Badge,
+  Notice,
+  displayName,
   } from "../../Components/UI";
 import { ImageUpload } from "../../Components/ImageUpload";
 import { useActionFeedback } from "../../Components/Toast";
@@ -40,6 +42,12 @@ const Profile = () => {
 
   const update = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }));
+
+  // What the rest of the app shows for someone with no name — displayName()
+  // is the single source of that fallback, so this quotes exactly what
+  // colleagues actually see rather than guessing at it.
+  const nameMissing = !`${form.first_name} ${form.surname}`.trim();
+  const fallbackName = displayName(profile);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -80,10 +88,22 @@ const Profile = () => {
             ) : null}
           </p>
 
+          {/* A profile with no name is not a broken form, but it looks like
+              one — blank boxes read as "this failed to load". It also has a
+              visible consequence the person never sees explained: every name
+              in the app falls back to their email address, so colleagues see
+              an email where a name should be. Say both things plainly. */}
+          {nameMissing ? (
+            <Notice tone="warn">
+              {`Your name isn't set yet, so everywhere else in the app you appear as “${fallbackName}”. Fill in your first name and surname below, then save.`}
+            </Notice>
+          ) : null}
+
           <form onSubmit={handleSubmit}>
             <Field label="Firstname">
               <input
                 className="input"
+                placeholder="e.g. Daniel"
                 value={form.first_name}
                 onChange={update("first_name")}
               />
@@ -91,13 +111,15 @@ const Profile = () => {
             <Field label="Surname">
               <input
                 className="input"
+                placeholder="e.g. Oshinubi"
                 value={form.surname}
                 onChange={update("surname")}
               />
             </Field>
-            <Field label="Username">
+            <Field label="Username" hint="Optional — a short handle. Your name is what's shown around the app.">
               <input
                 className="input"
+                placeholder="Optional"
                 value={form.username}
                 onChange={update("username")}
               />

@@ -994,6 +994,25 @@ export const createGroupChannel = async ({ schoolId, name, memberIds }) => {
   return data;
 };
 
+// Renaming needs no RPC: the update policy on chat_channels is already
+// is_chat_channel_admin(id), so an admin may write the row directly. Only
+// `name` is sent — the same policy would also allow writing kind/school_id,
+// and there is no reason for a rename to be able to touch those.
+//
+// The trim matters: chat_channels_name_shape only requires a group's name to
+// be NOT NULL, so an empty string passes the constraint and then renders as
+// "Unnamed group" via chat_overview's own coalesce. Rejected here instead.
+export const renameChatChannel = async ({ channelId, name }) => {
+  const clean = (name || "").trim();
+  if (!clean) throw new Error("A group needs a name.");
+  const { error } = await supabase
+    .from("chat_channels")
+    .update({ name: clean })
+    .eq("id", channelId);
+  if (error) throw error;
+  return clean;
+};
+
 export const addChatMembers = async ({ channelId, memberIds }) => {
   const { error } = await supabase.rpc("add_chat_members", {
     target_channel: channelId,

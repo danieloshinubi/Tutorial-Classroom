@@ -1179,6 +1179,10 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 .notice.error { color: var(--danger); }
 .notice.success { color: var(--success); }
 .notice.muted { color: var(--ink-3); }
+/* Needs attention but nothing is broken — an incomplete profile, say. Notice
+   silently renders an unknown tone as unstyled text, so a tone only exists
+   once it has a rule here. */
+.notice.warn { color: var(--warn-ink); }
 
 /* ==========================================================================
    Skeleton loaders — Components/UI.jsx's Skeleton/SkeletonText/SkeletonTable/
