@@ -21,6 +21,7 @@ import {
 } from "../UI";
 import { useDocumentPreview } from "../DocumentPreview";
 import { useActionFeedback } from "../Toast";
+import { confirmDialog } from "../Confirm";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -197,7 +198,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
 
   const handleDelete = async (assignment) => {
     if (
-      !window.confirm(
+      !await confirmDialog(
         `Delete "${assignment.title}"? Every submission for it is deleted too.`
       )
     ) {

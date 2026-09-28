@@ -14,6 +14,7 @@ import {
   Empty,
   SkeletonCards,
   } from "../../Components/UI";
+import { confirmDialog } from "../../Components/Confirm";
 
 const Teach = () => {
   const { user } = useAuth();
@@ -47,7 +48,7 @@ const Teach = () => {
     setError("");
     // Deleting cascades to the course's materials, assignments, submissions
     // and chat, so make the consequence explicit before it happens.
-    const confirmed = window.confirm(
+    const confirmed = await confirmDialog(
       `Delete ${course.code}? This permanently removes its materials, assignments, submissions and chat. This cannot be undone.`
     );
     if (!confirmed) return;

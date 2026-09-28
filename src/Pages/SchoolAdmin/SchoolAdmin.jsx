@@ -16,6 +16,7 @@ import ClassesPanel from "./ClassesPanel";
 import AdmissionsSettingsPanel from "./AdmissionsSettingsPanel";
 import PaymentGatewaySettingsPanel from "./PaymentGatewaySettingsPanel";
 import ModulesPanel from "./ModulesPanel";
+import FeesSetupPanel from "./FeesSetupPanel";
 import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
 import OrganogramPanel from "./OrganogramPanel";
 import { STAFF_ROLES } from "../../lib/orgChart";
@@ -63,6 +64,7 @@ import {
   SkeletonList,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { confirmDialog } from "../../Components/Confirm";
 
 const PEOPLE_EXPORT_COLUMNS = [
   { key: "profiles.first_name", label: "First name" },
@@ -219,7 +221,7 @@ const PeoplePanel = () => {
 
   const handleRemove = async (row) => {
     if (
-      !window.confirm(
+      !await confirmDialog(
         `Remove ${displayName(row.profiles)} from this school? Their login stays, but they lose all access here.`
       )
     ) {
@@ -268,7 +270,7 @@ const PeoplePanel = () => {
 
   const handleResetPassword = async (row) => {
     if (
-      !window.confirm(
+      !await confirmDialog(
         `Reset ${displayName(row.profiles)}'s password? Their current password stops working immediately, and they will need to choose a new one the next time they sign in.`
       )
     ) {
@@ -1217,7 +1219,7 @@ const MailboxesPanel = () => {
   };
 
   const disconnect = async (row) => {
-    if (!window.confirm(`Disconnect ${row.address}? Tickets already raised from it stay put — only new mail stops coming in.`)) return;
+    if (!await confirmDialog(`Disconnect ${row.address}? Tickets already raised from it stay put — only new mail stops coming in.`)) return;
     setBusyId(row.id);
     setError("");
     try {
@@ -1298,7 +1300,7 @@ const MailboxesPanel = () => {
   );
 };
 
-const TABS = ["people", "organogram", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "modules", "settings"];
+const TABS = ["people", "organogram", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "fees", "modules", "settings"];
 
 const SchoolAdmin = () => {
   const { school } = useSchool();
@@ -1355,6 +1357,7 @@ const SchoolAdmin = () => {
               { id: "guardians", label: "Parents & children" },
               { id: "mailboxes", label: "Mailboxes" },
               { id: "payments", label: "Payments" },
+              { id: "fees", label: "Fees setup" },
               { id: "modules", label: "Modules" },
               { id: "settings", label: "School settings" },
             ]}
@@ -1374,6 +1377,7 @@ const SchoolAdmin = () => {
         {tab === "guardians" ? <GuardiansPanel /> : null}
         {tab === "mailboxes" ? <MailboxesPanel /> : null}
         {tab === "payments" ? <PaymentGatewaySettingsPanel /> : null}
+        {tab === "fees" ? <FeesSetupPanel /> : null}
         {tab === "modules" ? <ModulesPanel /> : null}
         {tab === "settings" ? <SettingsPanel /> : null}
       </Page>

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchExams, updateExam, deleteExam } from "../../lib/api";
 import { Card, Button, Badge, Empty, formatDate } from "../UI";
 import { useActionFeedback } from "../Toast";
+import { confirmDialog } from "../Confirm";
 
 // kind picks which list this renders: "exam" (the default "Exams" tab) or
 // "midterm" (the "Mid-exams" tab) — same table, same component, just a
@@ -36,7 +37,7 @@ const ExamsTab = ({ courseId, canManage, kind = "exam", schoolId }) => {
 
   const handleDelete = async (exam) => {
     if (
-      !window.confirm(
+      !await confirmDialog(
         `Delete "${exam.title}"? Every question and every student attempt goes with it.`
       )
     ) {

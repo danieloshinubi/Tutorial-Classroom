@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Icon } from "react-icons-kit";
+import { search as searchIcon } from "react-icons-kit/feather/search";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool } from "../../context/SchoolContext";
 import {
@@ -9,7 +11,7 @@ import {
   createTicket,
   updateTicket,
 } from "../../lib/api";
-import { Page, Button, Empty, Select, SkeletonList, displayName, initials } from "../../Components/UI";
+import { Page, Button, Empty, Field, Modal, Select, SkeletonList, displayName, initials } from "../../Components/UI";
 import { useLiveTicketsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -18,6 +20,17 @@ const STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
   { value: "resolved", label: "Resolved" },
   { value: "closed", label: "Closed" },
+];
+
+// The views across the top of the list. "Unresolved" (open + pending) is the
+// working queue, so it comes first and is where the page opens.
+const STATUS_TABS = [
+  ["unresolved", "Unresolved"],
+  ["open", "Open"],
+  ["pending", "Pending"],
+  ["resolved", "Resolved"],
+  ["closed", "Closed"],
+  ["all", "All"],
 ];
 
 const PRIORITY = ["low", "medium", "high", "urgent"];
@@ -37,55 +50,69 @@ const timeAgo = (iso) => {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 };
 
-// Freshdesk's own state badge — "New" (nobody's replied yet), "Overdue" (past
-// its resolution due date, only meaningful once due dates are wired up so
-// left off for now) — kept to the two states this data can actually support
-// honestly: unanswered, or the customer/requester's own turn.
-const StateBadge = ({ ticket }) => {
-  if (!ticket.first_response_at && ticket.status === "open") {
-    return <span className="tix-badge new">New</span>;
-  }
-  return null;
-};
+// "New" means nobody has replied yet. Overdue is left out until due dates
+// exist, so the badge only ever claims what this data can support.
+const isNew = (ticket) => !ticket.first_response_at && ticket.status === "open";
 
 const TicketRow = ({ ticket, onQuickUpdate }) => {
-  const name = displayName(ticket.requester);
+  const name = displayName(ticket.requester || (ticket.requester_name || ticket.requester_email
+    ? { first_name: ticket.requester_name || "", email: ticket.requester_email || "" }
+    : null));
 
   return (
-    <div className="tix-row">
-      <label className="tix-row-check">
-        <input type="checkbox" />
-      </label>
-      <span className="tix-avatar">{initials(ticket.requester)}</span>
-      <div className="tix-row-main">
-        <StateBadge ticket={ticket} />
-        <Link to={`/Tickets/${ticket.id}`} className="tix-row-subject">
-          {ticket.subject} <span className="tix-row-number">{`#${ticket.number}`}</span>
-        </Link>
-        <div className="tix-row-meta">
+    // The whole row opens the ticket (the subject link stretches over it,
+    // see .tk-row-link); the status picker sits above that link so it can
+    // still be changed without opening anything.
+    <div className={`tk-row tk-p-${ticket.priority}`}>
+      <span className="tix-avatar">{initials(ticket.requester || { first_name: name })}</span>
+      <div className="tk-row-main">
+        <div className="tk-row-title">
+          <Link to={`/Tickets/${ticket.id}`} className="tk-row-link">{ticket.subject}</Link>
+          <span className="tk-row-num">{`#${ticket.number}`}</span>
+          {isNew(ticket) ? <span className="tk-badge tk-badge-new">{"New"}</span> : null}
+        </div>
+        <div className="tk-row-meta">
           <span>{name}</span>
-          <span className="tix-dot">{"·"}</span>
+          <span aria-hidden="true">{"·"}</span>
           <span>{`Created ${timeAgo(ticket.created_at)}`}</span>
+          {ticket.channel === "email" ? (
+            <>
+              <span aria-hidden="true">{"·"}</span>
+              <span>{"By email"}</span>
+            </>
+          ) : null}
         </div>
       </div>
-      <div className="tix-row-side">
-        <span className={`tix-priority ${ticket.priority}`}>
-          <span className="tix-priority-dot" />
+      <div className="tk-row-side">
+        <span className={`tk-pill tk-pri tk-pri-${ticket.priority}`}>
+          <span className="tk-dot" aria-hidden="true" />
           {PRIORITY_LABEL[ticket.priority]}
         </span>
-        <span className="tix-row-group">{ticket.group?.name || "Unassigned"}</span>
-        <Select
-          className="tix-status-select"
-          value={ticket.status}
-          onChange={(v) => onQuickUpdate(ticket, { status: v })}
-          options={STATUS_OPTIONS}
-        />
+        <span className="tk-row-group">{ticket.group?.name || "No group"}</span>
+        <span className={`tk-row-agent${ticket.assignee ? "" : " is-empty"}`}>
+          {ticket.assignee ? (
+            <>
+              <span className="tix-avatar sm">{initials(ticket.assignee)}</span>
+              <span className="tk-row-agent-name">{displayName(ticket.assignee)}</span>
+            </>
+          ) : (
+            "Unassigned"
+          )}
+        </span>
+        <div className="tk-row-status">
+          <Select
+            className="select"
+            value={ticket.status}
+            onChange={(v) => onQuickUpdate(ticket, { status: v })}
+            options={STATUS_OPTIONS}
+          />
+        </div>
       </div>
     </div>
   );
 };
 
-const NewTicketForm = ({ groups, onCreate, onCancel }) => {
+const NewTicketModal = ({ groups, onCreate, onClose }) => {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("low");
@@ -121,72 +148,118 @@ const NewTicketForm = ({ groups, onCreate, onCancel }) => {
   };
 
   return (
-    // tix-shell too, not just tix-newform — this form renders above the
-    // .tix-shell list, so without it every --tix-* variable its own
-    // buttons/selects/inputs read is undefined here, and "Create ticket"
-    // renders as an invisible box (found live: exactly this happened).
-    <div className="tix-newform tix-shell">
-      <form onSubmit={submit}>
-        <input
-          className="tix-input tix-input-lg"
-          placeholder="Subject"
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          autoFocus
-        />
-        <textarea
-          className="tix-textarea"
-          placeholder="Describe the issue..."
-          rows={4}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-        />
+    <Modal
+      title="New ticket"
+      subtitle="Log a request that came in by phone, in person or by message."
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <Button type="button" variant="secondary" onClick={onClose}>{"Cancel"}</Button>
+          <Button type="submit" form="tk-new-ticket" disabled={saving || !subject.trim()}>
+            {saving ? "Creating..." : "Create ticket"}
+          </Button>
+        </>
+      }
+    >
+      <form id="tk-new-ticket" onSubmit={submit}>
+        <Field label="Subject">
+          <input
+            className="input"
+            placeholder="e.g. Projector in Room 12 not working"
+            value={subject}
+            onChange={(e) => setSubject(e.target.value)}
+            autoFocus
+          />
+        </Field>
+        <Field label="Description">
+          <textarea
+            className="textarea"
+            placeholder="What happened, where, and anything already tried."
+            rows={4}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Field>
 
         {/* Raising this on someone else's behalf — a phone call, a walk-in
-            — rather than it defaulting to whoever is filling the form in. */}
-        <div className="tix-newform-row" style={{ marginBottom: 10 }}>
-          <input
-            className="tix-input"
-            placeholder="Requester's name (optional)"
-            value={requesterName}
-            onChange={(e) => setRequesterName(e.target.value)}
-          />
-          <input
-            className="tix-input"
-            type="email"
-            placeholder="Requester's email — lets you email them from this ticket"
-            value={requesterEmail}
-            onChange={(e) => setRequesterEmail(e.target.value)}
-          />
-        </div>
-        {requesterEmail.trim() ? (
-          <div className="tix-newform-row" style={{ marginBottom: 10 }}>
-            <input className="tix-input" placeholder="Cc (optional)" value={cc} onChange={(e) => setCc(e.target.value)} />
-            <input className="tix-input" placeholder="Bcc (optional)" value={bcc} onChange={(e) => setBcc(e.target.value)} />
+            — rather than it defaulting to whoever is filling the form in.
+            Selects sit in a div, not Field's <label>: a label forwards its
+            click to the picker's button and reopens it. */}
+        <div className="tk-form-grid">
+          <div className="tk-field">
+            <span className="tk-field-label">{"Priority"}</span>
+            <Select
+              className="select"
+              value={priority}
+              onChange={setPriority}
+              options={PRIORITY.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))}
+            />
           </div>
-        ) : null}
-
-        <div className="tix-newform-row">
-          <Select
-            className="tix-select"
-            value={priority}
-            onChange={setPriority}
-            options={PRIORITY.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))}
-          />
-          <Select
-            className="tix-select"
-            value={groupId}
-            onChange={setGroupId}
-            options={[{ value: "", label: "No group" }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-          />
-          <span style={{ flex: 1 }} />
-          <button type="button" className="tix-btn tix-btn-ghost" onClick={onCancel}>{"Cancel"}</button>
-          <button type="submit" className="tix-btn tix-btn-primary" disabled={saving}>
-            {saving ? "Creating..." : "Create ticket"}
-          </button>
+          <div className="tk-field">
+            <span className="tk-field-label">{"Group"}</span>
+            <Select
+              className="select"
+              value={groupId}
+              onChange={setGroupId}
+              options={[{ value: "", label: "No group" }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+            />
+          </div>
+          <Field label="Requester's name" hint="Leave blank if it is you.">
+            <input className="input" value={requesterName} onChange={(e) => setRequesterName(e.target.value)} />
+          </Field>
+          <Field label="Requester's email" hint="Lets you email them from this ticket.">
+            <input className="input" type="email" value={requesterEmail} onChange={(e) => setRequesterEmail(e.target.value)} />
+          </Field>
+          {requesterEmail.trim() ? (
+            <>
+              <Field label="Cc">
+                <input className="input" placeholder="Optional" value={cc} onChange={(e) => setCc(e.target.value)} />
+              </Field>
+              <Field label="Bcc">
+                <input className="input" placeholder="Optional" value={bcc} onChange={(e) => setBcc(e.target.value)} />
+              </Field>
+            </>
+          ) : null}
         </div>
       </form>
-    </div>
+    </Modal>
+  );
+};
+
+const GroupsModal = ({ groups, onAdd, onClose }) => {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const { setError } = useActionFeedback();
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd(name.trim());
+      setName("");
+    } catch (err) {
+      setError(err.message || "Could not add that group.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title="Ticket groups" subtitle="Name your own: IT Support, Facilities, Front Office." onClose={onClose}>
+      <form onSubmit={submit} className="tk-group-add">
+        <input className="input" placeholder="New group name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        <Button type="submit" disabled={saving || !name.trim()}>{saving ? "Adding..." : "Add"}</Button>
+      </form>
+      {groups.length === 0 ? (
+        <p className="tk-muted">{"No groups yet."}</p>
+      ) : (
+        <ul className="tk-group-list">
+          {groups.map((g) => <li key={g.id}>{g.name}</li>)}
+        </ul>
+      )}
+    </Modal>
   );
 };
 
@@ -198,13 +271,12 @@ const TicketsList = () => {
   const [loading, setLoading] = useState(true);
   const { setError } = useActionFeedback();
   const [showNew, setShowNew] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
+  const [showGroups, setShowGroups] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState("unresolved");
   const [groupFilter, setGroupFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [search, setSearch] = useState("");
-  const [newGroupName, setNewGroupName] = useState("");
 
   const live = useLiveTicketsListUpdates(schoolId);
 
@@ -239,12 +311,9 @@ const TicketsList = () => {
     navigate(`/Tickets/${created.id}`, { state: { prefillCc: cc, prefillBcc: bcc } });
   };
 
-  const handleAddGroup = async (e) => {
-    e.preventDefault();
-    if (!newGroupName.trim()) return;
-    const g = await createTicketGroup({ schoolId, name: newGroupName.trim() });
+  const handleAddGroup = async (name) => {
+    const g = await createTicketGroup({ schoolId, name });
     setGroups((c) => [...c, g]);
-    setNewGroupName("");
   };
 
   const handleQuickUpdate = async (ticket, changes) => {
@@ -256,13 +325,24 @@ const TicketsList = () => {
     }
   };
 
+  // One line of what needs attention in the list as it stands.
+  const newCount = tickets.filter(isNew).length;
+  const urgentCount = tickets.filter((t) => t.priority === "urgent" || t.priority === "high").length;
+  const unassignedCount = tickets.filter((t) => !t.assigned_to).length;
+  const filtered = Boolean(groupFilter || priorityFilter || search.trim());
+
   return (
     <div className="shell">
       <Navbar />
       <Page
         title="Tickets"
         subtitle={school ? `Support requests at ${school.name}` : "Support requests"}
-        action={<Button onClick={() => setShowNew((v) => !v)}>{showNew ? "Cancel" : "New ticket"}</Button>}
+        action={
+          <div className="btn-row">
+            <Button variant="secondary" onClick={() => setShowGroups(true)}>{"Groups"}</Button>
+            <Button onClick={() => setShowNew(true)}>{"New ticket"}</Button>
+          </div>
+        }
         wide
       >
         <LiveUpdateBanner
@@ -271,96 +351,96 @@ const TicketsList = () => {
           label={`${live.count} new update${live.count === 1 ? "" : "s"} on tickets`}
         />
 
-        {showNew ? (
-          <NewTicketForm groups={groups} onCreate={handleCreate} onCancel={() => setShowNew(false)} />
-        ) : null}
-
-        <div className="tix-shell">
-          <div className="tix-toolbar">
-            <div className="tix-toolbar-title">
-              {statusFilter === "unresolved" ? "All unresolved tickets" : `All ${statusFilter} tickets`}
-              <span className="tix-count">{tickets.length}</span>
+        <div className="tk-list-card">
+          <div className="tk-toolbar">
+            <div className="tk-tabs" role="tablist" aria-label="Show tickets">
+              {STATUS_TABS.map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={statusFilter === value}
+                  className={`tk-tab${statusFilter === value ? " active" : ""}`}
+                  onClick={() => setStatusFilter(value)}
+                >
+                  {label}
+                  {statusFilter === value && !loading ? <span className="tk-tab-count">{tickets.length}</span> : null}
+                </button>
+              ))}
             </div>
-            <div className="tix-toolbar-actions">
-              <Select
-                className="tix-select"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                options={[
-                  { value: "unresolved", label: "Unresolved" },
-                  { value: "open", label: "Open" },
-                  { value: "pending", label: "Pending" },
-                  { value: "resolved", label: "Resolved" },
-                  { value: "closed", label: "Closed" },
-                  { value: "all", label: "All" },
-                ]}
-              />
-              <input
-                className="tix-input"
-                placeholder="Search tickets..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              <button type="button" className="tix-btn tix-btn-ghost" onClick={() => setShowFilters((v) => !v)}>
-                {`Filters${groupFilter || priorityFilter ? " (1)" : ""}`}
-              </button>
+            <div className="tk-filters">
+              <label className="tk-search">
+                <Icon icon={searchIcon} size={15} />
+                <input
+                  className="input"
+                  placeholder="Search subject or description"
+                  aria-label="Search tickets"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </label>
+              <div className="tk-filter">
+                <Select
+                  className="select"
+                  value={priorityFilter}
+                  onChange={setPriorityFilter}
+                  options={[{ value: "", label: "Any priority" }, ...PRIORITY.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))]}
+                />
+              </div>
+              <div className="tk-filter">
+                <Select
+                  className="select"
+                  value={groupFilter}
+                  onChange={setGroupFilter}
+                  options={[{ value: "", label: "Any group" }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+                />
+              </div>
+              {filtered ? (
+                <button
+                  type="button"
+                  className="tk-clear"
+                  onClick={() => { setSearch(""); setGroupFilter(""); setPriorityFilter(""); }}
+                >
+                  {"Clear"}
+                </button>
+              ) : null}
             </div>
           </div>
 
-          <div className="tix-body">
-            <div className="tix-list">
-              {loading ? <SkeletonList rows={5} avatar={true} /> : null}
-              {!loading && tickets.length === 0 ? (
-                <Empty>{"Nothing here. Everyone's caught up."}</Empty>
-              ) : null}
-              {tickets.map((t) => (
-                <TicketRow key={t.id} ticket={t} onQuickUpdate={handleQuickUpdate} />
-              ))}
+          {!loading && tickets.length > 0 ? (
+            <div className="tk-summary">
+              <span><strong>{tickets.length}</strong>{` ticket${tickets.length === 1 ? "" : "s"}`}</span>
+              {newCount ? <span className="tk-summary-new"><strong>{newCount}</strong>{" new"}</span> : null}
+              {urgentCount ? <span className="tk-summary-urgent"><strong>{urgentCount}</strong>{" high or urgent"}</span> : null}
+              {unassignedCount ? <span><strong>{unassignedCount}</strong>{" unassigned"}</span> : null}
             </div>
+          ) : null}
 
-            {showFilters ? (
-              <div className="tix-filters">
-                <div className="tix-filters-head">{"Filters"}</div>
-                <div className="tix-field">
-                  <label>{"Group"}</label>
-                  <Select
-                    className="tix-select"
-                    value={groupFilter}
-                    onChange={setGroupFilter}
-                    options={[{ value: "", label: "Any group" }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-                  />
-                </div>
-                <div className="tix-field">
-                  <label>{"Priority"}</label>
-                  <Select
-                    className="tix-select"
-                    value={priorityFilter}
-                    onChange={setPriorityFilter}
-                    options={[{ value: "", label: "Any priority" }, ...PRIORITY.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))]}
-                  />
-                </div>
-                <hr className="tix-hr" />
-                <div className="tix-filters-head">{"Ticket groups"}</div>
-                <p className="tix-filters-hint">{"Name your own — IT Support, Facilities, Front Office."}</p>
-                <form onSubmit={handleAddGroup} className="tix-field">
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <input
-                      className="tix-input"
-                      placeholder="New group name"
-                      value={newGroupName}
-                      onChange={(e) => setNewGroupName(e.target.value)}
-                    />
-                    <button type="submit" className="tix-btn tix-btn-ghost">{"Add"}</button>
-                  </div>
-                </form>
-                <ul className="tix-grouplist">
-                  {groups.map((g) => <li key={g.id}>{g.name}</li>)}
-                </ul>
+          <div className="tk-list">
+            {/* The skeleton only stands in for a list that has never loaded.
+                A reload (typing in search, a new filter) keeps the rows on
+                screen until the new ones arrive, rather than flashing. */}
+            {loading && tickets.length === 0 ? <div className="tk-list-pad"><SkeletonList rows={5} avatar={true} /></div> : null}
+            {!loading && tickets.length === 0 ? (
+              <div className="tk-list-pad">
+                <Empty>
+                  {filtered
+                    ? "No tickets match these filters."
+                    : statusFilter === "unresolved"
+                    ? "Nothing waiting. Everyone's caught up."
+                    : "No tickets here."}
+                </Empty>
               </div>
             ) : null}
+            {tickets.map((t) => (
+              <TicketRow key={t.id} ticket={t} onQuickUpdate={handleQuickUpdate} />
+            ))}
           </div>
         </div>
       </Page>
+
+      {showNew ? <NewTicketModal groups={groups} onCreate={handleCreate} onClose={() => setShowNew(false)} /> : null}
+      {showGroups ? <GroupsModal groups={groups} onAdd={handleAddGroup} onClose={() => setShowGroups(false)} /> : null}
     </div>
   );
 };

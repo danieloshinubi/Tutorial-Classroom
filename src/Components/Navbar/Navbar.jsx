@@ -5,6 +5,7 @@ import { grid } from "react-icons-kit/feather/grid";
 import { bookOpen } from "react-icons-kit/feather/bookOpen";
 import { users as usersIcon } from "react-icons-kit/feather/users";
 import { creditCard } from "react-icons-kit/feather/creditCard";
+import { shoppingBag } from "react-icons-kit/feather/shoppingBag";
 import { award } from "react-icons-kit/feather/award";
 import { checkSquare } from "react-icons-kit/feather/checkSquare";
 import { fileText } from "react-icons-kit/feather/fileText";
@@ -47,6 +48,7 @@ const ICONS = {
   results: award,
   bursary: creditCard,
   fees: creditCard,
+  store: shoppingBag,
   admissions: fileText,
   attendance: checkSquare,
   reports: fileText,

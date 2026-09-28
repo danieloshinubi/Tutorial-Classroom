@@ -9,6 +9,7 @@ import {
 import { AuthProvider } from "./context/AuthContext";
 import { SchoolProvider } from "./context/SchoolContext";
 import { ToastProvider } from "./Components/Toast";
+import { ConfirmProvider } from "./Components/Confirm";
 import { startTableWrapFit } from "./lib/tableWrapFit";
 import ConfigNotice from "./Components/ConfigNotice";
 import ProtectedRoute from "./Components/ProtectedRoute";
@@ -53,6 +54,7 @@ import TrialGate from "./Components/TrialGate";
 import { isPlatformHost, isMarketingHost } from "./lib/tenant";
 import News from "./Pages/News/News";
 import Bursary from "./Pages/Bursary/Bursary";
+import Store from "./Pages/Store/Store";
 import Attendance from "./Pages/Attendance/Attendance";
 import Fees from "./Pages/Fees/Fees";
 import PaymentReturn from "./Pages/Fees/PaymentReturn";
@@ -107,6 +109,9 @@ function App() {
 
   return (
     <ToastProvider>
+    {/* Inside ToastProvider so a confirmation can be followed by a toast, and
+        outside the router so any page can ask without mounting its own modal. */}
+    <ConfirmProvider>
     <Router>
       <AuthProvider>
         <SchoolProvider>
@@ -145,7 +150,12 @@ function App() {
                 scoped in Postgres: a staff notice is not readable by a
                 parent, and an invoice is only visible to its own family. */}
             <Route path="/News" element={<News />} />
-            <Route path="/Fees" element={<Fees />} />
+            {/* The family side of money: parents and pupils only. Staff are
+                sent to Bursary; the page itself lists only the caller's own and
+                their children's bills (supabase/187) in any case. */}
+            <Route element={<SchoolRoute module="fees" instead="bursary" />}>
+              <Route path="/Fees" element={<Fees />} />
+            </Route>
             {/* Raise your own request and follow it — every signed-in role,
                 same reach as News/Fees. RLS scopes it to the caller's own
                 tickets; the staff-side queue at /Tickets is separate. */}
@@ -210,6 +220,10 @@ function App() {
               <Route path="/Bursary" element={<Bursary />} />
             </Route>
 
+            <Route element={<SchoolRoute module="store" />}>
+              <Route path="/Store" element={<Store />} />
+            </Route>
+
             {/* Daily, per-class marks — form/subject teachers and school
                 leadership mark; staff broadly and a guardian for their own
                 child read (classroom.can_mark_attendance/is_guardian_of). */}
@@ -247,6 +261,7 @@ function App() {
         </SchoolProvider>
       </AuthProvider>
     </Router>
+    </ConfirmProvider>
     </ToastProvider>
   );
 }

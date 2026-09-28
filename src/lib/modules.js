@@ -95,6 +95,18 @@ export const MODULES = [
     roles: [...RUNS_THE_SCHOOL, "bursar"],
   },
   {
+    // Uniforms, books and stationery sold by the school. The same people as
+    // the bursary: the money is theirs to account for, and a sale can go on
+    // a family's bill. Switched off for schools that do not run a store
+    // (supabase/182); a school admin turns it on under Modules.
+    id: "store",
+    priority: 36,
+    group: "Money",
+    path: "/Store",
+    label: "Store",
+    roles: [...RUNS_THE_SCHOOL, "bursar"],
+  },
+  {
     id: "fees",
     priority: 30,
     group: "Money",

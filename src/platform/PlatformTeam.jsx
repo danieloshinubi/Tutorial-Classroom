@@ -4,6 +4,7 @@ import { fetchPlatformAdmins, addPlatformAdmin, removePlatformAdmin } from "../l
 import { Page, Card, Button, Badge, Empty, Field, Modal, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import { downloadCsv } from "../lib/csv";
+import { confirmDialog } from "../Components/Confirm";
 
 // Who has access to this console. classroom.platform_admins existed since
 // day one with no RPC and no UI at all — granting or revoking access, or
@@ -49,7 +50,7 @@ const PlatformTeam = () => {
   };
 
   const handleRemove = async (admin) => {
-    if (!window.confirm(`Revoke ${admin.email}'s access to this console?`)) return;
+    if (!await confirmDialog(`Revoke ${admin.email}'s access to this console?`)) return;
     setBusyId(admin.user_id);
     try {
       await removePlatformAdmin(admin.user_id);

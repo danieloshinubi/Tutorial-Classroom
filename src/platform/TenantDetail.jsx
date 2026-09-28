@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { todayISO } from "../lib/dates";
 import { Link, useParams } from "react-router-dom";
 import {
   fetchTenant,
@@ -34,6 +35,7 @@ import {
 import { StatRow } from "../Components/Charts";
 import { useActionFeedback } from "../Components/Toast";
 import { downloadCsv } from "../lib/csv";
+import { confirmDialog } from "../Components/Confirm";
 
 const Fact = ({ label, children }) =>
   children ? (
@@ -97,7 +99,7 @@ const BillingSection = ({ schoolId, currency }) => {
   const [form, setForm] = useState({
     plan: "basic",
     amount: "",
-    periodStart: new Date().toISOString().slice(0, 10),
+    periodStart: todayISO(),
     periodEnd: "",
     status: "pending",
     note: "",
@@ -281,7 +283,7 @@ const TenantDetail = () => {
   const toggle = async () => {
     if (
       tenant.is_active &&
-      !window.confirm(
+      !await confirmDialog(
         `Suspend ${tenant.name}? Everyone at that school loses access until it is reactivated.`
       )
     ) {
@@ -336,7 +338,7 @@ const TenantDetail = () => {
     const archiving = !tenant.archived_at;
     if (
       archiving &&
-      !window.confirm(
+      !await confirmDialog(
         `Archive ${tenant.name}? This marks it as formally offboarded — export their data first if you'll need it. Not the same as a temporary suspend, and can be undone here later if needed.`
       )
     ) {

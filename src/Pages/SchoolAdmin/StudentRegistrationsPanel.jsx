@@ -4,6 +4,7 @@ import { useSchool } from "../../context/SchoolContext";
 import { fetchStudentRegistrations, updateStudentRegistration } from "../../lib/api";
 import { Card, Button, Badge, Empty, formatDate, displayName, Select, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { promptDialog } from "../../Components/Confirm";
 
 const STATUS_LABEL = {
   active: "Active",
@@ -63,7 +64,7 @@ const StudentRegistrationsPanel = () => {
   const changeStatus = async (row, status) => {
     let notes = row.notes || "";
     if (status !== "active") {
-      const reason = window.prompt(`Reason for marking ${displayName(row.student)} as ${STATUS_LABEL[status].toLowerCase()}? (optional)`, "");
+      const reason = await promptDialog({ body: `Reason for marking ${displayName(row.student)} as ${STATUS_LABEL[status].toLowerCase()}? (optional)`, defaultValue: "" });
       if (reason === null) return; // cancelled
       notes = reason.trim() || notes;
     }

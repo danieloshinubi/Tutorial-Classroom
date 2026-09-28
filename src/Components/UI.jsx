@@ -18,7 +18,7 @@ import { calendar as calendarIcon } from "react-icons-kit/feather/calendar";
 //
 // The main region is the scroll container (see .shell in theme.css), so this
 // is sticky within it rather than the window.
-export const Page = ({ title, subtitle, action, toolbar, children, wide = false }) => {
+export const Page = ({ title, subtitle, action, toolbar, children, wide = false, className = "" }) => {
   // Anything inside a page that also wants to stay put — a filter row, an
   // "add" form, a row of totals — has to sit below the page header rather
   // than under it. The header's height is not fixed (a subtitle wraps, a tab
@@ -35,10 +35,13 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false 
   useLayoutEffect(() => {
     const top = topRef.current;
     const page = pageRef.current;
-    if (!top || !page || typeof ResizeObserver === "undefined") return undefined;
+    // A page with no header (Chat names itself inside its own panel) still
+    // needs --page-avail-h, or its bounded panel falls back to the 100vh
+    // guess described below. The header just counts as zero.
+    if (!page || typeof ResizeObserver === "undefined") return undefined;
 
     const publish = () => {
-      const topH = top.offsetHeight;
+      const topH = top ? top.offsetHeight : 0;
       page.style.setProperty("--page-top-h", `${topH}px`);
       // A bounded panel below the header (.tix-shell — Tickets, Chat) wants
       // to fill exactly what's left of *this* page's own real, grid-
@@ -57,13 +60,13 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false 
     };
     publish();
     const observer = new ResizeObserver(publish);
-    observer.observe(top);
+    if (top) observer.observe(top);
     observer.observe(page);
     return () => observer.disconnect();
   });
 
   return (
-  <div className={`page${wide ? " page-wide" : ""}`} ref={pageRef}>
+  <div className={`page${wide ? " page-wide" : ""}${className ? ` ${className}` : ""}`} ref={pageRef}>
     {(title || action || toolbar) && (
       <div className="page-top" ref={topRef}>
         {(title || action) && (
@@ -82,6 +85,19 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false 
   </div>
   );
 };
+
+// The whole-screen wait before the signed-in person's school is known.
+// Deliberately unbranded, and not a Page: the tenant's colour, logo and menu
+// are exactly what has not loaded yet. Rendering a normal page here is what
+// produced the "wrong app" flash — Schoolivio's default purple, a student's
+// "Your courses" and an empty sidebar, shown to a parent for several seconds
+// until the real school arrived and everything changed underneath them.
+export const AppLoading = ({ label = "Loading..." }) => (
+  <div className="app-loading" role="status" aria-live="polite">
+    <span className="app-loading-spinner" aria-hidden="true" />
+    <span>{label}</span>
+  </div>
+);
 
 export const Card = ({ children, className = "", ...rest }) => (
   <div className={`card ${className}`} {...rest}>
@@ -913,9 +929,20 @@ export const Tabs = ({ tabs, active, onChange }) => {
   // The active tab can change from outside a click — a ?tab= query param, a
   // link from elsewhere in the app — so keep it in view then too, not only
   // when the user themselves clicked something already visible.
+  //
+  // Deferred a frame on purpose. Landing directly on ?tab=fees ran this while
+  // the tab strip was still being laid out (web fonts in particular change
+  // every tab's width), so it scrolled against stale measurements and the
+  // selected tab stayed clipped — "Fees setup" rendering as "Fee…". Measuring
+  // after the browser has painted is what makes it land in the right place.
   useEffect(() => {
-    trackRef.current?.querySelector(".tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [active]);
+    const id = window.requestAnimationFrame(() => {
+      trackRef.current
+        ?.querySelector(".tab.active")
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [active, tabs]);
 
   const scrollBy = (direction) => {
     trackRef.current?.scrollBy({ left: direction * Math.round(trackRef.current.clientWidth * 0.6), behavior: "smooth" });
@@ -930,11 +957,21 @@ export const Tabs = ({ tabs, active, onChange }) => {
           <Icon icon={chevronLeft} size={15} />
         </button>
       ) : null}
-      <div className="tabs" ref={trackRef}>
+      {/* Without these roles a screen reader hears a row of ordinary buttons
+          and cannot tell which one is currently showing — the selected state
+          was carried only by the .active class, i.e. by colour alone.
+          aria-selected is what actually announces it.
+
+          The panel itself is rendered by whoever uses Tabs, not here, so this
+          deliberately stops short of aria-controls: pointing at an id this
+          component cannot guarantee exists would be worse than omitting it. */}
+      <div className="tabs" ref={trackRef} role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
+            role="tab"
+            aria-selected={active === tab.id}
             className={`tab${active === tab.id ? " active" : ""}`}
             onClick={() => onChange(tab.id)}
           >

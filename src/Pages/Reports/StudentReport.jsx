@@ -14,32 +14,124 @@ import {
   fetchSchoolAttendanceRecords,
 } from "../../lib/api";
 import { analyse, marksAsSeries, bandFor, analyseAttendance } from "../../lib/analysis";
-import {
-  StatRow,
-  CourseBars,
-  TurnInBar,
-  TrendLine,
-  ParticipationDonut,
-} from "../../Components/Charts";
+import { TrendLine, ParticipationDonut } from "../../Components/Charts";
 import {
   Page,
-  Card,
   Badge,
   Notice,
-  Empty,
   Button,
+  SkeletonStatRow,
+  SkeletonCards,
   displayName,
   formatDate,
 } from "../../Components/UI";
 
-const Finding = ({ finding }) => (
-  <div className={`finding ${finding.kind}`}>
-    <div>
-      <div className="finding-title">{finding.title}</div>
-      <div className="finding-detail">{finding.detail}</div>
-    </div>
+// One student's report, laid out like a report card rather than a column of
+// charts.
+//
+// What changed, and why:
+//   * The four headline figures sit in one strip at the top, each with the
+//     one piece of context that makes it readable — the grade band beside the
+//     average, a bar beside "handed in".
+//   * The per-course breakdown is visible by default. It used to be split
+//     between a bar chart and a table hidden behind "Show table", so the most
+//     useful part of the report was the part nobody saw. The rows are text,
+//     so they are also the accessible version of every chart on the page.
+//   * Evidence (attendance, participation, who the guardians are) moves to a
+//     side column beside the judgement, instead of trailing below it. The
+//     guardians were at the very bottom.
+//   * Printing produces the report on A4 without the app around it (see the
+//     .sr-shell print rules). Before, the app's fixed-height window meant
+//     Print sent the sidebar and only the first screenful.
+//   * Removed the footnote saying fees were not included because "the
+//     bursary module is still to be built" — it has been built.
+
+// Concerns first, then things to watch, then strengths: a parent reading this
+// wants to know what to act on before what is going well.
+const FINDING_ORDER = { concern: 0, watch: 1, strength: 2 };
+const FINDING_GROUP = { concern: "Needs attention", watch: "Worth watching", strength: "Going well" };
+
+const handInTone = (pct) => (pct === null ? "" : pct >= 90 ? "success" : pct >= 70 ? "brand" : "warn");
+
+const Stat = ({ label, value, muted, children }) => (
+  <div className="sr-stat">
+    <div className="sr-stat-label">{label}</div>
+    <div className={`sr-stat-value${muted ? " muted" : ""}`}>{value}</div>
+    {children ? <div className="sr-stat-note">{children}</div> : null}
   </div>
 );
+
+const Bar = ({ pct, tone }) => (
+  <span className="sr-bar" aria-hidden="true">
+    <span className={`sr-bar-fill tone-${tone || "none"}`} style={{ width: `${Math.max(0, Math.min(100, pct || 0))}%` }} />
+  </span>
+);
+
+const CourseRow = ({ c, labelFor }) => {
+  const band = bandFor(c.score);
+  const turnIn = c.assignments_set ? Math.round((c.assignments_done / c.assignments_set) * 100) : null;
+  return (
+    <div className="sr-course" role="listitem">
+      <div className="sr-course-id">
+        <div className="sr-course-code">{c.course_code}</div>
+        <div className="sr-course-title">
+          {[c.course_title, c.level_year ? labelFor(c.level_year) : null].filter(Boolean).join(" · ")}
+        </div>
+      </div>
+
+      <div className="sr-course-score">
+        <span className={`sr-course-figure${c.score === null ? " muted" : ""}`}>
+          {c.score === null ? "—" : `${c.score}%`}
+        </span>
+        <Badge tone={band.tone}>{band.label}</Badge>
+      </div>
+
+      <dl className="sr-course-facts">
+        <div>
+          <dt>{"Assignments"}</dt>
+          <dd>
+            {c.assignments_set ? (
+              <>
+                <span>{`${c.assignments_done} of ${c.assignments_set} in`}</span>
+                <Bar pct={turnIn} tone={handInTone(turnIn)} />
+              </>
+            ) : (
+              <span className="muted">{"None set"}</span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>{"Assignment marks"}</dt>
+          <dd>{c.assignmentPct === null ? <span className="muted">{"Not marked"}</span> : `${c.assignmentPct}%`}</dd>
+        </div>
+        <div>
+          <dt>{"Exams"}</dt>
+          <dd>
+            {c.exams_sat ? (
+              `${c.exam_score} / ${c.exam_max}${c.examPct !== null ? ` · ${c.examPct}%` : ""}`
+            ) : (
+              <span className="muted">{"None sat"}</span>
+            )}
+          </dd>
+        </div>
+        <div>
+          <dt>{"On time"}</dt>
+          <dd>{c.punctualityPct === null ? <span className="muted">{"—"}</span> : `${c.punctualityPct}%`}</dd>
+        </div>
+        <div>
+          <dt>{"Last active"}</dt>
+          <dd>
+            {c.last_activity ? (
+              formatDate(c.last_activity, { withTime: false })
+            ) : (
+              <span className="muted">{"Not yet"}</span>
+            )}
+          </dd>
+        </div>
+      </dl>
+    </div>
+  );
+};
 
 const StudentReport = () => {
   const { studentId } = useParams();
@@ -53,7 +145,6 @@ const StudentReport = () => {
   const [classAttendance, setClassAttendance] = useState([]);
   const [schoolAttendance, setSchoolAttendance] = useState([]);
   const [showAttendanceDetail, setShowAttendanceDetail] = useState(false);
-  const [showTable, setShowTable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -99,28 +190,71 @@ const StudentReport = () => {
     [classAttendance, schoolAttendance]
   );
 
-  const name = student
-    ? displayName({
-        first_name: student.first_name,
-        surname: student.surname,
-        email: student.email,
-      })
-    : "Student";
+  const person = student
+    ? { first_name: student.first_name, surname: student.surname, email: student.email }
+    : null;
+  const name = person ? displayName(person) : "Student";
+
+  // The year groups the courses belong to — "JSS 2", or "JSS 2, JSS 3" for a
+  // student taking a course above their year.
+  const levels = [...new Set(report.courses.map((c) => c.level_year).filter(Boolean))]
+    .sort((a, b) => a - b)
+    .map((y) => labelFor(y));
+
+  const findings = [...report.findings, ...attendance.findings].sort(
+    (a, b) => (FINDING_ORDER[a.kind] ?? 3) - (FINDING_ORDER[b.kind] ?? 3)
+  );
+
+  const participation = report.courses
+    .filter((c) => c.contribution > 0)
+    .map((c) => ({ label: c.course_code, value: Math.round(c.contribution * 10) / 10 }));
+
+  const records = [
+    ...classAttendance.map((r) => ({
+      id: `class-${r.id}`,
+      at: r.session_at,
+      kind: r.classes?.name || "Class",
+      detail: r.status === "present" ? "Present" : "Absent",
+      absent: r.status !== "present",
+    })),
+    ...schoolAttendance.map((r) => ({
+      id: `school-${r.id}`,
+      at: r.resumed_at,
+      kind: "Arrived at school",
+      detail: r.source === "manual" ? "Logged by staff" : "Card or fingerprint",
+      absent: false,
+    })),
+  ].sort((a, b) => new Date(b.at) - new Date(a.at));
+
+  const shellClass = "shell sr-shell";
+
+  const backLink = (
+    <Link to="/Reports" className="sr-back sr-no-print">
+      <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M10 3.5 5.5 8 10 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      {"All reports"}
+    </Link>
+  );
 
   if (loading) {
     return (
-      <div className="shell">
+      <div className={shellClass}>
         <Navbar />
-        <Page><Empty>{"Building report..."}</Empty></Page>
+        <Page title="Report" subtitle="Building the report...">
+          <SkeletonStatRow count={4} />
+          <SkeletonCards count={3} lines={3} />
+        </Page>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="shell">
+      <div className={shellClass}>
         <Navbar />
         <Page title="Report">
+          {backLink}
           <Notice tone="error">{error}</Notice>
         </Page>
       </div>
@@ -129,306 +263,234 @@ const StudentReport = () => {
 
   if (!report.hasData && !attendance.hasData) {
     return (
-      <div className="shell">
+      <div className={shellClass}>
         <Navbar />
         <Page title={name} subtitle="Student report">
-          <Empty>
-            {"Not enrolled in any course yet, so there is nothing to report on."}
-          </Empty>
+          {backLink}
+          <div className="sr-empty">
+            <strong>{"Nothing to report yet"}</strong>
+            <span>{"This student is not on any course and has no attendance recorded, so there is nothing to show."}</span>
+          </div>
         </Page>
       </div>
     );
   }
 
   const band = bandFor(report.average);
-
-  const courseBars = report.courses.map((c) => ({
-    label: c.course_code,
-    value: c.score,
-    detail: [
-      c.course_title || c.course_code,
-      c.assignmentPct !== null ? `Assignments ${c.assignmentPct}%` : "No marked assignments",
-      c.examPct !== null ? `Exams ${c.examPct}%` : "No exams sat",
-      `${c.assignments_done} of ${c.assignments_set} turned in`,
-    ],
-    color:
-      c.score === null
-        ? "var(--grid)"
-        : c.score < 50
-        ? "var(--c3)"
-        : "var(--c1)",
-  }));
-
-  // Contribution, not raw post count — otherwise a student who takes part by
-  // reacting rather than writing disappears from this chart entirely, which
-  // is the exact blind spot reactions were added to close.
-  const participation = report.courses
-    .filter((c) => c.contribution > 0)
-    .map((c) => ({
-      label: c.course_code,
-      value: Math.round(c.contribution * 10) / 10,
-    }));
+  const courseCount = report.courses.length;
 
   return (
-    <div className="shell">
+    <div className={shellClass}>
       <Navbar />
       <Page
         title={name}
-        subtitle={`Report across ${report.courses.length} course${report.courses.length === 1 ? "" : "s"}`}
+        subtitle={[
+          levels.join(", ") || null,
+          `${courseCount} course${courseCount === 1 ? "" : "s"}`,
+          `Report as of ${formatDate(new Date().toISOString(), { withTime: false })}`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
         action={
-          <Button onClick={() => window.print()} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <Button className="sr-no-print" variant="secondary" onClick={() => window.print()} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Icon icon={printer} size={16} />
             {"Print"}
           </Button>
         }
       >
-        <StatRow
-          stats={[
-            {
-              label: "Overall average",
-              value: report.average === null ? "—" : `${report.average}%`,
-              note: band?.label,
-            },
-            {
-              label: "Work turned in",
-              value: report.turnIn === null ? "—" : `${report.turnIn}%`,
-              note: `${report.totalDone} of ${report.totalSet} assignments`,
-            },
-            {
-              label: "On time",
-              value: report.punctuality === null ? "—" : `${report.punctuality}%`,
-              note: "of what was submitted",
-            },
-            {
-              label: "Class contributions",
-              value: report.totalContribution,
-              note:
-                report.totalReactions > 0
-                  ? `${report.totalMessages} posts and ${report.totalReactions} reactions`
-                  : "posts across all streams",
-            },
-          ]}
-        />
+        {backLink}
 
-        {/* The judgement comes before the charts: a parent wants to know what
-            to do, and only then the evidence behind it. Academic and
-            attendance findings share one list — a parent reading "what this
-            shows" should not have to check two separate places for concerns. */}
-        {report.findings.length || attendance.findings.length ? (
-          <section className="section" style={{ marginTop: 8 }}>
-            <h2>{"What this shows"}</h2>
-            {[...report.findings, ...attendance.findings].map((f) => (
-              <Finding key={f.title} finding={f} />
-            ))}
-          </section>
-        ) : null}
-
-        {attendance.hasData ? (
-          <Card style={{ marginTop: 8 }}>
-            <div className="page-head" style={{ marginBottom: 12 }}>
-              <h3 style={{ margin: 0 }}>{"Attendance"}</h3>
-              <Button variant="secondary" size="sm" onClick={() => setShowAttendanceDetail((v) => !v)}>
-                {showAttendanceDetail ? "Hide details" : "View full details"}
-              </Button>
-            </div>
-            <div className="split">
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{"Class attendance"}</span>
-                  <Badge tone={attendance.classBand.tone}>{attendance.classBand.label}</Badge>
-                </div>
-                <div style={{ fontSize: 26, fontWeight: 700 }}>
-                  {attendance.classAttendanceRate === null ? "—" : `${attendance.classAttendanceRate}%`}
-                </div>
-                <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-                  {attendance.sessionsRecorded === 0
-                    ? "No class sessions marked yet."
-                    : `Present in ${attendance.presentCount} of ${attendance.sessionsRecorded} recorded sessions.`}
-                </div>
-              </div>
-              <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, color: "var(--ink-3)" }}>{"School attendance"}</span>
-                  <Badge tone={attendance.schoolBand.tone}>{attendance.schoolBand.label}</Badge>
-                </div>
-                <div style={{ fontSize: 26, fontWeight: 700 }}>
-                  {attendance.schoolAttendanceRate === null ? "—" : `${attendance.schoolAttendanceRate}%`}
-                </div>
-                <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-                  {attendance.averageResumptionTime
-                    ? `Usually resumes around ${attendance.averageResumptionTime}.`
-                    : "No resumption scans recorded yet."}
-                </div>
-              </div>
-            </div>
-
-            {showAttendanceDetail ? (
-              <div className="table-wrap" style={{ marginTop: 18 }}>
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>{"Date & time"}</th>
-                      <th>{"Kind"}</th>
-                      <th>{"Detail"}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      ...classAttendance.map((r) => ({
-                        id: `class-${r.id}`,
-                        at: r.session_at,
-                        kind: "Class attendance",
-                        detail: `${r.classes?.name || "Class"} — ${r.status === "present" ? "Present" : "Absent"}`,
-                      })),
-                      ...schoolAttendance.map((r) => ({
-                        id: `school-${r.id}`,
-                        at: r.resumed_at,
-                        kind: "School resumption",
-                        detail: r.source === "manual" ? "Logged manually" : "Biometric / card scan",
-                      })),
-                    ]
-                      .sort((a, b) => new Date(b.at) - new Date(a.at))
-                      .map((row) => (
-                        <tr key={row.id}>
-                          <td>{formatDate(row.at)}</td>
-                          <td>{row.kind}</td>
-                          <td>{row.detail}</td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </Card>
-        ) : null}
-
-        <div className="split" style={{ marginTop: 30 }}>
-          <Card>
-            <h3>{"Performance by course"}</h3>
-            <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0 }}>
-              {"Assignments and exams combined, weighted 40 / 60. Grey means nothing marked yet."}
-            </p>
-            {report.hasMarks ? (
-              <CourseBars rows={courseBars} />
+        <div className="sr-stats">
+          <Stat
+            label="Overall average"
+            value={report.average === null ? "—" : `${report.average}%`}
+            muted={report.average === null}
+          >
+            <Badge tone={band.tone}>{band.label}</Badge>
+          </Stat>
+          <Stat
+            label="Work handed in"
+            value={report.totalSet ? `${report.totalDone} of ${report.totalSet}` : "—"}
+            muted={!report.totalSet}
+          >
+            {report.totalSet ? (
+              <>
+                <Bar pct={report.turnIn} tone={handInTone(report.turnIn)} />
+                <span>{`${report.turnIn}% of assignments set`}</span>
+              </>
             ) : (
-              <Empty>{"Nothing has been marked yet."}</Empty>
+              <span>{"No assignments set yet"}</span>
             )}
-          </Card>
-
-          <Card>
-            <h3>{"Assignments"}</h3>
-            {report.totalSet > 0 ? (
-              <TurnInBar
-                done={report.totalDone}
-                missing={report.totalSet - report.totalDone}
-              />
-            ) : (
-              <Empty>{"None set yet."}</Empty>
-            )}
-          </Card>
+          </Stat>
+          <Stat
+            label="On time"
+            value={report.punctuality === null ? "—" : `${report.punctuality}%`}
+            muted={report.punctuality === null}
+          >
+            <span>{report.punctuality === null ? "Nothing handed in yet" : "of the work handed in"}</span>
+          </Stat>
+          {attendance.hasData ? (
+            <Stat
+              label="Class attendance"
+              value={attendance.classAttendanceRate === null ? "—" : `${attendance.classAttendanceRate}%`}
+              muted={attendance.classAttendanceRate === null}
+            >
+              <Badge tone={attendance.classBand.tone}>{attendance.classBand.label}</Badge>
+            </Stat>
+          ) : (
+            <Stat label="Class contributions" value={report.totalContribution} muted={!report.totalContribution}>
+              <span>
+                {report.totalReactions > 0
+                  ? `${report.totalMessages} posts, ${report.totalReactions} reactions`
+                  : `${report.totalMessages} posts on class streams`}
+              </span>
+            </Stat>
+          )}
         </div>
 
-        {series.length >= 2 ? (
-          <Card style={{ marginTop: 20 }}>
-            <h3>{"Marks over time"}</h3>
-            <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 0 }}>
-              {"Every marked assignment and exam, in the order they happened. The dashed line is 50%."}
-            </p>
-            <TrendLine points={series} />
-          </Card>
-        ) : null}
+        <div className="sr-body">
+          <div className="sr-main">
+            {findings.length ? (
+              <section className="sr-card">
+                <h2 className="sr-card-title">{"What this shows"}</h2>
+                {findings.map((f, i) => (
+                  <React.Fragment key={`${f.kind}-${f.title}`}>
+                    {i === 0 || findings[i - 1].kind !== f.kind ? (
+                      <div className="sr-finding-group">{FINDING_GROUP[f.kind] || "Notes"}</div>
+                    ) : null}
+                    <div className={`finding ${f.kind}`}>
+                      <div>
+                        <div className="finding-title">{f.title}</div>
+                        <div className="finding-detail">{f.detail}</div>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </section>
+            ) : null}
 
-        {participation.length ? (
-          <Card style={{ marginTop: 20 }}>
-            <h3>{"Where they contribute"}</h3>
-            <ParticipationDonut rows={participation} />
-          </Card>
-        ) : null}
+            {courseCount ? (
+              <section className="sr-card">
+                <div className="sr-card-head">
+                  <h2 className="sr-card-title">{"Courses"}</h2>
+                  <span className="sr-card-hint">
+                    {"Score blends assignments and exams, 40 / 60. Only marked work counts."}
+                  </span>
+                </div>
+                <div className="sr-courses" role="list">
+                  {report.courses.map((c) => (
+                    <CourseRow key={c.course_id} c={c} labelFor={labelFor} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-        <section className="section">
-          <div className="page-head" style={{ marginBottom: 12 }}>
-            <h2>{"Course detail"}</h2>
-            <Button variant="secondary" size="sm" onClick={() => setShowTable((v) => !v)}>
-              {showTable ? "Hide table" : "Show table"}
-            </Button>
+            {series.length >= 2 ? (
+              <section className="sr-card">
+                <div className="sr-card-head">
+                  <h2 className="sr-card-title">{"Marks over time"}</h2>
+                  <span className="sr-card-hint">
+                    {"Every marked assignment and exam, in order. The dashed line is 50%."}
+                  </span>
+                </div>
+                <TrendLine points={series} />
+              </section>
+            ) : null}
           </div>
 
-          {/* The table is the accessible equivalent of every chart above. */}
-          {showTable ? (
-            <Card className="pad-0" style={{ padding: "4px 14px" }}>
-              <div className="table-wrap">
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>{"Course"}</th>
-                      <th>{"Class"}</th>
-                      <th>{"Score"}</th>
-                      <th>{"Assignments"}</th>
-                      <th>{"On time"}</th>
-                      <th>{"Exams"}</th>
-                      <th>{"Posts"}</th>
-                      <th>{"Last active"}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.courses.map((c) => {
-                      const courseBand = bandFor(c.score);
-                      return (
-                        <tr key={c.course_id}>
-                          <td>
-                            <strong>{c.course_code}</strong>
-                            <div style={{ color: "var(--ink-3)", fontSize: 12.5 }}>
-                              {c.course_title}
-                            </div>
-                          </td>
-                          <td>{labelFor(c.level_year)}</td>
-                          <td>
-                            {c.score === null ? (
-                              <span style={{ color: "var(--ink-3)" }}>{"—"}</span>
-                            ) : (
-                              <Badge tone={courseBand.tone}>{`${c.score}%`}</Badge>
-                            )}
-                          </td>
-                          <td>{`${c.assignments_done} / ${c.assignments_set}`}</td>
-                          <td>{c.punctualityPct === null ? "—" : `${c.punctualityPct}%`}</td>
-                          <td>{c.exams_sat ? `${c.exam_score} / ${c.exam_max}` : "—"}</td>
-                          <td>{c.messages_sent}</td>
-                          <td style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>
-                            {c.last_activity
-                              ? formatDate(c.last_activity, { withTime: false })
-                              : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          ) : null}
-        </section>
-
-        {guardians.length ? (
-          <section className="section">
-            <h2>{"Guardians"}</h2>
-            <Card>
-              {guardians.map((g) => (
-                <div key={g.id} style={{ marginBottom: 6 }}>
-                  {displayName(g.guardian)}
-                  {g.relationship ? (
-                    <span style={{ color: "var(--ink-3)" }}>{` · ${g.relationship}`}</span>
-                  ) : null}
-                  <span style={{ color: "var(--ink-3)" }}>{` · ${g.guardian.email}`}</span>
+          <aside className="sr-aside">
+            {attendance.hasData ? (
+              <section className="sr-card">
+                <h2 className="sr-card-title">{"Attendance"}</h2>
+                <div className="sr-att">
+                  <div className="sr-att-row">
+                    <span className="sr-att-label">{"In class"}</span>
+                    <span className="sr-att-value">
+                      {attendance.classAttendanceRate === null ? "—" : `${attendance.classAttendanceRate}%`}
+                    </span>
+                    <Badge tone={attendance.classBand.tone}>{attendance.classBand.label}</Badge>
+                  </div>
+                  <div className="sr-att-note">
+                    {attendance.sessionsRecorded === 0
+                      ? "No class sessions marked yet."
+                      : `Present at ${attendance.presentCount} of ${attendance.sessionsRecorded} recorded sessions.`}
+                  </div>
+                  <div className="sr-att-row">
+                    <span className="sr-att-label">{"At school"}</span>
+                    <span className="sr-att-value">
+                      {attendance.schoolAttendanceRate === null ? "—" : `${attendance.schoolAttendanceRate}%`}
+                    </span>
+                    <Badge tone={attendance.schoolBand.tone}>{attendance.schoolBand.label}</Badge>
+                  </div>
+                  <div className="sr-att-note">
+                    {attendance.averageResumptionTime
+                      ? `Usually arrives around ${attendance.averageResumptionTime}.`
+                      : "No arrival scans recorded yet."}
+                  </div>
                 </div>
-              ))}
-            </Card>
-          </section>
-        ) : null}
 
-        <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 28 }}>
-          {"School fees are not part of this report yet — the bursary module is still to be built. "}
-          <Link to="/Dashboard">{"Back to dashboard"}</Link>
-        </p>
+                {records.length ? (
+                  <>
+                    <button
+                      type="button"
+                      className="sr-link sr-no-print"
+                      onClick={() => setShowAttendanceDetail((v) => !v)}
+                      aria-expanded={showAttendanceDetail}
+                    >
+                      {showAttendanceDetail ? "Hide records" : `Show all ${records.length} records`}
+                    </button>
+                    {showAttendanceDetail ? (
+                      <ul className="sr-records">
+                        {records.map((r) => (
+                          <li key={r.id}>
+                            <span className="sr-record-when">{formatDate(r.at)}</span>
+                            <span className="sr-record-what">
+                              {r.kind}
+                              {" · "}
+                              <span className={r.absent ? "sr-absent" : undefined}>{r.detail}</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </>
+                ) : null}
+              </section>
+            ) : null}
+
+            {participation.length ? (
+              <section className="sr-card">
+                <h2 className="sr-card-title">{"Where they take part"}</h2>
+                <p className="sr-card-hint" style={{ margin: "0 0 12px" }}>
+                  {report.totalReactions > 0
+                    ? `${report.totalMessages} posts and ${report.totalReactions} reactions across class streams. Four reactions count as one post.`
+                    : `${report.totalMessages} posts across class streams.`}
+                </p>
+                <ParticipationDonut rows={participation} />
+              </section>
+            ) : null}
+
+            <section className="sr-card">
+              <h2 className="sr-card-title">{guardians.length === 1 ? "Guardian" : "Guardians"}</h2>
+              {guardians.length ? (
+                <ul className="sr-people">
+                  {guardians.map((g) => (
+                    <li key={g.id}>
+                      <span className="sr-person-name">{displayName(g.guardian)}</span>
+                      <span className="sr-person-meta">
+                        {[g.relationship, g.guardian?.email].filter(Boolean).join(" · ")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="sr-card-hint" style={{ margin: 0 }}>
+                  {"No guardian is linked to this student. The school office links them under School admin → Parents & children."}
+                </p>
+              )}
+            </section>
+          </aside>
+        </div>
       </Page>
     </div>
   );

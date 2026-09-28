@@ -1,8 +1,12 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useLocation, useNavigate, Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { RichTextEditor } from "../../Components/RichTextEditor";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
+import EmailFrame from "../../Components/EmailFrame";
+import { Icon } from "react-icons-kit";
+import { ic_fullscreen } from "react-icons-kit/md/ic_fullscreen";
+import { ic_fullscreen_exit } from "react-icons-kit/md/ic_fullscreen_exit";
 import { useSchool } from "../../context/SchoolContext";
 import {
   fetchTicket,
@@ -15,7 +19,7 @@ import {
   fetchSchoolMembers,
   fetchTicketGroupHistory,
 } from "../../lib/api";
-import { Page, Select, SkeletonList, displayName, initials, formatDate } from "../../Components/UI";
+import { Page, Button, Select, SkeletonList, displayName, initials, formatDate } from "../../Components/UI";
 import { useLiveTicketThreadUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
 
@@ -85,6 +89,16 @@ const TicketDetail = () => {
 
   const live = useLiveTicketThreadUpdates(ticketId);
 
+  // Phone only: the details pane folds away above the conversation.
+  const [showDetails, setShowDetails] = useState(false);
+  // The composer opened out into a large window over the page, for writing
+  // a proper email rather than a line or two at the foot of the thread.
+  const [composeExpanded, setComposeExpanded] = useState(false);
+  const composeRef = useRef(null);
+  const textareaRef = useRef(null);
+  const editorRef = useRef(null);
+  const convoRef = useRef(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -129,6 +143,18 @@ const TicketDetail = () => {
       .catch(() => {});
   }, [schoolId]);
 
+  useEffect(() => {
+    const el = convoRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [ticket?.id, messages.length]);
+
+  useEffect(() => {
+    if (!composeExpanded) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setComposeExpanded(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [composeExpanded]);
+
   const toggleHistory = async () => {
     const opening = !showHistory;
     setShowHistory(opening);
@@ -170,6 +196,7 @@ const TicketDetail = () => {
         await addTicketMessage({ ticketId, kind: composeKind, body: composeBody.trim(), schoolId });
       }
       setComposeBody("");
+      setComposeExpanded(false);
       const [t, msgs] = await Promise.all([fetchTicket(ticketId, schoolId), fetchTicketMessages(ticketId, { schoolId })]);
       setTicket(t);
       setMessages(msgs);
@@ -230,7 +257,20 @@ const TicketDetail = () => {
     }
   };
 
-  if (loading) {
+  // Header buttons: pick Reply or Note, bring the composer into view and put
+  // the cursor in it.
+  const startCompose = (kind) => {
+    setComposeKind(kind);
+    requestAnimationFrame(() => {
+      composeRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      if (ticket?.channel === "email" && kind === "reply") editorRef.current?.focus();
+      else textareaRef.current?.focus();
+    });
+  };
+
+  // A reload of the same ticket (live updates, after a reply) keeps the page
+  // on screen; only a first load, or a different ticket, shows the skeleton.
+  if (loading && (!ticket || ticket.id !== ticketId)) {
     return (
       <div className="shell">
         <Navbar />
@@ -260,6 +300,7 @@ const TicketDetail = () => {
       : null
   );
   const requesterName = displayName(requesterProfile);
+  const requesterEmail = ticket.requester?.email || ticket.requester_email || "";
   const currentTags = pending.tags ?? ticket.tags ?? [];
 
   // A department group (role set) only offers its own members plus
@@ -271,6 +312,19 @@ const TicketDetail = () => {
     ? members.filter((m) => m.role === currentGroup.role || RUNS_THE_SCHOOL.includes(m.role))
     : members;
 
+  const isNote = composeKind === "note";
+  const composeEmpty = sendingByEmail ? isHtmlEmpty(composeBody) : !composeBody.trim();
+  const composeHint = isNote
+    ? "Only staff can see notes."
+    : sendingByEmail
+    ? "Sent as an email from this ticket's mailbox."
+    : `${requesterName} will see this reply.`;
+
+  // A message is the requester's when they wrote it in the app, or when it
+  // arrived by email.
+  const fromRequester = (m) =>
+    m.direction === "inbound" || (ticket.requester_id && m.author?.id === ticket.requester_id);
+
   return (
     <div className="shell">
       <Navbar />
@@ -278,11 +332,11 @@ const TicketDetail = () => {
         wide
         toolbar={
           <div className="tix-crumb" style={{ marginBottom: 0 }}>
-            <Link to="/Tickets">{"All unresolved tickets"}</Link>
+            <Link to="/Tickets">{"All tickets"}</Link>
             <span>{" › "}</span>
             <span>{`#${ticket.number}`}</span>
-            {/* Plain app tokens here, not --tix-* — this sits above .tix-shell,
-                same reason .tix-crumb itself already does. */}
+            {/* Plain app tokens here, not --tix-* — this sits above the
+                ticket panel, same reason .tix-crumb itself already does. */}
             <button type="button" className="tix-history-btn" onClick={toggleHistory}>
               {showHistory ? "Hide transfer history" : "Transfer history"}
             </button>
@@ -310,201 +364,300 @@ const TicketDetail = () => {
           </div>
         ) : null}
 
-        <div className="tix-shell tix-detail">
-          <aside className="tix-detail-list">
+        {/* Three panes on a wide screen (the queue, the conversation, the
+            ticket's details), each scrolling on its own inside a panel that
+            fills the page. On a phone they stack and the page scrolls: the
+            header, then the details (folded away), then the conversation. */}
+        <div className="tk-detail">
+          <aside className="tk-queue" aria-label="Other open tickets">
+            <div className="tk-pane-title">
+              {"Open tickets"}
+              <span className="tk-count">{others.length}</span>
+            </div>
             {others.length === 0 ? (
-              <p className="tix-filters-hint">{"No other open tickets."}</p>
+              <p className="tk-muted tk-queue-empty">{"No other open tickets."}</p>
             ) : (
               others.map((o) => (
-                <Link key={o.id} to={`/Tickets/${o.id}`} className="tix-detail-list-item">
-                  <span className="tix-avatar sm">{initials(o.requester)}</span>
-                  <span>
-                    <span className="tix-detail-list-subject">{o.subject}</span>
-                    <span className="tix-detail-list-num">{`#${o.number}`}</span>
+                <Link key={o.id} to={`/Tickets/${o.id}`} className={`tk-queue-item tk-p-${o.priority}`}>
+                  <span className="tk-queue-subject">{o.subject}</span>
+                  <span className="tk-queue-meta">
+                    <span className="tk-dot" aria-hidden="true" />
+                    {`#${o.number} · ${displayName(o.requester || (o.requester_name ? { first_name: o.requester_name } : null))}`}
                   </span>
                 </Link>
               ))
             )}
           </aside>
 
-          <section className="tix-thread">
-            <div className="tix-thread-head">
-              <h1>{ticket.subject}</h1>
-            </div>
-            <p className="tix-thread-byline">{`${requesterName} raised this ticket`}</p>
-
-            <div className="tix-compose">
-              <div className="tix-compose-tabs">
-                <button type="button" className={composeKind === "reply" ? "active" : ""} onClick={() => setComposeKind("reply")}>{"Reply"}</button>
-                <button type="button" className={composeKind === "note" ? "active" : ""} onClick={() => setComposeKind("note")}>{"Note"}</button>
+          <section className="tk-main">
+            <header className="tk-head">
+              <div className="tk-head-pills">
+                <span className={`tk-pill tk-status tk-status-${ticket.status}`}>{STATUS_LABEL[ticket.status]}</span>
+                <span className={`tk-pill tk-pri tk-pri-${ticket.priority}`}>
+                  <span className="tk-dot" aria-hidden="true" />
+                  {PRIORITY_LABEL[ticket.priority]}
+                </span>
+                {ticket.channel === "email" ? <span className="tk-pill">{"Email"}</span> : null}
+                {ticket.group?.name ? <span className="tk-pill">{ticket.group.name}</span> : null}
               </div>
-              <form onSubmit={send}>
-                {sendingByEmail ? (
-                  <div className="tix-mailfields">
-                    <div className="tix-mailfield">
-                      <label>{"To"}</label>
-                      <input className="tix-input full" value={toInput} onChange={(e) => setToInput(e.target.value)} placeholder="name@example.com" />
-                    </div>
-                    <div className="tix-mailfield">
-                      <label>{"Cc"}</label>
-                      <input className="tix-input full" value={ccInput} onChange={(e) => setCcInput(e.target.value)} />
-                    </div>
-                    <div className="tix-mailfield">
-                      <label>{"Bcc"}</label>
-                      <input className="tix-input full" value={bccInput} onChange={(e) => setBccInput(e.target.value)} />
-                    </div>
+              <h1 className="tk-subject">{ticket.subject}</h1>
+              <div className="tk-head-foot">
+                <p className="tk-byline">
+                  <strong>{requesterName}</strong>
+                  {` raised this ${formatDate(ticket.created_at)}`}
+                </p>
+                <div className="tk-head-actions">
+                  <Button size="sm" onClick={() => startCompose("reply")}>{"Reply"}</Button>
+                  <Button size="sm" variant="secondary" onClick={() => startCompose("note")}>{"Add note"}</Button>
+                </div>
+              </div>
+            </header>
+
+            <div className="tk-convo" ref={convoRef}>
+              <article className="tk-msg is-requester">
+                <span className="tix-avatar">{initials(requesterProfile)}</span>
+                <div className="tk-msg-card">
+                  <div className="tk-msg-head">
+                    <strong>{requesterName}</strong>
+                    <span className="tk-badge">{"Requester"}</span>
+                    <span className="tk-msg-time">{formatDate(ticket.created_at)}</span>
                   </div>
-                ) : null}
-                {sendingByEmail ? (
-                  <RichTextEditor value={composeBody} onChange={setComposeBody} placeholder="Type your response here..." />
-                ) : (
-                  <textarea
-                    className="tix-textarea"
-                    placeholder={composeKind === "note" ? "Add an internal note — only staff see this..." : "Type your response here..."}
-                    rows={3}
-                    value={composeBody}
-                    onChange={(e) => setComposeBody(e.target.value)}
-                  />
-                )}
-                <div className="tix-compose-actions">
-                  <button
-                    type="submit"
-                    className="tix-btn tix-btn-primary"
-                    disabled={sending || (sendingByEmail ? isHtmlEmpty(composeBody) : !composeBody.trim())}
+                  {ticket.description ? (
+                    ticket.description_format === "html" ? (
+                      <EmailFrame html={ticket.description} title={`Email from ${requesterName}`} />
+                    ) : (
+                      <p className="tk-msg-text">{ticket.description}</p>
+                    )
+                  ) : (
+                    <p className="tk-msg-text tk-muted">{"(no description)"}</p>
+                  )}
+                </div>
+              </article>
+
+              {messages.map((m) => {
+                const authorProfile = m.author || parseExternalFrom(m.external_from);
+                const requesterSide = fromRequester(m);
+                return (
+                  <article
+                    key={m.id}
+                    className={`tk-msg${m.kind === "note" ? " is-note" : ""}${requesterSide ? " is-requester" : ""}`}
                   >
-                    {sending ? "Sending..." : composeKind === "note" ? "Add note" : sendingByEmail ? "Send email" : "Send reply"}
+                    <span className="tix-avatar">{initials(authorProfile)}</span>
+                    <div className="tk-msg-card">
+                      <div className="tk-msg-head">
+                        <strong>{displayName(authorProfile)}</strong>
+                        {m.kind === "note" ? <span className="tk-badge tk-badge-note">{"Internal note"}</span> : null}
+                        {requesterSide && m.kind !== "note" ? <span className="tk-badge">{"Requester"}</span> : null}
+                        {m.send_status === "failed" ? <span className="tk-badge tk-badge-failed">{"Not delivered"}</span> : null}
+                        <span className="tk-msg-time">{formatDate(m.created_at)}</span>
+                      </div>
+                      {m.body_format === "html" && (m.direction === "inbound" || m.direction === "outbound") ? (
+                        <EmailFrame html={m.body} title={`Email from ${displayName(authorProfile)}`} />
+                      ) : m.body_format === "html" ? (
+                        <div
+                          className="tix-msg-html tk-msg-body"
+                          // Either side can be HTML now — the rich-text reply
+                          // composer, or a real inbound email kept in its
+                          // original formatting. Sanitized regardless, since
+                          // dangerouslySetInnerHTML is the one place stored
+                          // markup actually gets rendered, and an inbound
+                          // email is untrusted content from the open internet.
+                          dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }}
+                        />
+                      ) : (
+                        <p className="tk-msg-text">{m.body}</p>
+                      )}
+                      {m.send_status === "failed" && m.send_error ? (
+                        <p className="tk-msg-error">{m.send_error}</p>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+
+              {/* After the conversation, where the next message belongs. The
+                  header's Reply / Add note buttons bring it into view. */}
+              {composeExpanded ? (
+                <div className="tk-compose-backdrop" onMouseDown={() => setComposeExpanded(false)} aria-hidden="true" />
+              ) : null}
+              <div
+                className={`tk-compose${isNote ? " is-note" : ""}${composeExpanded ? " is-expanded" : ""}`}
+                ref={composeRef}
+                role={composeExpanded ? "dialog" : undefined}
+                aria-modal={composeExpanded ? "true" : undefined}
+                aria-label={composeExpanded ? `Reply to ${requesterName}` : undefined}
+              >
+                <div className="tk-compose-top">
+                <div className="tk-compose-tabs" role="tablist" aria-label="Write">
+                  <button type="button" role="tab" aria-selected={!isNote} className={!isNote ? "active" : ""} onClick={() => setComposeKind("reply")}>
+                    {sendingByEmail || ticket.channel === "email" ? "Email reply" : "Reply"}
+                  </button>
+                  <button type="button" role="tab" aria-selected={isNote} className={isNote ? "active" : ""} onClick={() => setComposeKind("note")}>
+                    {"Internal note"}
                   </button>
                 </div>
-              </form>
-            </div>
-
-            <div className="tix-msg original">
-              <span className="tix-avatar">{initials(requesterProfile)}</span>
-              <div className="tix-msg-body">
-                <div className="tix-msg-head">
-                  <strong>{requesterName}</strong>
-                  <span className="tix-msg-time">{formatDate(ticket.created_at)}</span>
+                {composeExpanded ? (
+                  <span className="tk-compose-title">{`Re: ${ticket.subject}`}</span>
+                ) : null}
+                <button
+                  type="button"
+                  className="tk-compose-expand"
+                  title={composeExpanded ? "Shrink (Esc)" : "Expand"}
+                  aria-label={composeExpanded ? "Shrink the composer" : "Expand the composer"}
+                  onClick={() => setComposeExpanded((v) => !v)}
+                >
+                  <Icon icon={composeExpanded ? ic_fullscreen_exit : ic_fullscreen} size={20} />
+                </button>
                 </div>
-                {ticket.description ? (
-                  ticket.description_format === "html" ? (
-                    <div className="tix-msg-html" dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(ticket.description) }} />
+                <form onSubmit={send} className="tk-compose-form">
+                  {sendingByEmail ? (
+                    <div className="tk-mailfields">
+                      <label className="tk-mailfield">
+                        <span>{"To"}</span>
+                        <input className="input" value={toInput} onChange={(e) => setToInput(e.target.value)} placeholder="name@example.com" />
+                      </label>
+                      <label className="tk-mailfield">
+                        <span>{"Cc"}</span>
+                        <input className="input" value={ccInput} onChange={(e) => setCcInput(e.target.value)} />
+                      </label>
+                      <label className="tk-mailfield">
+                        <span>{"Bcc"}</span>
+                        <input className="input" value={bccInput} onChange={(e) => setBccInput(e.target.value)} />
+                      </label>
+                    </div>
+                  ) : null}
+                  {sendingByEmail ? (
+                    <div className="tk-editor">
+                      <RichTextEditor ref={editorRef} value={composeBody} onChange={setComposeBody} placeholder="Type your response here..." toolbar="full" />
+                    </div>
                   ) : (
-                    <p>{ticket.description}</p>
-                  )
-                ) : (
-                  <p>{"(no description)"}</p>
-                )}
+                    <textarea
+                      ref={textareaRef}
+                      className="textarea"
+                      placeholder={isNote ? "Add an internal note. Only staff see this." : "Type your response here..."}
+                      rows={4}
+                      value={composeBody}
+                      onChange={(e) => setComposeBody(e.target.value)}
+                    />
+                  )}
+                  <div className="tk-compose-foot">
+                    <span className="tk-muted">{composeHint}</span>
+                    <Button type="submit" disabled={sending || composeEmpty}>
+                      {sending ? "Sending..." : isNote ? "Add note" : sendingByEmail ? "Send email" : "Send reply"}
+                    </Button>
+                  </div>
+                </form>
               </div>
             </div>
-
-            {messages.map((m) => {
-              const authorProfile = m.author || parseExternalFrom(m.external_from);
-              return (
-                <div key={m.id} className={`tix-msg ${m.kind === "note" ? "note" : ""}`}>
-                  <span className="tix-avatar">{initials(authorProfile)}</span>
-                  <div className="tix-msg-body">
-                    <div className="tix-msg-head">
-                      <strong>{displayName(authorProfile)}</strong>
-                      {m.kind === "note" ? <span className="tix-badge note-tag">Note</span> : null}
-                      {m.send_status === "failed" ? <span className="tix-badge failed">Not delivered</span> : null}
-                      <span className="tix-msg-time">{formatDate(m.created_at)}</span>
-                    </div>
-                    {m.body_format === "html" ? (
-                      <div
-                        className="tix-msg-html"
-                        // Either side can be HTML now — the rich-text reply
-                        // composer, or a real inbound email kept in its
-                        // original formatting. Sanitized regardless, since
-                        // dangerouslySetInnerHTML is the one place stored
-                        // markup actually gets rendered, and an inbound
-                        // email is untrusted content from the open internet.
-                        dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }}
-                      />
-                    ) : (
-                      <p>{m.body}</p>
-                    )}
-                    {m.send_status === "failed" && m.send_error ? (
-                      <p className="tix-msg-error">{m.send_error}</p>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })}
           </section>
 
-          <aside className="tix-properties">
-            <div className="tix-properties-head">{"Properties"}</div>
-
-            <div className="tix-prop">
-              <label>{"Tags"}</label>
-              <div className="tix-tags">
-                {currentTags.map((t) => (
-                  <span key={t} className="tix-tag">
-                    {t}
-                    <button type="button" onClick={() => removeTag(t)}>{"×"}</button>
-                  </span>
-                ))}
-              </div>
-              <input
-                className="tix-input"
-                placeholder="Add a tag, press Enter"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
-              />
-            </div>
-
-            <div className="tix-prop">
-              <label>{"Status"}</label>
-              <Select
-                className="tix-select full"
-                value={pending.status ?? ticket.status}
-                onChange={(v) => setField("status", v)}
-                options={Object.keys(STATUS_LABEL).map((s) => ({ value: s, label: STATUS_LABEL[s] }))}
-              />
-            </div>
-
-            <div className="tix-prop">
-              <label>{"Priority"}</label>
-              <Select
-                className="tix-select full"
-                value={pending.priority ?? ticket.priority}
-                onChange={(v) => setField("priority", v)}
-                options={PRIORITY.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))}
-              />
-            </div>
-
-            <div className="tix-prop">
-              <label>{"Group"}</label>
-              <Select
-                className="tix-select full"
-                value={pending.groupId ?? ticket.group_id ?? ""}
-                onChange={(v) => setField("groupId", v)}
-                options={[{ value: "", label: "No group" }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
-              />
-            </div>
-
-            <div className="tix-prop">
-              <label>{"Agent"}</label>
-              <Select
-                className="tix-select full"
-                value={pending.assignedTo ?? ticket.assigned_to ?? ""}
-                onChange={(v) => setField("assignedTo", v)}
-                options={[
-                  { value: "", label: "Unassigned" },
-                  ...assignableMembers.map((m) => ({ value: m.user_id, label: displayName(m.profiles) })),
-                ]}
-              />
-            </div>
-
-            <div className="tix-prop">
-              <label>{"Requester"}</label>
-              <div className="tix-readonly">{ticket.requester?.email || ticket.requester_email || "—"}</div>
-            </div>
-
-            <button type="button" className="tix-btn tix-btn-primary full" disabled={!hasPending || saving} onClick={applyUpdate}>
-              {saving ? "Updating..." : "Update"}
+          <aside className={`tk-props${showDetails ? " is-open" : ""}`}>
+            {/* Phone only: the details fold away above the conversation,
+                with the ones that matter most in the summary line. */}
+            <button
+              type="button"
+              className="tk-props-toggle"
+              aria-expanded={showDetails}
+              onClick={() => setShowDetails((v) => !v)}
+            >
+              <span>{"Details"}</span>
+              <span className="tk-props-summary">
+                {[
+                  ticket.assignee ? displayName(ticket.assignee) : "Unassigned",
+                  ticket.group?.name || "No group",
+                  hasPending ? "Unsaved changes" : null,
+                ].filter(Boolean).join(" · ")}
+              </span>
+              <span className="tk-props-chevron" aria-hidden="true">{"▾"}</span>
             </button>
+
+            <div className="tk-props-body">
+              <section className="tk-card">
+                <div className="tk-card-title">{"Requester"}</div>
+                <div className="tk-person">
+                  <span className="tix-avatar">{initials(requesterProfile)}</span>
+                  <div className="tk-person-text">
+                    <strong>{requesterName}</strong>
+                    <span>{requesterEmail || "No email address"}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section className="tk-card">
+                <div className="tk-card-title">{"Properties"}</div>
+                <div className="tk-field">
+                  <span className="tk-field-label">{"Status"}</span>
+                  <Select
+                    className="select"
+                    value={pending.status ?? ticket.status}
+                    onChange={(v) => setField("status", v)}
+                    options={Object.keys(STATUS_LABEL).map((s) => ({ value: s, label: STATUS_LABEL[s] }))}
+                  />
+                </div>
+                <div className="tk-field">
+                  <span className="tk-field-label">{"Priority"}</span>
+                  <Select
+                    className="select"
+                    value={pending.priority ?? ticket.priority}
+                    onChange={(v) => setField("priority", v)}
+                    options={PRIORITY.map((p) => ({ value: p, label: PRIORITY_LABEL[p] }))}
+                  />
+                </div>
+                <div className="tk-field">
+                  <span className="tk-field-label">{"Group"}</span>
+                  <Select
+                    className="select"
+                    value={pending.groupId ?? ticket.group_id ?? ""}
+                    onChange={(v) => setField("groupId", v)}
+                    options={[{ value: "", label: "No group" }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
+                  />
+                </div>
+                <div className="tk-field">
+                  <span className="tk-field-label">{"Agent"}</span>
+                  <Select
+                    className="select"
+                    value={pending.assignedTo ?? ticket.assigned_to ?? ""}
+                    onChange={(v) => setField("assignedTo", v)}
+                    options={[
+                      { value: "", label: "Unassigned" },
+                      ...assignableMembers.map((m) => ({ value: m.user_id, label: displayName(m.profiles) })),
+                    ]}
+                  />
+                </div>
+                <div className="tk-field">
+                  <span className="tk-field-label">{"Tags"}</span>
+                  {currentTags.length > 0 ? (
+                    <div className="tk-tags">
+                      {currentTags.map((t) => (
+                        <span key={t} className="tk-tag">
+                          {t}
+                          <button type="button" aria-label={`Remove ${t}`} onClick={() => removeTag(t)}>{"×"}</button>
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  <input
+                    className="input"
+                    placeholder="Add a tag, press Enter"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                  />
+                </div>
+              </section>
+
+              {/* Changes wait here until Update, so a mis-click on a picker
+                  never moves a ticket on its own. The bar says so. */}
+              <div className={`tk-save${hasPending ? " is-dirty" : ""}`}>
+                <span className="tk-save-note">{hasPending ? "Unsaved changes" : "No changes"}</span>
+                {hasPending ? (
+                  <Button size="sm" variant="secondary" disabled={saving} onClick={() => setPending({})}>{"Discard"}</Button>
+                ) : null}
+                <Button size="sm" disabled={!hasPending || saving} onClick={applyUpdate}>
+                  {saving ? "Updating..." : "Update"}
+                </Button>
+              </div>
+            </div>
           </aside>
         </div>
       </Page>

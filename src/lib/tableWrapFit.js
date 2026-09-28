@@ -28,6 +28,13 @@ let scheduled = false;
 const fit = () => {
   scheduled = false;
   document.querySelectorAll(".table-wrap").forEach((el) => {
+    // .table-wrap-plain opts out: a short list that should grow with the page
+    // (theme.css). This inline max-height beat that class's own max-height:
+    // none, so "plain" tables still scrolled inside a box of their own.
+    if (el.classList.contains("table-wrap-plain")) {
+      if (el.style.maxHeight) el.style.maxHeight = "";
+      return;
+    }
     const top = el.getBoundingClientRect().top;
     const available = window.innerHeight - top - PAGE_BOTTOM_PADDING - BREATHING_ROOM;
     el.style.maxHeight = `${Math.max(MIN_HEIGHT, available)}px`;

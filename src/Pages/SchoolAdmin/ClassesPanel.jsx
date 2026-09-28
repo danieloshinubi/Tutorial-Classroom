@@ -30,6 +30,7 @@ import {
   SkeletonCards,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { confirmDialog } from "../../Components/Confirm";
 
 // A class is a roster, not a level: "JSS 2" is the level, "JSS 2B" is the
 // class with pupils in it and a form teacher over it.
@@ -143,7 +144,7 @@ const ClassesPanel = () => {
 
   const handleDeleteClass = async (row) => {
     if (
-      !window.confirm(
+      !await confirmDialog(
         `Delete ${row.name}? Its roster and subject assignments go with it. Pupil accounts are not touched.`
       )
     ) {
@@ -517,7 +518,7 @@ const ClassesPanel = () => {
                         padding: 0,
                       }}
                       onClick={async () => {
-                        if (!window.confirm(`Delete ${s.name}? It is removed from every class.`)) return;
+                        if (!await confirmDialog(`Delete ${s.name}? It is removed from every class.`)) return;
                         await deleteSubject(s.id, schoolId);
                         load();
                       }}

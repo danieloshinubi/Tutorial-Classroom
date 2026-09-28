@@ -9,6 +9,7 @@ import {
 } from "../../lib/api";
 import { Card, Field, Button, Badge, Empty, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { confirmDialog } from "../../Components/Confirm";
 
 // Suggestions only — a school picks whatever it actually calls its classes.
 // Two different things a school groups its courses by, and the same table
@@ -143,7 +144,7 @@ const LevelsPanel = () => {
     const warning = used
       ? `"${row.label}" still has ${used} course${used === 1 ? "" : "s"}. Deleting it deletes ${used === 1 ? "that course" : "those courses"} and everything in ${used === 1 ? "it" : "them"} — materials, assignments, exams and chat. This cannot be undone.`
       : `Delete "${row.label}"?`;
-    if (!window.confirm(warning)) return;
+    if (!await confirmDialog(warning)) return;
 
     setBusy(true);
     try {

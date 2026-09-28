@@ -16,6 +16,7 @@ import {
   formatDate,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { confirmDialog } from "../../Components/Confirm";
 
 const slugify = (value) =>
   value
@@ -90,7 +91,7 @@ const Platform = () => {
     const stopping = school.is_active;
     if (
       stopping &&
-      !window.confirm(
+      !await confirmDialog(
         `Suspend ${school.name}? Everyone there loses access until it is restored. Nothing is deleted.`
       )
     ) {

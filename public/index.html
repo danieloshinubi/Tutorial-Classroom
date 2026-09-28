@@ -17,6 +17,66 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
 
     <title>Schoolivio</title>
+    <script>
+      // Repaint the school this device last saw before anything draws.
+      //
+      // A school's colour, tab title and icon used to arrive only after the
+      // app had loaded, signed the person back in and fetched the school over
+      // the network — several seconds on a phone, during which every refresh
+      // showed Schoolivio's own purple, name and icon instead. The branding
+      // is saved on the device each time it is applied (applyTenantBranding
+      // in src/lib/branding.js) and put back here, synchronously, ahead of
+      // the first paint. Each school is its own subdomain, so each has its
+      // own storage and one school's saved branding can never reach another.
+      //
+      // Only a fallback: the real values replace these the moment the school
+      // loads, so a change an admin makes still lands on the next visit. The
+      // originals are kept on each tag (data-default-*) so that removing a
+      // school's logo still restores Schoolivio's own icon correctly.
+      (function () {
+        try {
+          var raw = window.localStorage.getItem("schoolivio:brand");
+          if (!raw) return;
+          var brand = JSON.parse(raw);
+          if (!brand || brand.v !== 1) return;
+
+          var root = document.documentElement;
+          if (brand.palette) {
+            for (var key in brand.palette) {
+              if (
+                Object.prototype.hasOwnProperty.call(brand.palette, key) &&
+                key.indexOf("--brand") === 0
+              ) {
+                root.style.setProperty(key, brand.palette[key]);
+              }
+            }
+          }
+
+          if (brand.title) document.title = brand.title;
+
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta && brand.themeColor) {
+            meta.setAttribute("data-default-content", meta.getAttribute("content") || "");
+            meta.setAttribute("content", brand.themeColor);
+          }
+
+          if (brand.icon) {
+            var links = document.querySelectorAll('link[rel="icon"], link[rel="apple-touch-icon"]');
+            for (var i = 0; i < links.length; i++) {
+              links[i].setAttribute("data-default-href", links[i].getAttribute("href") || "");
+              if (links[i].hasAttribute("type")) {
+                links[i].setAttribute("data-default-type", links[i].getAttribute("type"));
+                links[i].removeAttribute("type");
+              }
+              links[i].setAttribute("href", brand.icon);
+            }
+          }
+        } catch (e) {
+          // Private browsing or blocked storage: nothing saved, so the page
+          // simply brands itself once the school loads, as it always did.
+        }
+      })();
+    </script>
     <style>
       * {
         margin: 0;

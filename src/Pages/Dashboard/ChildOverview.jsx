@@ -138,7 +138,12 @@ const ChildOverview = ({ child, relationship, schoolId }) => {
             <div style={{ fontWeight: 650, fontSize: 16 }}>{displayName(child)}</div>
             <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
               {relationship || "Your child"}
-              {lastActive ? ` · last active ${formatDate(lastActive)}` : " · not active yet"}
+              {/* This is course activity, nothing more. "Not active yet"
+                  read as an enrolment status — it was taken to mean the
+                  child wasn't a registered student and wouldn't be billed. */}
+              {lastActive
+                ? ` · last seen in class ${formatDate(lastActive)}`
+                : " · no course activity yet"}
             </div>
           </div>
         </div>

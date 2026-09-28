@@ -1,8 +1,8 @@
 import React from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useSchool } from "../context/SchoolContext";
-import { canUseModule, homeFor } from "../lib/modules";
-import { Page, Card, Notice } from "./UI";
+import { canUseModule, homeFor, moduleById } from "../lib/modules";
+import { Page, Card, Notice, AppLoading } from "./UI";
 import Navbar from "./Navbar/Navbar";
 
 // Gate for everything behind a school role.
@@ -19,11 +19,14 @@ import Navbar from "./Navbar/Navbar";
 // Neither this nor the navbar is the real boundary. Row level security
 // decides what the database will hand over, and it applies regardless of
 // anything here.
-const SchoolRoute = ({ module: moduleId }) => {
+// instead: where someone who cannot use this module, but can use that one,
+// is sent instead of their home page. /Fees is the family side of money, and
+// staff who land on it (an old link, a typed address) belong in Bursary.
+const SchoolRoute = ({ module: moduleId, instead }) => {
   const { school, roles, loading, error, slug, disabledModules } = useSchool();
 
   if (loading) {
-    return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Loading school..."}</p>;
+    return <AppLoading label="Loading your school..." />;
   }
 
   // No membership of this subdomain's school — say which school, since the URL
@@ -52,7 +55,10 @@ const SchoolRoute = ({ module: moduleId }) => {
 
   // Somewhere they can actually use, rather than a Dashboard their role may
   // not even have — or that this school has turned off.
-  if (!allowed) return <Navigate to={homeFor(roles, disabledModules)} replace />;
+  if (!allowed) {
+    const alternative = instead && canUseModule(instead, roles, disabledModules) ? moduleById(instead)?.path : null;
+    return <Navigate to={alternative || homeFor(roles, disabledModules)} replace />;
+  }
 
   return <Outlet />;
 };

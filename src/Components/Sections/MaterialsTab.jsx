@@ -12,6 +12,7 @@ import {
 import { Card, Button, Field, Empty, formatDate } from "../UI";
 import { useDocumentPreview } from "../DocumentPreview";
 import { useActionFeedback } from "../Toast";
+import { confirmDialog } from "../Confirm";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -153,7 +154,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
   };
 
   const handleDelete = async (material) => {
-    if (!window.confirm(`Delete "${material.title}"?`)) return;
+    if (!await confirmDialog(`Delete "${material.title}"?`)) return;
     setError("");
     try {
       if (material.file_path) {

@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import ChildOverview from "./ChildOverview";
 import { useActionFeedback } from "../../Components/Toast";
+import { useMoney } from "../../lib/money";
 import {
   fetchChildren,
   fetchMyInvoices,
@@ -61,11 +62,10 @@ const ParentDashboard = () => {
   }, [load]);
 
   const owing = invoices.reduce((sum, i) => sum + Number(i.balance || 0), 0);
-  const currency = school?.currency || "NGN";
-  const money = (value) =>
-    new Intl.NumberFormat(undefined, { style: "currency", currency }).format(
-      Number(value || 0)
-    );
+  // The shared formatter, so this card reads ₦212,000 like the Fees page it
+  // links to. Its own Intl call printed "NGN 212,000.00" — the ISO code and
+  // forced kobo — for the very same bill.
+  const money = useMoney(school?.currency);
 
   return (
     <Page

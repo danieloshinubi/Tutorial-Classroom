@@ -15,6 +15,7 @@ import {
   initials,
   formatDate,
 } from "../UI";
+import { confirmDialog } from "../Confirm";
 
 const Person = ({ profile, children, sub }) => (
   <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -68,7 +69,7 @@ const PeopleTab = ({ course, canManage, schoolId }) => {
   };
 
   const remove = async (profile) => {
-    if (!window.confirm(`Remove ${displayName(profile)} from ${course.code}?`)) return;
+    if (!await confirmDialog(`Remove ${displayName(profile)} from ${course.code}?`)) return;
     setBusyId(profile.id);
     setError("");
     try {

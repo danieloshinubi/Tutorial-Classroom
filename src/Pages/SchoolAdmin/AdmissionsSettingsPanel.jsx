@@ -18,6 +18,7 @@ import {
 import { Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput, Select, SkeletonText, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import ClearanceDepartmentsPanel from "./ClearanceDepartmentsPanel";
+import { confirmDialog } from "../../Components/Confirm";
 
 // Defaults mirror classroom.effective_admission_config()'s fallback exactly
 // (040_admissions_engine.sql) — what an unconfigured school is already
@@ -246,7 +247,7 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
   };
 
   const remove = async (row) => {
-    if (!window.confirm(`Remove "${row.name}"? Applications already against it keep their history.`)) return;
+    if (!await confirmDialog(`Remove "${row.name}"? Applications already against it keep their history.`)) return;
     setBusy(true);
     try {
       await deleteAdmissionProgramme(row.id, schoolId);
@@ -384,7 +385,7 @@ const ChecklistPanel = ({
   };
 
   const remove = async (row) => {
-    if (!window.confirm(`Delete "${row.label}"?`)) return;
+    if (!await confirmDialog(`Delete "${row.label}"?`)) return;
     setBusy(true);
     try {
       await deleteRow(row.id, schoolId);

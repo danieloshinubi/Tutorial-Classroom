@@ -44,6 +44,7 @@ import {
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
 import AdmissionLetter from "./AdmissionLetter";
+import { todayISO } from "../../lib/dates";
 
 // country-region-data ships each country as a [name, isoCode, regions] tuple
 // (regions themselves [name, isoCode] pairs) rather than the {countryName,
@@ -353,7 +354,8 @@ const DeclareAdmissionsPayment = ({ invoice, amount, schoolId, onDeclared }) => 
   const [open, setOpen] = useState(false);
   const [method, setMethod] = useState("transfer");
   const [reference, setReference] = useState("");
-  const [paidOn, setPaidOn] = useState(new Date().toISOString().slice(0, 10));
+  // The date on the applicant's own calendar, not UTC's (src/lib/dates.js).
+  const [paidOn, setPaidOn] = useState(todayISO());
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
   const { setError } = useActionFeedback();

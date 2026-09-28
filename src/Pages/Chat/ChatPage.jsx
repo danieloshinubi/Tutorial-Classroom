@@ -10,6 +10,11 @@ import { x as xIcon } from "react-icons-kit/feather/x";
 import { type as formatIcon } from "react-icons-kit/feather/type";
 import { arrowLeft } from "react-icons-kit/feather/arrowLeft";
 import { cornerUpLeft } from "react-icons-kit/feather/cornerUpLeft";
+import { edit as editIcon } from "react-icons-kit/feather/edit";
+import { search as searchIcon } from "react-icons-kit/feather/search";
+import { users as usersIcon } from "react-icons-kit/feather/users";
+import { info as infoIcon } from "react-icons-kit/feather/info";
+import { messageCircle } from "react-icons-kit/feather/messageCircle";
 import Navbar from "../../Components/Navbar/Navbar";
 import { RichTextEditor } from "../../Components/RichTextEditor";
 import { sanitizeEmailHtml } from "../../lib/sanitizeEmailHtml";
@@ -45,7 +50,8 @@ import {
   setChatMemberRole,
   renameChatChannel,
 } from "../../lib/api";
-import { Page, Button, Notice, Empty, Modal, displayName, initials } from "../../Components/UI";
+import { Page, Button, Empty, Modal, displayName, initials } from "../../Components/UI";
+import { ROLE_LABEL } from "../../lib/roles";
 
 // An empty Tiptap document still serialises to "<p></p>" — the same reason
 // Tickets' own composer checks text content rather than the raw HTML.
@@ -63,12 +69,6 @@ const AVATAR_BTN =
   "tw-border-none tw-p-0 tw-cursor-pointer [font-family:inherit] disabled:tw-cursor-default " +
   "enabled:hover:tw-brightness-110 focus-visible:tw-outline focus-visible:tw-outline-2 " +
   "focus-visible:tw-outline-offset-2 focus-visible:tw-outline-tix-brand";
-
-// The name beside a clickable avatar opens the same profile card — one
-// combined target rather than forcing the click onto the small circle.
-const CLICKABLE_NAME = "tw-cursor-pointer hover:tw-underline";
-
-const TYPING = "tw-text-xs tw-text-tix-ink-3 tw-italic tw-mt-0.5";
 
 // A quoted reply. The child [&_strong]/[&_span] rules are arbitrary variants
 // rather than classes on ReplyPreview's own tags, because ReplyPreview is
@@ -114,10 +114,18 @@ const PICKER_EMPTY = "tw-py-3.5 tw-px-3 tw-text-[13px] tw-text-ink-3";
 
 // The round icon buttons in the composer pill (formatting, emoji, attach).
 const ICON_BTN =
-  "tw-flex-none tw-w-8 tw-h-8 tw-rounded-full tw-border-none tw-cursor-pointer tw-flex tw-items-center " +
+  "tw-flex-none tw-w-8 tw-h-8 mobile:tw-w-9 mobile:tw-h-9 tw-rounded-full tw-border-none tw-cursor-pointer tw-flex tw-items-center " +
   "tw-justify-center tw-bg-transparent tw-text-tix-ink-3 tw-text-base tw-leading-none " +
   "enabled:hover:tw-bg-tix-surface enabled:hover:tw-text-tix-ink " +
   "disabled:tw-opacity-50 disabled:tw-cursor-not-allowed";
+
+// The round buttons in the thread head (back, participants, profile).
+const HEAD_ICON_BTN =
+  "tw-flex-none tw-w-9 tw-h-9 tw-rounded-full tw-border-none tw-bg-transparent tw-cursor-pointer tw-flex " +
+  "tw-items-center tw-justify-center tw-text-tix-ink-2 hover:tw-bg-tix-surface-2 hover:tw-text-tix-ink";
+
+// The chips under the list's search box.
+const CHAT_FILTERS = [["all", "All"], ["unread", "Unread"], ["groups", "Groups"], ["direct", "Direct"]];
 
 // Shared by the reaction picker and the per-message "⋮" menu — both are a
 // small popup anchored to a trigger button that should vanish the moment
@@ -310,6 +318,17 @@ const COMPOSE_EMOJI = [
   "👍", "👎", "🙏", "👏", "🎉", "🔥", "❤️", "✅",
 ];
 
+// Opening a chat puts the cursor straight in the composer, so you can type
+// without clicking into it first. Only where there is a mouse: on a phone
+// the same focus pops the keyboard up over half the conversation every time
+// a chat is opened just to read it. The composer is rebuilt for each chat
+// (it unmounts while the next one loads), so the editor's own autofocus
+// runs once per chat opened.
+const FOCUS_ON_OPEN =
+  typeof window !== "undefined" &&
+  !!window.matchMedia &&
+  window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
 // Never send a typing broadcast on every keystroke — once per this window
 // is plenty for "someone is typing" to feel live without flooding the
 // channel.
@@ -380,11 +399,15 @@ const MessageMenu = ({ message, mine, onReply, onForward, onCopy, onEdit, onDele
   };
 
   return (
-    <span className="tw-relative tw-flex-none tw-self-end tw-pb-1.5" ref={wrapRef}>
+    <span className="tw-relative tw-flex-none" ref={wrapRef}>
       <button
         type="button"
         ref={triggerRef}
-        className="tw-border-none tw-bg-transparent tw-text-tix-ink-3 tw-cursor-pointer tw-text-[15px] tw-leading-none tw-py-0.5 tw-px-1.5 tw-rounded-md tw-opacity-60 hover:tw-bg-tix-surface-2 hover:tw-text-tix-ink hover:tw-opacity-100"
+        className={`tw-w-7 tw-h-7 tw-flex tw-items-center tw-justify-center tw-border-none tw-bg-transparent tw-text-tix-ink-3 tw-cursor-pointer tw-text-[15px] tw-leading-none tw-rounded-full hover:tw-bg-tix-surface hover:tw-text-tix-ink focus-visible:tw-opacity-100 ${
+          open || reactOpen
+            ? "tw-opacity-100 tw-bg-tix-surface"
+            : "tw-opacity-0 group-hover/msg:tw-opacity-100 [@media(hover:none)]:tw-opacity-50"
+        }`}
         aria-label="More actions"
         onClick={() => setOpen((v) => !v)}
       >
@@ -670,7 +693,7 @@ const ParticipantsModal = ({
           return (
             <li key={m.user_id}>
               <div className={`${PICKER_ROW} tw-cursor-default`}>
-                <span className="tix-avatar sm">{initials(m.profile)}</span>
+                <Avatar profile={m.profile} size={32} />
                 <span className={PICKER_ROW_LABEL}>
                   {displayName(m.profile)}{isMe ? " (you)" : ""}
                   {isAdmin ? (
@@ -746,9 +769,10 @@ const ParticipantsModal = ({
                             )
                           }
                         >
-                          <span className="tix-avatar sm">{initials(s.profiles)}</span>
+                          <Avatar profile={s.profiles} size={32} />
                           <span className={PICKER_ROW_LABEL}>
-                            {displayName(s.profiles)} · {s.role}
+                            <span className="tw-block tw-truncate tw-text-ink tw-font-medium">{displayName(s.profiles)}</span>
+<span className="tw-block tw-text-xs tw-text-ink-3">{ROLE_LABEL[s.role] || s.role}</span>
                           </span>
                           {checked ? <Icon icon={check} size={16} /> : null}
                         </button>
@@ -779,16 +803,68 @@ const ParticipantsModal = ({
 
 // Today shows just the time (Teams' own convention for a chat list); older
 // falls back to a short date so a week-old thread isn't mistaken for "now".
+const startOfDay = (date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+const daysAgo = (value) => Math.round((startOfDay(new Date()) - startOfDay(new Date(value))) / 86400000);
+
+// The chat list: the time for today, then Yesterday, then the weekday for
+// the rest of this week, then a short date — so a week-old thread is never
+// mistaken for "now".
 const shortTimestamp = (value) => {
   if (!value) return "";
   const date = new Date(value);
-  const now = new Date();
-  const sameDay =
-    date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
-  return sameDay
-    ? date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
-    : date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const days = daysAgo(value);
+  if (days === 0) return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (days === 1) return "Yesterday";
+  if (days > 1 && days < 7) return date.toLocaleDateString(undefined, { weekday: "short" });
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 };
+
+// Local calendar day, so the heading changes at the reader's midnight.
+const localDayKey = (value) => {
+  const d = new Date(value);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+};
+
+// The heading pinned above each day's messages.
+const dayHeading = (value) => {
+  const date = new Date(value);
+  const days = daysAgo(value);
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days > 1 && days < 7) return date.toLocaleDateString(undefined, { weekday: "long" });
+  return date.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "long",
+    ...(date.getFullYear() !== new Date().getFullYear() ? { year: "numeric" } : {}),
+  });
+};
+
+const clockTime = (value) => new Date(value).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+// On hover over a bubble whose run shows its time only at the foot.
+const fullTimestamp = (value) =>
+  new Date(value).toLocaleString(undefined, {
+    weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+
+// Two messages belong to one run when the same person sent them on the same
+// day within five minutes of each other.
+const RUN_GAP_MS = 5 * 60 * 1000;
+const sameRun = (a, b) =>
+  Boolean(
+    a &&
+      b &&
+      a.author_id === b.author_id &&
+      localDayKey(a.created_at) === localDayKey(b.created_at) &&
+      new Date(b.created_at) - new Date(a.created_at) < RUN_GAP_MS
+  );
+
+// Bubbles in a run hug each other: the corners facing the neighbouring
+// bubble tighten, on the sender's side, so the run reads as one turn.
+const bubbleCorners = (mine, first, last) =>
+  mine
+    ? `${first ? "" : "tw-rounded-tr-[6px]"} ${last ? "" : "tw-rounded-br-[6px]"}`
+    : `${first ? "" : "tw-rounded-tl-[6px]"} ${last ? "" : "tw-rounded-bl-[6px]"}`;
 
 const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
   const [members, setMembers] = useState([]);
@@ -850,13 +926,20 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
   return (
     <Modal title="New chat" onClose={onClose}>
       <form onSubmit={submit}>
-        <div className="btn-row" style={{ marginBottom: 14 }}>
-          <Button type="button" variant={mode === "dm" ? "primary" : "secondary"} onClick={() => setMode("dm")}>
-            {"Direct message"}
-          </Button>
-          <Button type="button" variant={mode === "group" ? "primary" : "secondary"} onClick={() => setMode("group")}>
-            {"Group"}
-          </Button>
+        <div className="tw-grid tw-grid-cols-2 tw-gap-1 tw-p-1 tw-mb-3.5 tw-rounded-full tw-bg-bg" role="group" aria-label="Kind of chat">
+          {[["dm", "One person"], ["group", "Group"]].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={mode === id}
+              className={`tw-h-9 tw-rounded-full tw-border-none tw-cursor-pointer tw-text-[13.5px] tw-font-semibold [font-family:inherit] ${
+                mode === id ? "tw-bg-surface tw-text-ink tw-shadow-1" : "tw-bg-transparent tw-text-ink-3 hover:tw-text-ink"
+              }`}
+              onClick={() => setMode(id)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
 
         {members.length > 6 ? (
@@ -883,9 +966,10 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
                     className={`${PICKER_ROW} ${otherUserId === m.user_id ? PICKER_ROW_SELECTED : ""}`}
                     onClick={() => setOtherUserId(m.user_id)}
                   >
-                    <span className="tix-avatar sm">{initials(m.profiles)}</span>
+                    <Avatar profile={m.profiles} size={32} />
                     <span className={PICKER_ROW_LABEL}>
-                      {displayName(m.profiles)} · {m.role}
+                      <span className="tw-block tw-truncate tw-text-ink tw-font-medium">{displayName(m.profiles)}</span>
+<span className="tw-block tw-text-xs tw-text-ink-3">{ROLE_LABEL[m.role] || m.role}</span>
                     </span>
                     {otherUserId === m.user_id ? <Icon icon={check} size={16} /> : null}
                   </button>
@@ -919,9 +1003,10 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
                         className={`${PICKER_ROW} ${checked ? PICKER_ROW_SELECTED : ""}`}
                         onClick={() => toggleGroupMember(m.user_id)}
                       >
-                        <span className="tix-avatar sm">{initials(m.profiles)}</span>
+                        <Avatar profile={m.profiles} size={32} />
                         <span className={PICKER_ROW_LABEL}>
-                          {displayName(m.profiles)} · {m.role}
+                          <span className="tw-block tw-truncate tw-text-ink tw-font-medium">{displayName(m.profiles)}</span>
+<span className="tw-block tw-text-xs tw-text-ink-3">{ROLE_LABEL[m.role] || m.role}</span>
                         </span>
                         {checked ? <Icon icon={check} size={16} /> : null}
                       </button>
@@ -937,12 +1022,12 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
             with two people already ticked and the name box still empty, the
             obvious conclusion is that the button itself does not work. Say
             which part is missing instead. */}
-        <div className="tw-mt-4">
+        <div className="tw-mt-4 tw-flex tw-flex-wrap tw-items-center tw-gap-x-3 tw-gap-y-1.5">
           <Button type="submit" disabled={busy || !!blockedReason}>
             {busy ? "Starting..." : mode === "dm" ? "Start chat" : "Create group"}
           </Button>
           {blockedReason ? (
-            <span className="tw-ml-3 tw-text-[12.5px] tw-text-ink-3">{blockedReason}</span>
+            <span className="tw-text-[12.5px] tw-text-ink-3">{blockedReason}</span>
           ) : null}
         </div>
       </form>
@@ -958,6 +1043,7 @@ const ChatPage = () => {
 
   const [channels, setChannels] = useState([]);
   const [chatQuery, setChatQuery] = useState("");
+  const [chatFilter, setChatFilter] = useState("all");
   const [schoolMembers, setSchoolMembers] = useState([]);
   const [membersById, setMembersById] = useState({});
   const membersByIdRef = useRef({});
@@ -1153,6 +1239,11 @@ const ChatPage = () => {
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
+
+  // Choosing Reply means typing next, on any device.
+  useEffect(() => {
+    if (replyingTo) composerRef.current?.focus();
+  }, [replyingTo]);
 
   const notifyTyping = () => {
     const now = Date.now();
@@ -1410,12 +1501,15 @@ const ChatPage = () => {
   // someone's name" and "find a group chat" without telling the two apart.
   const filteredChannels = useMemo(() => {
     const needle = chatQuery.trim().toLowerCase();
-    if (!needle) return channels;
-    return channels.filter((c) => (c.name || "").toLowerCase().includes(needle));
-  }, [channels, chatQuery]);
+    return channels.filter((c) => {
+      if (chatFilter === "unread" && !(c.unread_count > 0)) return false;
+      if (chatFilter === "groups" && c.kind !== "group") return false;
+      if (chatFilter === "direct" && c.kind === "group") return false;
+      return !needle || (c.name || "").toLowerCase().includes(needle);
+    });
+  }, [channels, chatQuery, chatFilter]);
 
   const activeChannel = channels.find((c) => c.id === channelId);
-  const myProfile = membersById[user?.id];
   // The other side of a DM — chat_overview never names them (it returns
   // the channel's display name, not a user id), but the roster fetched for
   // "seen" already has every member of THIS open channel.
@@ -1452,124 +1546,217 @@ const ChatPage = () => {
   const lastMineIndex = [...messages].map((m, i) => ({ m, i })).filter(({ m }) => m.author_id === user?.id).pop()?.i;
   const typingNames = typingUserIds.map((id) => displayName(membersById[id])).filter(Boolean);
 
+  const isGroup = activeChannel?.kind === "group";
+  const otherMember = otherMemberId ? schoolMembers.find((m) => m.user_id === otherMemberId) : null;
+  const unreadChats = channels.filter((c) => c.unread_count > 0).length;
+  const typingLine =
+    typingNames.length > 0 ? `${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…` : "";
+  // Under the name in the thread head: what this chat is, unless someone is
+  // typing, which is the more useful thing to know right then.
+  const threadSubtitle = isGroup
+    ? `${channelMembers.length} participants`
+    : otherMember
+    ? ROLE_LABEL[otherMember.role] || otherMember.role
+    : "";
+  const headerProfile = otherMemberId ? membersById[otherMemberId] : { first_name: activeChannel?.name };
+
   return (
     <div className="shell">
       <Navbar />
-      <Page title="Chat" wide>
-        <Notice tone="error">{error}</Notice>
-        {/* A real phone chat app shows one pane at a time — the chat list, or
-            (once you tap into one) that conversation full-screen with a back
-            arrow, never both stacked down one page, which is what the generic
-            .tix-detail mobile rule does for Tickets. Which pane shows is
-            driven straight off channelId rather than a toggle class with
-            descendant selectors: it is the same signal the old
-            .chat-mobile-open class was derived from, and reading it here
-            means the two panes cannot disagree about which one is visible.
-            Every mobile: utility below is max-width 900px (see
-            tailwind.config.js), matching this app's desktop-first CSS. */}
-        <div className="tix-shell tix-detail tw-grid-cols-[300px_1fr] mobile:tw-grid-cols-[1fr] mobile:tw-grid-rows-[minmax(0,1fr)] mobile:tw-h-[var(--page-avail-h,calc(100vh-68px-var(--page-top-h,0px)-40px))]">
+      {/* No page title: the list names itself ("Chats") and the thread names
+          the conversation, so a third heading above both only cost height.
+          page-chat (theme.css) trims the page's own padding, and takes it
+          away entirely on a phone, where a chat should run edge to edge. */}
+      <Page wide className="page-chat">
+        {/* Every mobile: utility below is max-width 900px (see
+            tailwind.config.js), matching this app's desktop-first CSS. A phone
+            shows one pane at a time, the list or the open conversation, driven
+            straight off channelId so the two can never disagree. */}
+        <div className="tix-shell tix-detail tw-relative tw-grid-cols-[minmax(280px,340px)_1fr] mobile:tw-grid-cols-[1fr] mobile:tw-grid-rows-[minmax(0,1fr)] mobile:tw-h-[var(--page-avail-h,calc(100vh-68px-var(--page-top-h,0px)-40px))] mobile:tw-rounded-none mobile:tw-border-0 mobile:tw-shadow-none">
+          {/* An error floats over the chat rather than sitting above it: as a
+              line above the panel it pushed the composer below the fold. */}
+          {error ? (
+            <div
+              className="tw-absolute tw-top-3 tw-left-1/2 -tw-translate-x-1/2 tw-z-[70] tw-w-[min(520px,calc(100%-24px))] tw-flex tw-items-start tw-gap-2 tw-py-2.5 tw-pl-3.5 tw-pr-2 tw-rounded-xl tw-bg-danger-soft tw-text-danger tw-text-[13px] tw-font-medium tw-shadow-2"
+              role="alert"
+            >
+              <span className="tw-flex-1 tw-min-w-0 tw-pt-px">{error}</span>
+              <button
+                type="button"
+                className="tw-flex-none tw-w-6 tw-h-6 tw-rounded-full tw-border-none tw-bg-transparent tw-text-danger tw-cursor-pointer tw-flex tw-items-center tw-justify-center hover:tw-bg-[color-mix(in_srgb,var(--danger)_12%,transparent)]"
+                aria-label="Dismiss"
+                onClick={() => setError("")}
+              >
+                <Icon icon={xIcon} size={14} />
+              </button>
+            </div>
+          ) : null}
+
           <aside
-            className={`tix-detail-list mobile:tw-h-full mobile:tw-overflow-y-auto mobile:tw-border-r-0 mobile:tw-border-b-0 ${
+            className={`tix-detail-list tw-flex tw-flex-col tw-p-0 tw-overflow-hidden tw-bg-tix-surface mobile:tw-h-full mobile:tw-overflow-hidden mobile:tw-border-r-0 mobile:tw-border-b-0 ${
               channelId ? "mobile:tw-hidden" : ""
             }`}
           >
-            <div className="tw-flex tw-justify-between tw-items-center tw-mb-2.5">
-              <strong>{"Chats"}</strong>
-              <Button size="sm" onClick={() => setShowNewChat(true)}>{"New"}</Button>
-            </div>
-            {channels.length > 0 ? (
-              <input
-                className="input tw-w-full tw-mb-2 tw-py-[7px] tw-px-2.5 tw-text-[13.5px]"
-                placeholder="Search chats"
-                value={chatQuery}
-                onChange={(e) => setChatQuery(e.target.value)}
-              />
-            ) : null}
-            {channels.length === 0 ? (
-              <Empty>{"No chats yet. Start one with “New” above."}</Empty>
-            ) : filteredChannels.length === 0 ? (
-              <Empty>{"No chats match that search."}</Empty>
-            ) : (
-              filteredChannels.map((c) => (
-                <div
-                  key={c.id}
-                  role="button"
-                  tabIndex={0}
-                  className={`tw-flex tw-items-start tw-gap-2.5 tw-w-full tw-text-left tw-py-[9px] tw-px-2 tw-rounded-[8px] tw-border-0 tw-border-solid tw-border-l-[3px] tw-cursor-pointer [font-family:inherit] hover:tw-bg-tix-surface-2 ${
-                    c.id === channelId
-                      ? "tw-bg-tix-surface-2 tw-border-l-tix-brand"
-                      : "tw-bg-transparent tw-border-l-transparent"
-                  }`}
-                  onClick={() => navigate(`/Chat/${c.id}`)}
-                  onKeyDown={(e) => { if (e.key === "Enter") navigate(`/Chat/${c.id}`); }}
-                >
-                  {c.kind === "group" ? (
-                    <span className="tw-flex-none tw-mt-0.5">
-                      {/* filter(Boolean): the school roster loads separately,
-                          so before it arrives these ids resolve to undefined
-                          and would each render a "SO" (initials of "Someone")
-                          circle. Dropping them shows fewer faces for a moment
-                          instead of wrong ones. */}
-                      <GroupAvatar
-                        profiles={(c.member_preview || []).map((id) => membersById[id]).filter(Boolean)}
-                        size={34}
-                      />
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      className={`tix-avatar ${AVATAR_BTN}`}
-                      disabled={!c.other_user_id}
-                      onClick={(e) => { e.stopPropagation(); if (c.other_user_id) openPerson(c.other_user_id); }}
-                    >
-                      {initials({ first_name: c.name })}
-                    </button>
-                  )}
-                  <span className="tw-flex-1 tw-min-w-0">
-                    <span className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
-                      <span
-                        className={`tw-text-[13.5px] tw-truncate ${
-                          c.unread_count > 0 ? "tw-font-bold tw-text-tix-ink" : "tw-text-tix-ink-2"
-                        }${c.other_user_id ? ` ${CLICKABLE_NAME}` : ""}`}
-                        onClick={c.other_user_id ? (e) => { e.stopPropagation(); openPerson(c.other_user_id); } : undefined}
-                      >
-                        {c.name?.trim() || "Unnamed channel"}
-                      </span>
-                      <span className="tw-flex-none tw-text-[11px] tw-text-tix-ink-3">{shortTimestamp(c.last_message_at)}</span>
-                    </span>
-                    <span className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-mt-0.5">
-                      {/* Typing only ever exists for the channel actually
-                          open right now — subscribeToTyping only listens
-                          on channelId, not every channel in the list — so
-                          this can only ever apply to that one row. */}
-                      {c.id === channelId && typingNames.length > 0 ? (
-                        <span className={`${TYPING} tw-truncate`}>{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</span>
-                      ) : (
-                        <span className="tw-text-xs tw-text-tix-ink-3 tw-truncate">
-                          {(c.last_message_preview || "No messages yet").replace(/<[^>]+>/g, "")}
-                        </span>
-                      )}
-                      {/* The bold name alone reads as "different", not
-                          "unread", at a glance — this dot is the actual
-                          unread signal, same shape as the sidebar's own
-                          Chat-link dot, so both places agree on what
-                          "unread" looks like. */}
-                      {c.unread_count > 0 ? (
-                        <span
-                          className="tw-flex-none tw-w-2 tw-h-2 tw-rounded-full tw-bg-tix-brand"
-                          title={`${c.unread_count} unread`}
-                          aria-hidden="true"
-                        />
-                      ) : null}
-                    </span>
-                  </span>
+            <div className="tw-flex-none tw-flex tw-flex-col tw-gap-3 tw-px-4 tw-pt-4 tw-pb-3 tw-border-0 tw-border-solid tw-border-b tw-border-b-tix-line">
+              <div className="tw-flex tw-items-center tw-justify-between tw-gap-3">
+                <div className="tw-min-w-0">
+                  <h1 className="tw-m-0 tw-text-[19px] tw-font-bold tw-leading-tight tw-text-tix-ink [font-family:inherit]">{"Chats"}</h1>
+                  <p className="tw-m-0 tw-mt-0.5 tw-text-xs tw-text-tix-ink-3">
+                    {unreadChats > 0
+                      ? `${unreadChats} unread ${unreadChats === 1 ? "chat" : "chats"}`
+                      : channels.length > 0
+                      ? "You're all caught up"
+                      : "Message anyone at your school"}
+                  </p>
                 </div>
-              ))
-            )}
+                <button
+                  type="button"
+                  className="tw-flex-none tw-w-9 tw-h-9 tw-rounded-full tw-border-none tw-cursor-pointer tw-flex tw-items-center tw-justify-center tw-bg-tix-brand tw-text-white tw-shadow-1 hover:tw-brightness-110 mobile:tw-w-10 mobile:tw-h-10"
+                  aria-label="New chat"
+                  title="New chat"
+                  onClick={() => setShowNewChat(true)}
+                >
+                  <Icon icon={editIcon} size={16} />
+                </button>
+              </div>
+              {channels.length > 0 ? (
+                <>
+                  <label className="tw-relative tw-block">
+                    <span className="tw-absolute tw-left-3 tw-top-1/2 -tw-translate-y-1/2 tw-flex tw-text-tix-ink-3 tw-pointer-events-none">
+                      <Icon icon={searchIcon} size={15} />
+                    </span>
+                    <input
+                      className="tw-w-full tw-h-9 tw-pl-9 tw-pr-3 tw-rounded-full tw-border tw-border-solid tw-border-transparent tw-bg-tix-surface-2 tw-text-[13.5px] tw-text-tix-ink [font-family:inherit] tw-outline-none focus:tw-border-tix-brand focus:tw-bg-tix-surface mobile:tw-h-10"
+                      placeholder="Search chats"
+                      aria-label="Search chats"
+                      value={chatQuery}
+                      onChange={(e) => setChatQuery(e.target.value)}
+                    />
+                  </label>
+                  <div className="tw-flex tw-gap-1.5 tw-overflow-x-auto [scrollbar-width:none]">
+                    {CHAT_FILTERS.map(([id, label]) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={chatFilter === id}
+                        className={`tw-flex-none tw-h-7 tw-px-3 tw-rounded-full tw-border tw-border-solid tw-text-[12.5px] tw-font-semibold tw-cursor-pointer [font-family:inherit] mobile:tw-h-8 ${
+                          chatFilter === id
+                            ? "tw-bg-brand-soft tw-border-transparent tw-text-brand-dark"
+                            : "tw-bg-transparent tw-border-tix-line tw-text-tix-ink-2 hover:tw-bg-tix-surface-2"
+                        }`}
+                        onClick={() => setChatFilter(id)}
+                      >
+                        {label}
+                        {id === "unread" && unreadChats > 0 ? ` ${unreadChats}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            <div className="tw-flex-1 tw-min-h-0 tw-overflow-y-auto tw-p-2 mobile:tw-px-1.5">
+              {channels.length === 0 ? (
+                <div className="tw-flex tw-flex-col tw-items-center tw-gap-3 tw-py-10 tw-px-6 tw-text-center">
+                  <span className="tw-w-12 tw-h-12 tw-rounded-full tw-bg-brand-soft tw-text-tix-brand tw-flex tw-items-center tw-justify-center">
+                    <Icon icon={messageCircle} size={22} />
+                  </span>
+                  <span className="tw-text-[13px] tw-text-tix-ink-3">{"No chats yet."}</span>
+                  <Button size="sm" onClick={() => setShowNewChat(true)}>{"Start a chat"}</Button>
+                </div>
+              ) : filteredChannels.length === 0 ? (
+                <Empty>
+                  {chatQuery.trim()
+                    ? "No chats match that search."
+                    : chatFilter === "unread"
+                    ? "Nothing unread. You're all caught up."
+                    : chatFilter === "groups"
+                    ? "You're not in any groups yet."
+                    : "No direct messages yet."}
+                </Empty>
+              ) : (
+                filteredChannels.map((c) => {
+                  const active = c.id === channelId;
+                  const unread = c.unread_count > 0;
+                  return (
+                    <div
+                      key={c.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-current={active ? "true" : undefined}
+                      className={`tw-flex tw-items-center tw-gap-3 tw-py-2.5 tw-px-2.5 tw-mb-0.5 tw-rounded-xl tw-cursor-pointer tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-tix-brand mobile:tw-py-3 ${
+                        active ? "tw-bg-brand-soft" : "hover:tw-bg-tix-surface-2"
+                      }`}
+                      onClick={() => navigate(`/Chat/${c.id}`)}
+                      onKeyDown={(e) => { if (e.key === "Enter") navigate(`/Chat/${c.id}`); }}
+                    >
+                      {c.kind === "group" ? (
+                        <span className="tw-flex-none tw-leading-none">
+                          {/* filter(Boolean): the school roster loads
+                              separately, so before it arrives these ids
+                              resolve to undefined and would each render a
+                              "SO" (initials of "Someone") circle. Fewer faces
+                              for a moment beats wrong ones. */}
+                          <GroupAvatar
+                            profiles={(c.member_preview || []).map((id) => membersById[id]).filter(Boolean)}
+                            size={44}
+                          />
+                        </span>
+                      ) : (
+                        // The photo opens their profile card; the rest of the
+                        // row opens the chat.
+                        <button
+                          type="button"
+                          className={`${AVATAR_BTN} tw-flex-none tw-bg-transparent tw-rounded-full tw-leading-none`}
+                          aria-label="View profile"
+                          disabled={!c.other_user_id}
+                          onClick={(e) => { e.stopPropagation(); if (c.other_user_id) openPerson(c.other_user_id); }}
+                        >
+                          <Avatar profile={membersById[c.other_user_id] || { first_name: c.name }} size={44} />
+                        </button>
+                      )}
+                      <span className="tw-flex-1 tw-min-w-0">
+                        <span className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
+                          <span className={`tw-text-[14px] tw-truncate tw-text-tix-ink ${unread ? "tw-font-bold" : "tw-font-semibold"}`}>
+                            {c.name?.trim() || "Unnamed channel"}
+                          </span>
+                          <span className={`tw-flex-none tw-text-[11px] ${unread ? "tw-text-tix-brand tw-font-semibold" : "tw-text-tix-ink-3"}`}>
+                            {shortTimestamp(c.last_message_at)}
+                          </span>
+                        </span>
+                        <span className="tw-flex tw-items-center tw-justify-between tw-gap-2 tw-mt-0.5">
+                          {/* Typing is only ever known for the open channel
+                              (subscribeToTyping listens on channelId alone),
+                              so this can only apply to that one row. */}
+                          {active && typingLine ? (
+                            <span className="tw-text-[12.5px] tw-text-tix-brand tw-font-medium tw-truncate">{typingLine}</span>
+                          ) : (
+                            <span className={`tw-text-[12.5px] tw-truncate ${unread ? "tw-text-tix-ink-2 tw-font-medium" : "tw-text-tix-ink-3"}`}>
+                              {(c.last_message_preview || "No messages yet").replace(/<[^>]+>/g, "")}
+                            </span>
+                          )}
+                          {unread ? (
+                            <span
+                              className="tw-flex-none tw-min-w-[20px] tw-h-5 tw-px-1.5 tw-rounded-full tw-bg-tix-brand tw-text-white tw-text-[11px] tw-font-bold tw-leading-5 tw-text-center"
+                              aria-label={`${c.unread_count} unread`}
+                            >
+                              {c.unread_count > 99 ? "99+" : c.unread_count}
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </aside>
 
+          {/* overflow hidden on a phone too: the head and the composer stay
+              put and only the messages between them scroll. The generic
+              .tix-thread mobile rule would let the whole pane scroll away. */}
           <section
-            className={`tix-thread tw-relative tw-flex tw-flex-col tw-p-0 tw-overflow-y-hidden mobile:tw-h-full mobile:tw-overflow-y-auto mobile:tw-border-r-0 mobile:tw-border-b-0 ${
+            className={`tix-thread tw-relative tw-flex tw-flex-col tw-p-0 tw-overflow-hidden tw-border-r-0 tw-bg-tix-surface-2 mobile:tw-h-full mobile:tw-overflow-hidden mobile:tw-border-b-0 ${
               channelId ? "" : "mobile:tw-hidden"
             }`}
             onDragEnter={onDragEnter}
@@ -1588,8 +1775,15 @@ const ChatPage = () => {
               </div>
             ) : null}
             {!channelId ? (
-              <div className="tw-flex-1 tw-flex tw-items-center tw-justify-center">
-                <Empty>{"Pick a chat on the left, or start a new one."}</Empty>
+              <div className="tw-flex-1 tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-3 tw-p-8 tw-text-center">
+                <span className="tw-w-16 tw-h-16 tw-rounded-full tw-bg-brand-soft tw-text-tix-brand tw-flex tw-items-center tw-justify-center">
+                  <Icon icon={messageCircle} size={28} />
+                </span>
+                <h2 className="tw-m-0 tw-text-[17px] tw-font-bold tw-text-tix-ink [font-family:inherit]">{"Your conversations"}</h2>
+                <p className="tw-m-0 tw-max-w-[320px] tw-text-[13.5px] tw-leading-relaxed tw-text-tix-ink-3">
+                  {"Pick a chat on the left, or start a new one with one person or a whole group."}
+                </p>
+                <Button onClick={() => setShowNewChat(true)}>{"New chat"}</Button>
               </div>
             ) : loading ? (
               <div className="tw-flex-1 tw-flex tw-items-center tw-justify-center">
@@ -1597,295 +1791,305 @@ const ChatPage = () => {
               </div>
             ) : (
               <>
-                <div className="tw-flex-none tw-flex tw-items-center tw-gap-3 tw-py-3.5 tw-px-5 tw-border-0 tw-border-solid tw-border-b-[1px] tw-border-b-tix-line tw-min-h-[30px]">
-                  {/* Only reachable once mobile hides the list behind the open
-                      thread — on a wide screen both panes already show, so it
-                      would only duplicate the list's own "New" button. */}
+                <header className="tw-flex-none tw-flex tw-items-center tw-gap-3 tw-h-16 tw-px-4 tw-bg-tix-surface tw-border-0 tw-border-solid tw-border-b tw-border-b-tix-line mobile:tw-h-14 mobile:tw-pl-1.5 mobile:tw-pr-2 mobile:tw-gap-2">
+                  {/* Only reachable once a phone hides the list behind the
+                      open thread; on a wide screen both panes already show. */}
                   <button
                     type="button"
-                    className="tw-hidden mobile:tw-inline-flex tw-flex-none tw-w-8 tw-h-8 tw-rounded-full tw-border-none tw-bg-transparent tw-items-center tw-justify-center tw-text-tix-ink-2 tw-cursor-pointer tw-mr-0.5 hover:tw-bg-tix-surface-2"
+                    className={`${HEAD_ICON_BTN} tw-hidden mobile:tw-inline-flex`}
                     aria-label="Back to chats"
                     onClick={() => navigate("/Chat")}
                   >
-                    <Icon icon={arrowLeft} size={18} />
+                    <Icon icon={arrowLeft} size={19} />
                   </button>
-                  {activeChannel?.kind === "group" ? (
+                  {isGroup ? (
                     <button
                       type="button"
-                      className={`tw-flex-none tw-border-none tw-bg-transparent tw-p-0 tw-cursor-pointer [font-family:inherit]`}
+                      className="tw-flex-none tw-border-none tw-bg-transparent tw-p-0 tw-cursor-pointer tw-leading-none"
                       aria-label="Participants"
                       onClick={() => setShowParticipants(true)}
                     >
-                      <GroupAvatar profiles={headerGroupProfiles} size={38} />
+                      <GroupAvatar profiles={headerGroupProfiles} size={40} />
                     </button>
                   ) : (
                     <button
                       type="button"
-                      className={`tix-avatar tw-w-[38px] tw-h-[38px] tw-text-[13.5px] tw-shadow-1 ${AVATAR_BTN}`}
+                      className={`${AVATAR_BTN} tw-flex-none tw-bg-transparent tw-rounded-full tw-leading-none`}
+                      aria-label="View profile"
                       disabled={!otherMemberId}
                       onClick={() => otherMemberId && openPerson(otherMemberId)}
                     >
-                      {initials({ first_name: activeChannel?.name })}
+                      <Avatar profile={headerProfile} size={40} />
                     </button>
                   )}
-                  <div>
-                    <h1
-                      className={`tw-text-base tw-m-0 tw-text-tix-ink [font-family:inherit] tw-leading-[1.3] ${
-                        otherMemberId ? CLICKABLE_NAME : ""
-                      }`}
-                      onClick={() => otherMemberId && openPerson(otherMemberId)}
-                    >
+                  <button
+                    type="button"
+                    className="tw-flex-1 tw-min-w-0 tw-text-left tw-border-none tw-bg-transparent tw-p-0 tw-cursor-pointer [font-family:inherit] disabled:tw-cursor-default"
+                    disabled={!isGroup && !otherMemberId}
+                    onClick={() => (isGroup ? setShowParticipants(true) : openPerson(otherMemberId))}
+                  >
+                    <span className="tw-block tw-text-[15px] tw-font-bold tw-leading-tight tw-text-tix-ink tw-truncate">
                       {activeChannel?.name?.trim() || "Chat"}
-                    </h1>
-                    {typingNames.length > 0 ? (
-                      <div className={TYPING}>{`${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…`}</div>
-                    ) : null}
-                  </div>
-                  {/* Groups only — a DM's "participants" are the two people
-                      already named in this header. */}
-                  {activeChannel?.kind === "group" ? (
-                    <button
-                      type="button"
-                      className={`${CLICKABLE_NAME} tw-ml-auto tw-flex-none tw-border-none tw-bg-transparent tw-text-[12.5px] tw-text-tix-ink-3 [font-family:inherit]`}
-                      onClick={() => setShowParticipants(true)}
-                    >
-                      {`${channelMembers.length} participants`}
+                    </span>
+                    <span className={`tw-block tw-mt-0.5 tw-text-xs tw-truncate ${typingLine ? "tw-text-tix-brand tw-font-medium" : "tw-text-tix-ink-3"}`}>
+                      {typingLine || threadSubtitle || " "}
+                    </span>
+                  </button>
+                  {isGroup ? (
+                    <button type="button" className={HEAD_ICON_BTN} aria-label="Participants" title="Participants" onClick={() => setShowParticipants(true)}>
+                      <Icon icon={usersIcon} size={18} />
+                    </button>
+                  ) : otherMemberId ? (
+                    <button type="button" className={HEAD_ICON_BTN} aria-label="Profile" title="Profile" onClick={() => openPerson(otherMemberId)}>
+                      <Icon icon={infoIcon} size={18} />
                     </button>
                   ) : null}
-                </div>
+                </header>
 
-                <div className="tw-flex-1 tw-min-h-0 tw-overflow-y-auto tw-py-[18px] tw-px-[22px]">
+                <div className="tw-flex-1 tw-min-h-0 tw-overflow-y-auto tw-px-6 tw-pt-1 tw-pb-4 mobile:tw-px-2.5">
+                  {messages.length === 0 ? (
+                    <div className="tw-flex tw-flex-col tw-items-center tw-gap-2 tw-py-14 tw-px-4 tw-text-center">
+                      {isGroup ? <GroupAvatar profiles={headerGroupProfiles} size={64} /> : <Avatar profile={headerProfile} size={64} />}
+                      <strong className="tw-mt-2 tw-text-[15px] tw-text-tix-ink">{activeChannel?.name?.trim() || "Chat"}</strong>
+                      <span className="tw-max-w-[300px] tw-text-[13px] tw-text-tix-ink-3">
+                        {isGroup ? "No messages in this group yet. Say hello to get it started." : "No messages yet. Say hello."}
+                      </span>
+                    </div>
+                  ) : null}
                   {messages.map((m, i) => {
                     const mine = m.author_id === user?.id;
                     const prev = messages[i - 1];
-                    // Consecutive messages from the same person, sent close
-                    // together, read as one continued turn — Teams drops
-                    // the repeated avatar/name for those, same as here.
-                    const grouped =
-                      prev &&
-                      prev.author_id === m.author_id &&
-                      new Date(m.created_at) - new Date(prev.created_at) < 5 * 60 * 1000;
+                    const next = messages[i + 1];
+                    const newDay = !prev || localDayKey(prev.created_at) !== localDayKey(m.created_at);
+                    // A run is one person's messages sent close together:
+                    // the name shows at its top, the avatar and time at its
+                    // foot, and the bubbles between hug each other.
+                    const first = !sameRun(prev, m);
+                    const last = !sameRun(m, next);
                     const seen = i === lastMineIndex && mine && otherReadAt && otherReadAt >= m.created_at;
+                    // Faces and names only where they tell you something: in
+                    // a DM there is one other person, named in the head.
+                    const showAuthor = !mine && isGroup;
                     return (
-                      <div
-                        key={m.id}
-                        className={`tw-flex tw-gap-2.5 tw-max-w-[74%] tw-my-[3px] ${
-                          grouped ? "tw-mt-0" : ""
-                        } ${mine ? "tw-ml-auto tw-flex-row-reverse" : ""}`}
-                      >
-                        {/* Your own avatar is dropped on a phone — the bubble's
-                            own colour and right alignment already say "mine",
-                            and the repeated circle only costs width there. */}
-                        <button
-                          type="button"
-                          className={`tix-avatar sm tw-mt-0.5 tw-flex-none ${AVATAR_BTN} ${
-                            grouped ? "tw-invisible" : ""
-                          } ${mine ? "mobile:tw-hidden" : ""}`}
-                          onClick={() => openPerson(mine ? user.id : m.author_id)}
+                      <React.Fragment key={m.id}>
+                        {newDay ? (
+                          <div className="tw-sticky tw-top-2 tw-z-10 tw-flex tw-justify-center tw-my-3 tw-pointer-events-none">
+                            <span className="tw-px-3 tw-py-1 tw-rounded-full tw-bg-tix-surface tw-border tw-border-solid tw-border-tix-line tw-shadow-1 tw-text-[11.5px] tw-font-semibold tw-text-tix-ink-2">
+                              {dayHeading(m.created_at)}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div
+                          className={`tw-group/msg tw-flex tw-items-end tw-gap-2 ${mine ? "tw-justify-end" : ""} ${
+                            first && !newDay ? "tw-mt-3" : "tw-mt-[3px]"
+                          }`}
                         >
-                          {mine ? initials(myProfile) : initials(m.author)}
-                        </button>
-                        <div className={`tw-flex tw-flex-col tw-gap-0.5 tw-min-w-0 ${mine ? "tw-items-end" : ""}`}>
-                          {!grouped ? (
-                            <div className="tw-flex tw-items-baseline tw-gap-2 tw-mb-px">
-                              <strong
-                                className={`tw-text-[12.5px] tw-text-tix-ink ${CLICKABLE_NAME}`}
-                                onClick={() => openPerson(mine ? user.id : m.author_id)}
+                          {showAuthor ? (
+                            last ? (
+                              <button
+                                type="button"
+                                className={`${AVATAR_BTN} tw-flex-none tw-bg-transparent tw-rounded-full tw-leading-none tw-mb-5`}
+                                aria-label={`${displayName(m.author)}'s profile`}
+                                onClick={() => openPerson(m.author_id)}
                               >
-                                {mine ? "You" : displayName(m.author)}
-                              </strong>
-                              <span className="tw-text-[11px] tw-text-tix-ink-3">
-                                {shortTimestamp(m.created_at)}{m.edited_at ? " · edited" : ""}
-                              </span>
-                            </div>
+                                <Avatar profile={m.author} size={28} />
+                              </button>
+                            ) : (
+                              <span className="tw-flex-none tw-w-7" aria-hidden="true" />
+                            )
                           ) : null}
-                          {/* The menu sits beside the bubble itself, not on
-                              its own meta line — a grouped message (no name/
-                              time shown above it) used to still get a whole
-                              extra row just to hold this one small button,
-                              which is most of what made the thread read as
-                              cluttered rather than "a professional built
-                              this". row-reverse for "mine" puts it on the
-                              outer edge, away from the bubble's own corner,
-                              on both sides. */}
                           <div
-                            className={`tw-flex tw-items-end tw-gap-0.5 tw-min-w-0 ${
-                              mine ? "tw-flex-row-reverse" : ""
+                            className={`tw-flex tw-flex-col tw-min-w-0 tw-max-w-[min(72%,600px)] mobile:tw-max-w-[86%] ${
+                              mine ? "tw-items-end" : "tw-items-start"
                             }`}
                           >
-                            <SwipeToReply onReply={() => setReplyingTo(m)}>
-                              <div
-                                className={`tw-flex tw-flex-col tw-gap-[3px] tw-min-w-0 ${
-                                  mine ? "tw-items-end" : ""
-                                }`}
+                            {first && showAuthor ? (
+                              <button
+                                type="button"
+                                className="tw-border-none tw-bg-transparent tw-p-0 tw-mb-1 tw-ml-3 tw-text-xs tw-font-semibold tw-text-brand-dark tw-cursor-pointer hover:tw-underline [font-family:inherit]"
+                                onClick={() => openPerson(m.author_id)}
                               >
-                                {m.deleted_at ? (
-                                  <div className="tw-rounded-[14px] tw-py-2 tw-px-[13px] tw-bg-transparent tw-border tw-border-dashed tw-border-tix-line tw-text-tix-ink-3 tw-italic">
-                                    {"Message deleted."}
-                                  </div>
-                                ) : editingId === m.id ? (
-                                  <div>
-                                    <RichTextEditor
-                                      value={editBody}
-                                      onChange={setEditBody}
-                                      placeholder="Edit message..."
-                                      onSubmitEditor={() => saveEdit(m.id)}
-                                    />
-                                    <div className="btn-row" style={{ marginTop: 6 }}>
-                                      <Button size="sm" onClick={() => saveEdit(m.id)}>{"Save"}</Button>
-                                      <Button size="sm" variant="secondary" onClick={() => setEditingId(null)}>{"Cancel"}</Button>
+                                {displayName(m.author)}
+                              </button>
+                            ) : null}
+                            {/* The menu sits beside the bubble, on its outer
+                                edge (row-reverse for mine), and only shows on
+                                hover so a long thread stays quiet. */}
+                            <div className={`tw-flex tw-items-center tw-gap-1 tw-min-w-0 tw-max-w-full ${mine ? "tw-flex-row-reverse" : ""}`}>
+                              <SwipeToReply onReply={() => setReplyingTo(m)}>
+                                <div
+                                  className={`tw-flex tw-flex-col tw-gap-1 tw-min-w-0 ${mine ? "tw-items-end" : "tw-items-start"}`}
+                                  title={fullTimestamp(m.created_at)}
+                                >
+                                  {m.deleted_at ? (
+                                    <div className="tw-rounded-[18px] tw-py-2 tw-px-3.5 tw-border tw-border-dashed tw-border-tix-line tw-text-[13.5px] tw-text-tix-ink-3 tw-italic">
+                                      {"Message deleted."}
                                     </div>
-                                  </div>
-                                ) : (
-                                  <>
-                                    {m.reply_to ? <ReplyPreview message={m.reply_to} className={REPLY_QUOTE} /> : null}
-                                    {!isHtmlEmpty(m.body) ? (
-                                      <div
-                                        // tix-msg-html stays a real CSS class:
-                                        // it styles the p/ul/a tags Tiptap
-                                        // generates inside this bubble, which
-                                        // have no JSX call site to take a
-                                        // className. The link colour override
-                                        // for "mine" needs the same treatment,
-                                        // hence the [&_a] arbitrary variant.
-                                        className={`tw-rounded-[14px] tw-py-2 tw-px-[13px] tix-msg-html ${
-                                          mine
-                                            ? "tw-bg-tix-brand tw-text-white [&_a]:tw-text-white"
-                                            : "tw-bg-tix-surface-2 tw-text-tix-ink-2"
-                                        }`}
-                                        // Instagram/WhatsApp's other signature
-                                        // gesture — double-tap a message to
-                                        // heart it, the same toggle the "⋮"
-                                        // menu's own React item already
-                                        // calls. A shortcut onto existing
-                                        // behaviour, not a new one.
-                                        onDoubleClick={() => toggleReaction(m, "❤️")}
-                                        dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }}
+                                  ) : editingId === m.id ? (
+                                    <div className="tw-w-[min(520px,74vw)] tw-p-2 tw-rounded-2xl tw-bg-tix-surface tw-border tw-border-solid tw-border-tix-brand tw-shadow-1">
+                                      <RichTextEditor
+                                        value={editBody}
+                                        onChange={setEditBody}
+                                        placeholder="Edit message..."
+                                        onSubmitEditor={() => saveEdit(m.id)}
                                       />
-                                    ) : null}
-                                    {/* A picture shows as a picture. The chip
-                                        is right for a spreadsheet nobody can
-                                        preview from its name, but it made an
-                                        image something you had to open to
-                                        find out what it was. Tapping it still
-                                        opens the same full viewer. */}
-                                    {m.attachment_path && isImagePath(m.attachment_path) ? (
-                                      <button
-                                        type="button"
-                                        className="tw-block tw-mt-1.5 tw-p-0 tw-border-none tw-bg-transparent tw-cursor-pointer tw-rounded-[10px] tw-overflow-hidden tw-max-w-[420px]"
-                                        onClick={() => openAttachment(m)}
-                                        title={m.attachment_name || "Open image"}
-                                      >
-                                        {imageUrls[m.attachment_path] ? (
-                                          // Sized like a shared screenshot
-                                          // rather than a thumbnail — the
-                                          // point of one is usually that it
-                                          // is readable in place. Natural
-                                          // size up to the caps, so a small
-                                          // image is not stretched; max-w
-                                          // also keeps it inside the row's
-                                          // own 74% on a narrow screen, and
-                                          // the height cap stops a tall
-                                          // screenshot taking over the thread.
-                                          <img
-                                            src={imageUrls[m.attachment_path]}
-                                            alt={m.attachment_name || "Image"}
-                                            className="tw-block tw-max-w-full tw-max-h-[360px] tw-object-contain tw-rounded-[10px]"
-                                          />
-                                        ) : (
-                                          // Same footprint as the image that
-                                          // replaces it, so the thread does
-                                          // not jump as pictures resolve.
-                                          <span className="tw-flex tw-items-center tw-justify-center tw-w-[180px] tw-h-[120px] tw-rounded-[10px] tw-bg-tix-surface-2 tw-text-xs tw-text-tix-ink-3">
-                                            {"Loading image…"}
-                                          </span>
-                                        )}
-                                      </button>
-                                    ) : m.attachment_path ? (
-                                      <AttachmentChip
-                                        name={m.attachment_name}
-                                        size={m.attachment_size}
-                                        busy={openingAttachmentId === m.id}
-                                        onOpen={() => openAttachment(m)}
-                                      />
-                                    ) : null}
-                                    <ReactionChips message={m} myUserId={user?.id} onToggle={(emoji) => toggleReaction(m, emoji)} />
-                                  </>
-                                )}
+                                      <div className="btn-row" style={{ marginTop: 6 }}>
+                                        <Button size="sm" onClick={() => saveEdit(m.id)}>{"Save"}</Button>
+                                        <Button size="sm" variant="secondary" onClick={() => setEditingId(null)}>{"Cancel"}</Button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {m.reply_to ? <ReplyPreview message={m.reply_to} className={`${REPLY_QUOTE} tw-max-w-full tw-mb-0`} /> : null}
+                                      {!isHtmlEmpty(m.body) ? (
+                                        <div
+                                          // tix-msg-html stays a real CSS class:
+                                          // it styles the p/ul/a tags Tiptap
+                                          // generates inside this bubble, which
+                                          // have no JSX call site to take a
+                                          // className. The link colour for
+                                          // "mine" needs the same reach, hence
+                                          // the [&_a] arbitrary variant.
+                                          className={`tix-msg-html tw-rounded-[18px] tw-py-2 tw-px-3.5 tw-text-[14.5px] tw-leading-[1.5] [overflow-wrap:anywhere] mobile:tw-text-[15px] ${bubbleCorners(mine, first, last)} ${
+                                            mine
+                                              ? "tw-bg-tix-brand tw-text-white [&_a]:tw-text-white"
+                                              : "tw-bg-tix-surface tw-text-tix-ink tw-border tw-border-solid tw-border-tix-line"
+                                          }`}
+                                          // Double-tap to heart, the same toggle
+                                          // the menu's own React item calls.
+                                          onDoubleClick={() => toggleReaction(m, "❤️")}
+                                          dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(m.body) }}
+                                        />
+                                      ) : null}
+                                      {/* A picture shows as a picture; the chip
+                                          is for files nobody can preview from
+                                          a name. Tapping either opens the same
+                                          full viewer. */}
+                                      {m.attachment_path && isImagePath(m.attachment_path) ? (
+                                        <button
+                                          type="button"
+                                          className="tw-block tw-p-0 tw-border-none tw-bg-transparent tw-cursor-pointer tw-rounded-2xl tw-overflow-hidden tw-max-w-[min(420px,100%)]"
+                                          onClick={() => openAttachment(m)}
+                                          title={m.attachment_name || "Open image"}
+                                        >
+                                          {imageUrls[m.attachment_path] ? (
+                                            // Natural size up to the caps, so a
+                                            // small image is not stretched and a
+                                            // tall screenshot cannot take over.
+                                            <img
+                                              src={imageUrls[m.attachment_path]}
+                                              alt={m.attachment_name || "Image"}
+                                              className="tw-block tw-max-w-full tw-max-h-[360px] tw-object-contain tw-rounded-2xl"
+                                            />
+                                          ) : (
+                                            // Same footprint as the image that
+                                            // replaces it, so the thread does not
+                                            // jump as pictures resolve.
+                                            <span className="tw-flex tw-items-center tw-justify-center tw-w-[180px] tw-h-[120px] tw-rounded-2xl tw-bg-tix-surface tw-border tw-border-solid tw-border-tix-line tw-text-xs tw-text-tix-ink-3">
+                                              {"Loading image…"}
+                                            </span>
+                                          )}
+                                        </button>
+                                      ) : m.attachment_path ? (
+                                        <AttachmentChip
+                                          name={m.attachment_name}
+                                          size={m.attachment_size}
+                                          busy={openingAttachmentId === m.id}
+                                          onOpen={() => openAttachment(m)}
+                                        />
+                                      ) : null}
+                                      <ReactionChips message={m} myUserId={user?.id} onToggle={(emoji) => toggleReaction(m, emoji)} />
+                                    </>
+                                  )}
+                                </div>
+                              </SwipeToReply>
+                              {!m.deleted_at && editingId !== m.id ? (
+                                <MessageMenu
+                                  message={m}
+                                  mine={mine}
+                                  onReply={() => setReplyingTo(m)}
+                                  onForward={() => setForwardMessage(m)}
+                                  onCopy={() => copyMessageText(m)}
+                                  onEdit={() => { setEditingId(m.id); setEditBody(m.body); }}
+                                  onDelete={() => remove(m.id)}
+                                  onReact={(emoji) => toggleReaction(m, emoji)}
+                                />
+                              ) : null}
+                            </div>
+                            {last || m.edited_at ? (
+                              <div className={`tw-flex tw-items-center tw-gap-1 tw-mt-1 tw-px-1 tw-text-[11px] tw-text-tix-ink-3 ${mine ? "tw-justify-end" : ""}`}>
+                                {last ? <span>{clockTime(m.created_at)}</span> : null}
+                                {m.edited_at ? <span>{last ? "· edited" : "edited"}</span> : null}
+                                {seen ? (
+                                  <span className="tw-inline-flex tw-items-center tw-gap-0.5 tw-text-tix-brand tw-font-semibold">
+                                    {"·"} <Icon icon={check} size={12} /> {"Seen"}
+                                  </span>
+                                ) : null}
                               </div>
-                            </SwipeToReply>
-                            {!m.deleted_at ? (
-                              <MessageMenu
-                                message={m}
-                                mine={mine}
-                                onReply={() => setReplyingTo(m)}
-                                onForward={() => setForwardMessage(m)}
-                                onCopy={() => copyMessageText(m)}
-                                onEdit={() => { setEditingId(m.id); setEditBody(m.body); }}
-                                onDelete={() => remove(m.id)}
-                                onReact={(emoji) => toggleReaction(m, emoji)}
-                              />
                             ) : null}
                           </div>
-                          {seen ? (
-                            <div className="tw-text-[11px] tw-text-tix-ink-3 tw-mt-0.5 tw-text-right">{"Seen"}</div>
-                          ) : null}
                         </div>
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                   <div ref={threadEndRef} />
                 </div>
 
-                <form
-                  onSubmit={send}
-                  className="tw-flex-none tw-border-0 tw-border-solid tw-border-t-[1px] tw-border-t-tix-line tw-pt-3 tw-px-5 tw-pb-4 tw-bg-tix-surface"
-                >
-                  {replyingTo ? (
-                    <div className="tw-flex tw-items-center tw-gap-2 tw-mb-1.5">
-                      <ReplyPreview message={replyingTo} className={`${REPLY_QUOTE} tw-flex-1 tw-mb-0`} />
+                {/* A card floating on the conversation's own ground, holding
+                    whatever this message will carry (the quote it replies to,
+                    the file it attaches) above the line you type on. */}
+                <form onSubmit={send} className="tw-flex-none tw-px-6 tw-pt-1 tw-pb-4 mobile:tw-px-2 mobile:tw-pb-2">
+                  <div className="tw-rounded-[22px] tw-border tw-border-solid tw-border-tix-line tw-bg-tix-surface tw-shadow-1 tw-transition-shadow focus-within:tw-border-tix-brand focus-within:tw-shadow-[0_0_0_3px_var(--brand-soft)]">
+                    {replyingTo ? (
+                      <div className="tw-flex tw-items-center tw-gap-2 tw-pt-2.5 tw-px-3">
+                        <ReplyPreview message={replyingTo} className={`${REPLY_QUOTE} tw-flex-1 tw-min-w-0 tw-mb-0`} />
+                        <button type="button" className={ICON_BTN} aria-label="Cancel reply" onClick={() => setReplyingTo(null)}>
+                          <Icon icon={xIcon} size={15} />
+                        </button>
+                      </div>
+                    ) : null}
+                    {pendingFile ? (
+                      <div className="tw-px-3">
+                        <AttachmentChip
+                          name={pendingFile.name}
+                          size={pendingFile.size}
+                          onOpen={previewPendingFile}
+                          openLabel="Preview"
+                          onRemove={clearPendingFile}
+                        />
+                      </div>
+                    ) : null}
+                    <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
+                    <div className="tw-flex tw-items-end tw-gap-1 tw-p-1.5">
                       <button
                         type="button"
-                        className="tw-flex-none tw-border-none tw-bg-transparent tw-text-tix-ink-3 tw-cursor-pointer"
-                        aria-label="Cancel reply"
-                        onClick={() => setReplyingTo(null)}
+                        className={ICON_BTN}
+                        aria-label="Attach a file"
+                        title="Attach a file"
+                        disabled={!!pendingFile}
+                        onClick={() => fileInputRef.current?.click()}
                       >
-                        <Icon icon={xIcon} size={14} />
+                        <Icon icon={paperclip} size={17} />
                       </button>
-                    </div>
-                  ) : null}
-                  {pendingFile ? (
-                    <AttachmentChip
-                      name={pendingFile.name}
-                      size={pendingFile.size}
-                      onOpen={previewPendingFile}
-                      openLabel="Preview"
-                      onRemove={clearPendingFile}
-                    />
-                  ) : null}
-                  <input ref={fileInputRef} type="file" hidden onChange={handleFileChange} />
-                  <div className="tw-flex tw-items-end tw-gap-1.5 tw-border tw-border-solid tw-border-tix-line tw-rounded-[22px] tw-py-1.5 tw-pr-2 tw-pl-4 tw-bg-tix-surface-2 focus-within:tw-border-tix-brand">
-                    {/* chat-composer-input stays a real class: theme.css uses
-                        it to reach inside RichTextEditor's own markup
-                        (.rte-compact .rte-prose), which has no JSX call site
-                        here to take a className. */}
-                    <div className="chat-composer-input tw-flex-1 tw-min-w-0">
-                      <RichTextEditor
-                        ref={composerRef}
-                        value={composeBody}
-                        onChange={(html) => { setComposeBody(html); notifyTyping(); }}
-                        placeholder="Type a message..."
-                        onSubmitEditor={send}
-                        showToolbar={showFormatting}
-                      />
-                    </div>
-                    <div className="tw-flex tw-items-center tw-gap-0.5 tw-flex-none tw-pb-0.5">
+                      {/* chat-composer-input stays a real class: theme.css uses
+                          it to reach inside RichTextEditor's own markup
+                          (.rte-compact .rte-prose), which has no JSX call site
+                          here to take a className. */}
+                      <div className="chat-composer-input tw-flex-1 tw-min-w-0 tw-px-1">
+                        <RichTextEditor
+                          ref={composerRef}
+                          value={composeBody}
+                          onChange={(html) => { setComposeBody(html); notifyTyping(); }}
+                          placeholder="Type a message..."
+                          onSubmitEditor={send}
+                          showToolbar={showFormatting}
+                          autoFocus={FOCUS_ON_OPEN}
+                        />
+                      </div>
                       <button
                         type="button"
                         className={`${ICON_BTN} ${
-                          showFormatting
-                            ? "tw-bg-[color-mix(in_srgb,var(--tix-brand)_16%,transparent)] tw-text-tix-brand"
-                            : ""
+                          showFormatting ? "tw-bg-[color-mix(in_srgb,var(--tix-brand)_16%,transparent)] tw-text-tix-brand" : ""
                         }`}
                         aria-label="Formatting"
                         title="Formatting"
@@ -1893,7 +2097,9 @@ const ChatPage = () => {
                       >
                         <Icon icon={formatIcon} size={17} />
                       </button>
-                      <span className="tw-relative tw-inline-flex" ref={emojiWrapRef}>
+                      {/* Hidden on a phone, whose keyboard has a full emoji
+                          set of its own; the room goes to the text instead. */}
+                      <span className="tw-relative tw-inline-flex mobile:tw-hidden" ref={emojiWrapRef}>
                         <button
                           type="button"
                           className={ICON_BTN}
@@ -1907,11 +2113,10 @@ const ChatPage = () => {
                             compiles to repeat(8, minmax(0,1fr)), and a zero
                             minimum lets the tracks collapse in this panel,
                             which is absolutely positioned and so sizes to its
-                            content. Plain 1fr means minmax(auto,1fr), so each
-                            track stays at least as wide as the emoji in it and
-                            the grid lays out 8 across as intended. */}
+                            content. Plain 1fr keeps each track at least as
+                            wide as the emoji in it. */}
                         {emojiPickerOpen ? (
-                          <div className="tw-absolute tw-bottom-[calc(100%+8px)] tw-right-0 tw-z-30 tw-grid tw-grid-cols-[repeat(8,1fr)] tw-gap-0.5 tw-p-2 tw-border tw-border-solid tw-border-tix-line tw-rounded-[10px] tw-bg-tix-surface tw-shadow-1">
+                          <div className="tw-absolute tw-bottom-[calc(100%+10px)] tw-right-0 tw-z-30 tw-grid tw-grid-cols-[repeat(8,1fr)] tw-gap-0.5 tw-p-2 tw-border tw-border-solid tw-border-tix-line tw-rounded-xl tw-bg-tix-surface tw-shadow-2">
                             {COMPOSE_EMOJI.map((emoji) => (
                               <button
                                 key={emoji}
@@ -1929,18 +2134,8 @@ const ChatPage = () => {
                         ) : null}
                       </span>
                       <button
-                        type="button"
-                        className={ICON_BTN}
-                        aria-label="Attach a file"
-                        title="Attach a file"
-                        disabled={!!pendingFile}
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        <Icon icon={paperclip} size={17} />
-                      </button>
-                      <button
                         type="submit"
-                        className="tw-flex-none tw-w-[34px] tw-h-[34px] tw-rounded-full tw-border-none tw-cursor-pointer tw-flex tw-items-center tw-justify-center tw-bg-tix-brand tw-text-white disabled:tw-opacity-50 disabled:tw-cursor-not-allowed enabled:hover:tw-brightness-[1.08]"
+                        className="tw-flex-none tw-w-9 tw-h-9 tw-rounded-full tw-border-none tw-cursor-pointer tw-flex tw-items-center tw-justify-center tw-bg-tix-brand tw-text-white disabled:tw-opacity-40 disabled:tw-cursor-not-allowed enabled:hover:tw-brightness-110"
                         disabled={sending || (isHtmlEmpty(composeBody) && !pendingFile)}
                         aria-label="Send"
                         title="Send"

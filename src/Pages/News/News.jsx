@@ -33,6 +33,7 @@ import {
 import Reactions from "../../Components/Reactions";
 import EmojiInput from "../../Components/EmojiInput";
 import { useActionFeedback } from "../../Components/Toast";
+import { confirmDialog } from "../../Components/Confirm";
 
 const AUDIENCE_LABEL = Object.fromEntries(NOTICE_AUDIENCES);
 
@@ -382,7 +383,7 @@ const News = () => {
   };
 
   const remove = async (row) => {
-    if (!window.confirm(`Delete "${row.title}" and its replies?`)) return;
+    if (!await confirmDialog(`Delete "${row.title}" and its replies?`)) return;
     try {
       await deleteNotice(row.id, schoolId);
       setNotices((current) => current.filter((r) => r.id !== row.id));
@@ -431,7 +432,7 @@ const News = () => {
   };
 
   const onRemoveReply = async (reply) => {
-    if (!window.confirm("Delete this reply?")) return;
+    if (!await confirmDialog("Delete this reply?")) return;
     try {
       await deleteNoticeReply(reply.id, schoolId);
       setReplies((current) => ({

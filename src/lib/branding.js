@@ -90,6 +90,11 @@ const BRAND_CSS_VARS = [
 
 const DEFAULT_TITLE = "Schoolivio";
 
+// Read back by the inline script in public/index.html before the first paint,
+// so a refresh shows the school rather than Schoolivio while the app loads.
+// Bump v if the shape changes; the boot script ignores anything else.
+const CACHE_KEY = "schoolivio:brand";
+
 // This tab's <link rel="icon"/apple-touch-icon> elements, captured once
 // exactly as index.html shipped them (one is the .png, one the .svg) — so
 // reverting to "no custom logo" restores each tag's own real default
@@ -97,15 +102,28 @@ const DEFAULT_TITLE = "Schoolivio";
 let originalIcons = null;
 const captureOriginalIcons = () => {
   if (originalIcons || typeof document === "undefined") return;
+  // The boot script in index.html may already have swapped these for a saved
+  // school logo, in which case what index.html really shipped is in the
+  // data-default-* attributes it left behind. Reading only the live href
+  // would record the school's logo as the "default" and make removing a logo
+  // impossible to undo.
+  const original = (el, attr) =>
+    el.hasAttribute(`data-default-${attr}`)
+      ? el.getAttribute(`data-default-${attr}`)
+      : el.getAttribute(attr);
   originalIcons = {
     favicons: Array.from(document.querySelectorAll('link[rel="icon"]')).map((el) => ({
       el,
-      href: el.getAttribute("href"),
-      type: el.getAttribute("type"),
+      href: original(el, "href"),
+      type: original(el, "type"),
     })),
     touchIcon: (() => {
       const el = document.querySelector('link[rel="apple-touch-icon"]');
-      return el ? { el, href: el.getAttribute("href") } : null;
+      return el ? { el, href: original(el, "href") } : null;
+    })(),
+    themeColor: (() => {
+      const el = document.querySelector('meta[name="theme-color"]');
+      return el ? { el, content: original(el, "content") } : null;
     })(),
   };
 };
@@ -152,5 +170,35 @@ export function applyTenantBranding({ name, logoUrl, themeColor } = {}) {
     }
   }
 
+  // The browser's own bar — the strip Safari on an iPhone tints to match the
+  // page. index.html ships Schoolivio's purple and nothing used to change it,
+  // so every school's app sat under a Schoolivio-coloured bar.
+  if (originalIcons?.themeColor) {
+    originalIcons.themeColor.el.setAttribute(
+      "content",
+      palette ? palette["--brand"] : originalIcons.themeColor.content
+    );
+  }
+
   document.title = name ? `${name} · Schoolivio` : DEFAULT_TITLE;
+
+  try {
+    if (name) {
+      window.localStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          v: 1,
+          title: document.title,
+          palette,
+          icon: logoUrl || null,
+          themeColor: palette ? palette["--brand"] : null,
+        })
+      );
+    } else {
+      window.localStorage.removeItem(CACHE_KEY);
+    }
+  } catch {
+    // Storage unavailable (private browsing, blocked cookies). Nothing is
+    // lost: the next load brands itself once the school arrives, as before.
+  }
 }

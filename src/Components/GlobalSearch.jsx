@@ -28,6 +28,18 @@ const GlobalSearch = () => {
   const canSeeCourses = roles.some((r) =>
     ["owner", "admin", "principal", "teacher", "student"].includes(r)
   );
+  // Who reportable_students() returns anyone for: leadership and teachers
+  // (their students) and parents (their children). A bursar or admissions
+  // officer gets nobody from it and no courses either, so the box would
+  // only ever say "Nothing matching" — it is not shown to them at all.
+  const isParent = roles.includes("parent");
+  const canSeePeople = canSeeCourses || isParent;
+  // Say what it actually searches. A parent was offered "courses and
+  // students" and could only ever find their own children.
+  const placeholder = canSeeCourses
+    ? "Search courses and students"
+    : "Search your children";
+  const peopleHeading = canSeeCourses ? "Students" : "Your children";
 
   const load = useCallback(async () => {
     if (loaded || !schoolId) return;
@@ -98,6 +110,8 @@ const GlobalSearch = () => {
     navigate(to);
   };
 
+  if (!canSeePeople) return null;
+
   return (
     <div className="gsearch" ref={wrapRef}>
       <Icon icon={searchIcon} size={16} className="gsearch-icon" />
@@ -105,7 +119,7 @@ const GlobalSearch = () => {
         ref={inputRef}
         className="gsearch-input"
         value={query}
-        placeholder="Search courses and students"
+        placeholder={placeholder}
         aria-label="Search"
         onFocus={() => {
           setOpen(true);
@@ -136,7 +150,7 @@ const GlobalSearch = () => {
 
           {results.people.length ? (
             <div className="gsearch-group">
-              <div className="account-heading">{"Students"}</div>
+              <div className="account-heading">{peopleHeading}</div>
               {results.people.map((p) => (
                 <button
                   key={p.student_id}

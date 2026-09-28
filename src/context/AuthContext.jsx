@@ -8,15 +8,24 @@ import React, {
   useState,
 } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { rememberUser } from "../lib/lastUser";
 
 const AuthContext = createContext(null);
 
 // Every signed-in person, any role, any tenant — a school holds children's
 // records, so a session left open on a shared or unattended device is a
-// real exposure. 7 minutes with no mouse/keyboard/touch/scroll activity
+// real exposure. 10 minutes with no mouse/keyboard/touch/scroll activity
 // anywhere on the page signs them out and sends them back to /Login, the
-// same as the session simply having expired.
-const INACTIVITY_LIMIT_MS = 7 * 60 * 1000;
+// same as the session simply having expired. (Was 7; raised to 10 because
+// it kept interrupting people mid-task — the 30-second warning below still
+// comes first.) Login.jsx and PlatformLogin.jsx quote this number.
+const INACTIVITY_LIMIT_MS = 10 * 60 * 1000;
+// How long the "still there?" warning shows before the sign-out actually
+// happens. The limit above is unchanged — this only stops the sign-out being
+// a surprise. A bursar part-way through entering a term's fees was being
+// dropped with no notice and losing the form; the exposure the limit exists to
+// prevent is an UNATTENDED session, and someone sitting there can now say so.
+const INACTIVITY_WARNING_MS = 30 * 1000;
 const ACTIVITY_EVENTS = ["mousedown", "mousemove", "keydown", "wheel", "touchstart", "scroll"];
 
 export const useAuth = () => {
@@ -33,6 +42,13 @@ export const AuthProvider = ({ children }) => {
   // Starts true so ProtectedRoute waits for the stored session to be restored
   // instead of bouncing a signed-in user straight back to /Login on refresh.
   const [loading, setLoading] = useState(true);
+  // True as soon as the stored session is known — before the profile has
+  // loaded. SchoolContext starts on this rather than on `loading`: it needs
+  // only the user id, and waiting for the profile first cost a whole extra
+  // round trip to the database on every page load.
+  const [sessionReady, setSessionReady] = useState(false);
+  // Shown for the last 30 seconds before the inactivity sign-out fires.
+  const [idleWarning, setIdleWarning] = useState(false);
   // Who the profile currently belongs to, so a token refresh can be told
   // apart from an actual change of person.
   const loadedForRef = useRef(null);
@@ -95,6 +111,7 @@ export const AuthProvider = ({ children }) => {
     supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       setSession(data.session);
+      setSessionReady(true);
       loadedForRef.current = data.session?.user?.id ?? null;
       loadProfile(data.session?.user).finally(() => {
         if (active) setLoading(false);
@@ -106,6 +123,7 @@ export const AuthProvider = ({ children }) => {
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
       const nextId = newSession?.user?.id ?? null;
       setSession(newSession);
+      rememberUser(nextId);
 
       // Returning to a tab refreshes the token, which arrives as a brand new
       // session object for the same person. Re-fetching the profile on that
@@ -130,6 +148,7 @@ export const AuthProvider = ({ children }) => {
     if (!session) return undefined;
 
     let timer;
+    let warnTimer;
     const lock = () => {
       // A hard navigation (signing out has to be, so the whole app resets)
       // can't carry React Router's location.state the way an in-app link
@@ -145,6 +164,15 @@ export const AuthProvider = ({ children }) => {
     };
     const resetTimer = () => {
       clearTimeout(timer);
+      clearTimeout(warnTimer);
+      // Any genuine activity — including a mousemove towards the warning
+      // itself — means somebody is there, so the warning simply goes away
+      // rather than needing to be dismissed.
+      setIdleWarning(false);
+      warnTimer = setTimeout(
+        () => setIdleWarning(true),
+        Math.max(0, INACTIVITY_LIMIT_MS - INACTIVITY_WARNING_MS)
+      );
       timer = setTimeout(lock, INACTIVITY_LIMIT_MS);
     };
 
@@ -153,6 +181,7 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       clearTimeout(timer);
+      clearTimeout(warnTimer);
       ACTIVITY_EVENTS.forEach((name) => window.removeEventListener(name, resetTimer));
     };
   }, [session]);
@@ -241,6 +270,7 @@ export const AuthProvider = ({ children }) => {
       user,
       profile,
       loading,
+      sessionReady,
       signUp,
       signIn,
       signInWithGoogle,
@@ -257,6 +287,7 @@ export const AuthProvider = ({ children }) => {
       user,
       profile,
       loading,
+      sessionReady,
       signUp,
       signIn,
       signInWithGoogle,
@@ -267,7 +298,24 @@ export const AuthProvider = ({ children }) => {
     ]
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+      {/* Deliberately not the shared Modal or confirmDialog: this has to be
+          able to dismiss ITSELF the moment any activity is detected, which a
+          promise-based dialog awaiting a button press cannot do. It is also
+          rendered by the auth provider, which sits above most of the app, so
+          keeping it self-contained avoids dragging UI imports down here. */}
+      {idleWarning ? (
+        <div className="idle-warning" role="alertdialog" aria-live="assertive">
+          <strong>{"Still there?"}</strong>
+          <span>
+            {"You'll be signed out shortly because the screen has been idle. Move the mouse or press a key to stay signed in."}
+          </span>
+        </div>
+      ) : null}
+    </AuthContext.Provider>
+  );
 };
 
 export default AuthContext;

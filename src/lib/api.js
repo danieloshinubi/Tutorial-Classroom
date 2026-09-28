@@ -866,18 +866,26 @@ export const generateDueReminders = async () => {
 // already-handled item sitting there forever. Read notifications still
 // exist in the table (nothing here deletes a row), just never fetched into
 // this list again.
-export const fetchNotifications = async ({ schoolId, courseId } = {}) => {
-  let query = supabase
-    .from("notifications")
-    .select("id, course_id, kind, title, body, link, read_at, created_at")
-    .eq("school_id", schoolId)
-    .is("read_at", null)
-    .order("created_at", { ascending: false })
-    .limit(50);
-  if (courseId) query = query.eq("course_id", courseId);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
+export const fetchNotifications = async ({ schoolId, courseId, includeRead = false } = {}) => {
+  const base = () => {
+    let query = supabase
+      .from("notifications")
+      .select("id, course_id, kind, title, body, link, read_at, created_at")
+      .eq("school_id", schoolId)
+      .order("created_at", { ascending: false });
+    if (courseId) query = query.eq("course_id", courseId);
+    return query;
+  };
+  // Unread in full (up to 50), plus — when asked — the most recent read ones
+  // as history. Two queries rather than one "latest 50 of either", so a busy
+  // week of read notifications can never push an older unread one out.
+  const [unread, read] = await Promise.all([
+    base().is("read_at", null).limit(50),
+    includeRead ? base().not("read_at", "is", null).limit(20) : Promise.resolve({ data: [] }),
+  ]);
+  if (unread.error) throw unread.error;
+  if (read.error) throw read.error;
+  return [...(unread.data || []), ...(read.data || [])];
 };
 
 export const markNotificationRead = async (id, schoolId) => {
@@ -1844,6 +1852,18 @@ export const fetchStudentMarks = async (studentId, schoolId) => {
 
 // Students this viewer is entitled to report on: their own children, the
 // students in courses they teach, or everyone if they run the school.
+// The Reports list: everyone this viewer may report on, each with the same
+// per-course rows student_report() returns, in one call (report_overview in
+// supabase/179). Run through analyse() these give the same average, hand-in
+// rate and punctuality the student's own report page shows.
+export const fetchReportOverview = async (schoolId) => {
+  const { data, error } = await supabase.rpc("report_overview", {
+    target_school: schoolId,
+  });
+  if (error) throw error;
+  return data || [];
+};
+
 export const fetchReportableStudents = async (schoolId) => {
   const { data, error } = await supabase.rpc("reportable_students", {
     target_school: schoolId,
@@ -1960,6 +1980,22 @@ export const createSession = async ({ schoolId, name, startsOn, endsOn }) => {
   return data;
 };
 
+// Correcting a session's name or dates. Previously the only way to fix a typo
+// or a wrong end date was to delete the session — which cascades to its terms,
+// and through them to anything already reported against those terms.
+export const updateSession = async ({ id, schoolId, name, startsOn, endsOn }) => {
+  const { data, error } = await supabase
+    .from("sessions")
+    .update({ name, starts_on: startsOn || null, ends_on: endsOn || null })
+    .eq("id", id)
+    .eq("school_id", schoolId)
+    .select("id, name, starts_on, ends_on, is_current")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("That session could not be updated. You may not have permission to change the calendar.");
+  return data;
+};
+
 export const deleteSession = async (id, schoolId) => {
   const { error } = await supabase
     .from("sessions")
@@ -1993,6 +2029,22 @@ export const createTerm = async ({ schoolId, sessionId, name, position, startsOn
     .select("id, name, position, is_current")
     .single();
   if (error) throw error;
+  return data;
+};
+
+// session_id is deliberately not editable here: moving a term to another
+// session would silently re-file every result, fee and attendance record
+// already reported against it. Name and dates only.
+export const updateTerm = async ({ id, schoolId, name, startsOn, endsOn }) => {
+  const { data, error } = await supabase
+    .from("terms")
+    .update({ name, starts_on: startsOn || null, ends_on: endsOn || null })
+    .eq("id", id)
+    .eq("school_id", schoolId)
+    .select("id, session_id, name, starts_on, ends_on, is_current")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("That term could not be updated. You may not have permission to change the calendar.");
   return data;
 };
 
@@ -2123,6 +2175,21 @@ export const fetchMarkableClasses = async (schoolId) => {
   return data || [];
 };
 
+// The date-and-time pickers hand back the wall-clock time the person chose,
+// with no timezone: "2026-09-27T08:00". Sent like that, Postgres (which runs
+// in UTC) reads it AS UTC, so an 08:00 lesson in Lagos was stored as 08:00
+// UTC — 09:00 Lagos — and every list then showed it an hour late. This turns
+// the chosen wall-clock time into the real instant in the device's own zone
+// before it is saved or matched. Anything already carrying a zone or "Z" is
+// passed through untouched. (Fixed before any attendance had been recorded,
+// so no stored row was written the old way.)
+const WALL_CLOCK = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/;
+export const wallClockToInstant = (value) => {
+  if (!value || !WALL_CLOCK.test(value)) return value;
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? value : at.toISOString();
+};
+
 // The roster for one class SESSION (a specific date+time, not just a day —
 // the same class can be marked more than once a day, once per period) each
 // row already carrying that session's mark if one exists. A left join done
@@ -2135,7 +2202,7 @@ export const fetchAttendanceForClass = async ({ classId, schoolId, sessionAt }) 
       .from("attendance_records")
       .select("id, student_id, status, note")
       .eq("class_id", classId)
-      .eq("session_at", sessionAt),
+      .eq("session_at", wallClockToInstant(sessionAt)),
   ]);
   if (error) throw error;
   const byStudent = new Map((marks || []).map((m) => [m.student_id, m]));
@@ -2155,7 +2222,7 @@ export const saveAttendance = async ({ schoolId, classId, sessionAt, records }) 
       records.map((r) => ({
         school_id: schoolId,
         class_id: classId,
-        session_at: sessionAt,
+        session_at: wallClockToInstant(sessionAt),
         student_id: r.student_id,
         status: r.status,
         note: r.note || null,
@@ -2236,7 +2303,7 @@ export const logSchoolAttendance = async ({ schoolId, personId, resumedAt, note 
   const { error } = await supabase.from("school_attendance_records").insert({
     school_id: schoolId,
     person_id: personId,
-    resumed_at: resumedAt,
+    resumed_at: wallClockToInstant(resumedAt),
     source: "manual",
     note: note || null,
   });
@@ -3878,9 +3945,12 @@ export const PAYMENT_METHODS = [
 
 // Row level security decides whose invoices come back: a parent gets their
 // children's, a student their own, the bursary the whole school.
+// Bills for me or my own children (or my own application), never every bill
+// my role can read: the bursary can read all of them, and an owner who opened
+// /Fees saw every family's bills as their own. See supabase/187.
 export const fetchMyInvoices = async (schoolId) => {
   const { data, error } = await supabase
-    .from("invoice_balances")
+    .from("my_invoice_balances")
     .select("*")
     .eq("school_id", schoolId)
     .order("due_on", { ascending: true, nullsFirst: false });
@@ -4016,11 +4086,90 @@ export const fetchChildTeachers = async (studentId, schoolId) => {
 /* bursary                                                                    */
 /* -------------------------------------------------------------------------- */
 
+// A school's reusable fee names — "WAEC", "PTA", "Extra coaching" — defined
+// once instead of retyped into every term's structure. Retired entries are
+// deactivated rather than deleted, because invoices already reference them.
+export const fetchFeeCatalogue = async (schoolId, { includeInactive = false } = {}) => {
+  let query = supabase
+    .from("fee_catalogue")
+    .select("id, label, default_amount, category, position, is_active")
+    .eq("school_id", schoolId)
+    .order("position")
+    .order("label");
+  if (!includeInactive) query = query.eq("is_active", true);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
+export const upsertFeeCatalogueItem = async ({ id, schoolId, label, defaultAmount, category, position, isActive }) => {
+  const row = {
+    school_id: schoolId,
+    label,
+    default_amount: defaultAmount === "" || defaultAmount == null ? null : Number(defaultAmount),
+    category: category || null,
+    position: position ?? 0,
+    is_active: isActive ?? true,
+  };
+  const query = id
+    ? supabase.from("fee_catalogue").update(row).eq("id", id)
+    : supabase.from("fee_catalogue").insert(row);
+  const { error } = await query;
+  if (error) throw error;
+};
+
+export const deleteFeeCatalogueItem = async (id) => {
+  const { error } = await supabase.from("fee_catalogue").delete().eq("id", id);
+  if (error) throw error;
+};
+
+// Named discounts — "Staff child, 50%", "Parent, 10%" — so the figure is
+// derived rather than typed per invoice. raise_invoice resolves the rule
+// against that invoice's own gross.
+export const fetchDiscountRules = async (schoolId, { includeInactive = false } = {}) => {
+  let query = supabase
+    .from("discount_rules")
+    .select("id, label, kind, value, position, is_active")
+    .eq("school_id", schoolId)
+    .order("position")
+    .order("label");
+  if (!includeInactive) query = query.eq("is_active", true);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
+export const upsertDiscountRule = async ({ id, schoolId, label, kind, value, position, isActive }) => {
+  const row = {
+    school_id: schoolId,
+    label,
+    kind,
+    value: Number(value),
+    position: position ?? 0,
+    is_active: isActive ?? true,
+  };
+  const query = id
+    ? supabase.from("discount_rules").update(row).eq("id", id)
+    : supabase.from("discount_rules").insert(row);
+  const { error } = await query;
+  if (error) throw error;
+};
+
+export const deleteDiscountRule = async (id) => {
+  const { error } = await supabase.from("discount_rules").delete().eq("id", id);
+  if (error) throw error;
+};
+
 export const fetchFeeStructures = async (schoolId) => {
   const { data, error } = await supabase
     .from("fee_structures")
+    // level_year and purpose are as load-bearing as class_id: level_year is how
+    // "SSS 3 pays WAEC" is expressed (classes.level_year, labelled by
+    // classroom.levels), and purpose is what lets a supplementary charge sit
+    // beside the term fee. Left out of this list they would simply never reach
+    // the UI, and the feature would look unbuilt while the data was correct.
     .select(
-      "id, name, term_id, session_id, class_id, due_on, notes, is_active, created_at"
+      "id, name, term_id, session_id, class_id, level_year, purpose, due_on, notes, is_active, created_at"
     )
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
@@ -4032,7 +4181,7 @@ export const fetchFeeItems = async (structureIds) => {
   if (!structureIds || structureIds.length === 0) return {};
   const { data, error } = await supabase
     .from("fee_items")
-    .select("id, structure_id, name, amount, is_optional, position")
+    .select("id, structure_id, catalogue_id, name, amount, is_optional, position")
     .in("structure_id", structureIds)
     .order("position");
   if (error) throw error;
@@ -4044,11 +4193,16 @@ export const fetchFeeItems = async (structureIds) => {
   return byStructure;
 };
 
+// classId and levelYear are mutually exclusive — a structure bills the whole
+// school (neither), one level (levelYear), or one class (classId). The database
+// enforces that with fee_structures_one_audience; this just passes it through.
 export const createFeeStructure = async ({
   schoolId,
   sessionId,
   termId,
   classId,
+  levelYear,
+  purpose,
   name,
   dueOn,
   notes,
@@ -4061,6 +4215,8 @@ export const createFeeStructure = async ({
       session_id: sessionId,
       term_id: termId,
       class_id: classId || null,
+      level_year: levelYear ?? null,
+      purpose: purpose || "term_fee",
       name,
       due_on: dueOn || null,
       notes: notes || null,
@@ -4083,7 +4239,19 @@ export const deleteFeeStructure = async (id, schoolId) => {
 
 // fee_items has no school_id of its own — verify the target structure
 // belongs to the caller's current school before inserting.
-export const addFeeItem = async ({ schoolId, structureId, name, amount, isOptional, position }) => {
+// catalogueId points the line back at the school's saved charge, so a term
+// fee made of "WAEC" is the same WAEC every other term billed rather than a
+// string that happened to be typed the same way. Null is still allowed: a
+// one-off line nobody wants in the catalogue is a real case.
+export const addFeeItem = async ({
+  schoolId,
+  structureId,
+  catalogueId,
+  name,
+  amount,
+  isOptional,
+  position,
+}) => {
   const { data: structure, error: structureError } = await supabase
     .from("fee_structures")
     .select("id")
@@ -4097,12 +4265,13 @@ export const addFeeItem = async ({ schoolId, structureId, name, amount, isOption
     .from("fee_items")
     .insert({
       structure_id: structureId,
+      catalogue_id: catalogueId || null,
       name,
       amount,
       is_optional: Boolean(isOptional),
       position: position || 0,
     })
-    .select("id, structure_id, name, amount, is_optional, position")
+    .select("id, structure_id, catalogue_id, name, amount, is_optional, position")
     .single();
   if (error) throw error;
   return data;
@@ -4150,13 +4319,24 @@ export const raiseInvoicesForClass = async (structureId) => {
   return data ?? 0;
 };
 
-export const raiseInvoice = async ({ structureId, studentId, includeOptional, discount, discountReason }) => {
+// discountRuleId wins over a hand-typed discount: raise_invoice resolves the
+// rule against the invoice's own gross and supplies the reason from the rule's
+// label, so a named discount cannot drift from the figure it produced.
+export const raiseInvoice = async ({
+  structureId,
+  studentId,
+  includeOptional,
+  discount,
+  discountReason,
+  discountRuleId,
+}) => {
   const { data, error } = await supabase.rpc("raise_invoice", {
     target_structure: structureId,
     target_student: studentId,
     include_optional: includeOptional || [],
     discount: discount || 0,
     discount_reason: discountReason || null,
+    discount_rule: discountRuleId || null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;
@@ -4165,6 +4345,152 @@ export const raiseInvoice = async ({ structureId, studentId, includeOptional, di
 export const issueInvoice = async (invoiceId) => {
   const { error } = await supabase.rpc("issue_invoice", { target_invoice: invoiceId });
   if (error) throw error;
+};
+
+// Puts one of the school's discount rules on a DRAFT invoice, or takes the
+// discount off with ruleId null. The amount is worked out by the database
+// from the invoice's own lines (supabase/181) — never sent from here — so it
+// always matches what raise_invoice would have given. Refused once issued.
+export const applyDiscountRule = async ({ invoiceId, ruleId }) => {
+  const { data, error } = await supabase.rpc("apply_discount_rule", {
+    target_invoice: invoiceId,
+    target_rule: ruleId || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+/* ------------------------------------------------------------------ store
+   The school store (supabase/182). Products are edited directly; stock only
+   ever moves through the functions — restock, adjust, sell, void — each of
+   which records the movement behind the change. */
+
+const STORE_PRODUCT_FIELDS =
+  "id, name, size, category, supplier, cost_price, trade_discount, sell_price, net_cost, unit_profit, stock_qty, reorder_level, is_active, updated_at";
+
+export const fetchStoreProducts = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("store_products")
+    .select(STORE_PRODUCT_FIELDS)
+    .eq("school_id", schoolId)
+    .order("category")
+    .order("name")
+    .order("size");
+  if (error) throw error;
+  return data || [];
+};
+
+// Name, size, category, supplier and prices. Never stock: the database
+// refuses a direct stock change (use restockStoreProduct / adjustStoreStock).
+export const saveStoreProduct = async ({ id, schoolId, ...fields }) => {
+  const row = {
+    name: fields.name,
+    size: fields.size || null,
+    category: fields.category,
+    supplier: fields.supplier || null,
+    cost_price: Number(fields.costPrice || 0),
+    trade_discount: Number(fields.tradeDiscount || 0),
+    sell_price: Number(fields.sellPrice || 0),
+    reorder_level: Number(fields.reorderLevel || 0),
+    is_active: fields.isActive ?? true,
+  };
+  const query = id
+    ? supabase.from("store_products").update(row).eq("id", id).eq("school_id", schoolId)
+    : supabase.from("store_products").insert({ ...row, school_id: schoolId });
+  const { data, error } = await query.select(STORE_PRODUCT_FIELDS).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("That item could not be saved. You may not have permission to manage the store.");
+  return data;
+};
+
+// Whether an item has ever been stocked or sold. Such an item cannot be
+// deleted (its history has to stay), so the page offers to switch it off
+// instead of showing a Delete that is bound to fail.
+export const storeProductHasHistory = async (id) => {
+  const [{ count: moves, error: e1 }, { count: sold, error: e2 }] = await Promise.all([
+    supabase.from("store_stock_movements").select("id", { count: "exact", head: true }).eq("product_id", id),
+    supabase.from("store_sale_items").select("id", { count: "exact", head: true }).eq("product_id", id),
+  ]);
+  if (e1) throw e1;
+  if (e2) throw e2;
+  return (moves || 0) + (sold || 0) > 0;
+};
+
+export const deleteStoreProduct = async (id, schoolId) => {
+  const { error } = await supabase.from("store_products").delete().eq("id", id).eq("school_id", schoolId);
+  if (error) throw error;
+};
+
+export const restockStoreProduct = async ({ productId, qty, unitCost, unitDiscount, note }) => {
+  const { data, error } = await supabase.rpc("restock_store_product", {
+    target_product: productId,
+    qty: Number(qty),
+    unit_cost: unitCost === "" || unitCost == null ? null : Number(unitCost),
+    unit_discount: unitDiscount === "" || unitDiscount == null ? null : Number(unitDiscount),
+    note: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const adjustStoreStock = async ({ productId, qtyChange, reason }) => {
+  const { data, error } = await supabase.rpc("adjust_store_stock", {
+    target_product: productId,
+    qty_change: Number(qtyChange),
+    reason,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// lines: [{ productId, qty }]. payment: cash | transfer | pos | account.
+// "account" puts it on the pupil's family's bill as a draft invoice.
+export const recordStoreSale = async ({ schoolId, studentId, buyerName, payment, lines, note }) => {
+  const { data, error } = await supabase.rpc("record_store_sale", {
+    target_school: schoolId,
+    buyer_student: studentId || null,
+    buyer_name: buyerName || null,
+    payment,
+    lines: lines.map((l) => ({ product_id: l.productId, qty: Number(l.qty) })),
+    note: note || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchStoreSales = async ({ schoolId, from, to }) => {
+  let query = supabase
+    .from("store_sales")
+    .select(
+      `id, reference, student_id, buyer_name, payment, invoice_id, total, cost_total, note, sold_at, voided_at, void_reason,
+       student:profiles!store_sales_student_id_fkey ( ${PROFILE_FIELDS} ),
+       seller:profiles!store_sales_sold_by_fkey ( first_name, surname, email ),
+       items:store_sale_items ( id, name, size, category, qty, unit_price, unit_cost ),
+       invoice:invoices!store_sales_invoice_id_fkey ( status, reference )`
+    )
+    .eq("school_id", schoolId)
+    .order("sold_at", { ascending: false });
+  if (from) query = query.gte("sold_at", from);
+  if (to) query = query.lte("sold_at", endOfDay(to));
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+};
+
+export const voidStoreSale = async ({ saleId, reason }) => {
+  const { data, error } = await supabase.rpc("void_store_sale", { target_sale: saleId, reason });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchStoreProfit = async ({ schoolId, from, to }) => {
+  const { data, error } = await supabase.rpc("store_profit", {
+    target_school: schoolId,
+    from_date: from || null,
+    to_date: to || null,
+  });
+  if (error) throw error;
+  return data || [];
 };
 
 export const cancelInvoice = async ({ invoiceId, reason }) => {
@@ -4182,7 +4508,12 @@ export const fetchSchoolInvoices = async ({ schoolId, termId }) => {
     .from("invoice_balances")
     .select("*")
     .eq("school_id", schoolId)
-    .order("balance", { ascending: false });
+    // By invoice number, newest first. Ordering by balance alone put equal
+    // balances in whatever order the database returned them, which changes
+    // when a row is updated — so issuing an invoice made rows swap places
+    // under the pointer, and a payment moved a row down the list. The
+    // reference's number is zero-padded (INV/JNC/2026/0012), so it sorts.
+    .order("reference", { ascending: false });
   if (termId) query = query.eq("term_id", termId);
   const { data, error } = await query;
   if (error) throw error;

@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabaseClient";
 import { resolveSlug } from "../lib/tenant";
 import { fetchMyApplicantAccount, createApplicantAccount } from "../lib/api";
 import { useActionFeedback } from "./Toast";
+import { AppLoading } from "./UI";
 
 // Reachable with no school_members row at this tenant — an applicant's own
 // portal, and basic account management every signed-in person needs
@@ -117,7 +118,7 @@ const ProtectedRoute = () => {
   }, [applicantStatus]);
 
   if (loading) {
-    return <p style={{ textAlign: "center", marginTop: "20%" }}>{"Loading..."}</p>;
+    return <AppLoading />;
   }
 
   if (!session) {
@@ -130,6 +131,16 @@ const ProtectedRoute = () => {
     return <Navigate to="/Set-Password" replace />;
   }
 
+  // Signed in, but the school — its branding, this person's roles, and so
+  // which dashboard and menu they get — is still on its way. This used to fall
+  // straight through to the page: noMembershipSignal below is false while the
+  // school is loading, so nothing held it back, and a parent saw the generic
+  // student dashboard until their roles arrived. Only member-only routes wait;
+  // an applicant's own portal and account pages never needed a school.
+  if (needsMembership && schoolLoading) {
+    return <AppLoading label="Loading your school..." />;
+  }
+
   if (confirmedNoMembership) {
     if (applicantStatus === "applicant") {
       return <Navigate to="/Applications" replace />;
@@ -137,14 +148,14 @@ const ProtectedRoute = () => {
     // "none" is being signed out by the effect above — session will drop
     // and the `!session` branch takes over. "unknown" is still checking.
     // Either way, render nothing rather than the member-only page.
-    return <p style={{ textAlign: "center", marginTop: "20%" }}>{"Loading..."}</p>;
+    return <AppLoading />;
   }
 
   // Still within the settle window — render nothing rather than the
   // member-only page underneath, which is exactly the broken state this
   // whole check exists to avoid ever showing.
   if (noMembershipSignal) {
-    return <p style={{ textAlign: "center", marginTop: "20%" }}>{"Loading..."}</p>;
+    return <AppLoading />;
   }
 
   return <Outlet />;

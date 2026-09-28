@@ -20,6 +20,7 @@ import {
 import { Page, Card, Field, Button, Badge, Select, DateTimePicker } from "../../Components/UI";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 import { useActionFeedback } from "../../Components/Toast";
+import { confirmDialog } from "../../Components/Confirm";
 
 const blankQuestion = (kind = "multiple_choice") => ({
   kind,
@@ -295,7 +296,7 @@ const ExamBuilder = () => {
     // Rewriting questions discards any answers already given against them, so
     // never do it silently once students have sat the paper.
     if (isEditing && attemptCount > 0) {
-      const ok = window.confirm(
+      const ok = await confirmDialog(
         `${attemptCount} student${attemptCount === 1 ? " has" : "s have"} already sat this exam. ` +
           "Changing the questions will discard their answers and scores. Continue?"
       );

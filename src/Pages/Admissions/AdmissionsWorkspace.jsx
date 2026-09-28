@@ -49,6 +49,7 @@ import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/Li
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 import { useToast } from "../../Components/Toast";
 import AdmissionLetter from "./AdmissionLetter";
+import { promptDialog } from "../../Components/Confirm";
 
 // Same field keys and labels ApplicationDashboard.jsx's own Section
 // components use for personal_info/education_history/exam_results/
@@ -435,8 +436,8 @@ const AdmissionsWorkspace = () => {
                         </Button>
                         <Button size="sm" variant="secondary"
                           disabled={busy}
-                          onClick={() => {
-                            const reason = window.prompt("Why is this being rejected?");
+                          onClick={async () => {
+                            const reason = await promptDialog({ body: "Why is this being rejected?" });
                             if (reason) run(() => rejectDocument({ docId: d.id, reason, schoolId }), "reject");
                           }}>
                           {"Reject"}
@@ -444,8 +445,8 @@ const AdmissionsWorkspace = () => {
                         {(isAdmin || isPrincipal) ? (
                           <Button size="sm" variant="ghost"
                             disabled={busy}
-                            onClick={() => {
-                              const reason = window.prompt("Why is this being waived?");
+                            onClick={async () => {
+                              const reason = await promptDialog({ body: "Why is this being waived?" });
                               if (reason) run(() => waiveDocument({ docId: d.id, reason, schoolId }), "waive");
                             }}>
                             {"Waive"}
@@ -505,15 +506,15 @@ const AdmissionsWorkspace = () => {
                       {"Pass"}
                     </Button>
                     <Button size="sm" variant="secondary" disabled={busy}
-                      onClick={() => {
-                        const note = window.prompt("Reason?");
+                      onClick={async () => {
+                        const note = await promptDialog({ body: "Reason?" });
                         if (note) run(() => setScreeningItemStatus({ itemId: item.id, schoolId, status: "failed", note }), "fail");
                       }}>
                       {"Fail"}
                     </Button>
                     <Button size="sm" variant="ghost" disabled={busy}
-                      onClick={() => {
-                        const note = window.prompt("Waiver reason?");
+                      onClick={async () => {
+                        const note = await promptDialog({ body: "Waiver reason?" });
                         if (note) run(() => setScreeningItemStatus({ itemId: item.id, schoolId, status: "waived", note }), "waive");
                       }}>
                       {"Waive"}
@@ -585,8 +586,8 @@ const AdmissionsWorkspace = () => {
                 {iv.status === "scheduled" ? (
                   <div style={{ marginTop: 8 }}>
                     <Button size="sm" variant="secondary" disabled={busy}
-                      onClick={() => {
-                        const outcome = window.prompt("Outcome (pass, fail, inconclusive)?");
+                      onClick={async () => {
+                        const outcome = await promptDialog({ body: "Outcome (pass, fail, inconclusive)?" });
                         if (outcome) run(() => recordInterviewOutcome({
                           interviewId: iv.id, schoolId, status: "completed", outcome
                         }), "record outcome");
@@ -651,8 +652,8 @@ const AdmissionsWorkspace = () => {
                       {"Record acceptance"}
                     </Button>
                     <Button size="sm" variant="secondary" disabled={busy}
-                      onClick={() => {
-                        const note = window.prompt("Reason for declining? (optional)");
+                      onClick={async () => {
+                        const note = await promptDialog({ body: "Reason for declining? (optional)" });
                         if (note !== null) run(() => recordOfferResponse({ offerId: offer.id, response: "declined", note: note || undefined, schoolId }), "record decline");
                       }}>
                       {"Record decline"}
@@ -764,16 +765,16 @@ const AdmissionsWorkspace = () => {
                         {"Clear"}
                       </Button>
                       <Button size="sm" variant="secondary" disabled={busy}
-                        onClick={() => {
-                          const note = window.prompt("Why is this being rejected?");
+                        onClick={async () => {
+                          const note = await promptDialog({ body: "Why is this being rejected?" });
                           if (note) run(() => setClearanceStatus({ checklistId: item.id, schoolId, status: "rejected", note }), "reject");
                         }}>
                         {"Reject"}
                       </Button>
                       {(isAdmin || isPrincipal) ? (
                         <Button size="sm" variant="ghost" disabled={busy}
-                          onClick={() => {
-                            const note = window.prompt("Waiver reason?");
+                          onClick={async () => {
+                            const note = await promptDialog({ body: "Waiver reason?" });
                             if (note) run(() => setClearanceStatus({ checklistId: item.id, schoolId, status: "waived", note }), "waive");
                           }}>
                           {"Waive"}

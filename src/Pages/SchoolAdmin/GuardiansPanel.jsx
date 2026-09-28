@@ -18,6 +18,7 @@ import {
   displayName,
   initials,
 } from "../../Components/UI";
+import { confirmDialog } from "../../Components/Confirm";
 
 // Links a parent account to the children it may see. Without a link a parent
 // sees nothing, which is the safe default — a guardian's access to a child's
@@ -99,7 +100,7 @@ const GuardiansPanel = () => {
 
   const handleUnlink = async (link, parentName) => {
     if (
-      !window.confirm(
+      !await confirmDialog(
         `Stop ${parentName} seeing ${displayName(link.student)}'s reports?`
       )
     ) {

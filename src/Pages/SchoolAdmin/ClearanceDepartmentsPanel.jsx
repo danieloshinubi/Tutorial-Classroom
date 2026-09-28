@@ -10,6 +10,7 @@ import {
 } from "../../lib/api";
 import { Card, Field, Button, Badge, Empty, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { confirmDialog } from "../../Components/Confirm";
 
 // Who has to sign off before an accepted applicant clears — Bursary, the
 // Library, Hostel, whatever this school actually runs people through before
@@ -104,7 +105,7 @@ const ClearanceDepartmentsPanel = () => {
     const warning = used
       ? `"${row.name}" is already on ${used} application${used === 1 ? "" : "s"}' clearance checklists. Deleting it removes those checklist entries too. This cannot be undone.`
       : `Delete "${row.name}"?`;
-    if (!window.confirm(warning)) return;
+    if (!await confirmDialog(warning)) return;
 
     setBusy(true);
     try {

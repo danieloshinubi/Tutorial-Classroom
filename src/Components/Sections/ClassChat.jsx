@@ -18,6 +18,7 @@ import { Card, Button, displayName } from "../UI";
 import Reactions from "../Reactions";
 import EmojiInput from "../EmojiInput";
 import { useActionFeedback } from "../Toast";
+import { confirmDialog } from "../Confirm";
 
 // A textarea that grows with what is being typed, so a long announcement is
 // visible while it is written instead of scrolling inside two lines.
@@ -247,7 +248,7 @@ const ClassChat = ({ courseId, schoolId }) => {
   };
 
   const removeMessage = async (message) => {
-    if (!window.confirm("Delete this post and its comments?")) return;
+    if (!await confirmDialog("Delete this post and its comments?")) return;
     setError("");
     try {
       await deleteMessage({ id: message.id, schoolId });
@@ -276,7 +277,7 @@ const ClassChat = ({ courseId, schoolId }) => {
   };
 
   const removeComment = async (comment) => {
-    if (!window.confirm("Delete this comment?")) return;
+    if (!await confirmDialog("Delete this comment?")) return;
     try {
       await deleteComment({ id: comment.id, schoolId });
       setComments((current) => ({

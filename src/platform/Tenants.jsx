@@ -17,6 +17,7 @@ import {
 } from "../Components/UI";
 import { downloadCsv } from "../lib/csv";
 import { useActionFeedback } from "../Components/Toast";
+import { confirmDialog } from "../Components/Confirm";
 
 // A slug becomes a hostname, so it has to be safe to put in one.
 const slugify = (value) =>
@@ -100,7 +101,7 @@ const Tenants = () => {
     const suspending = tenant.is_active;
     if (
       suspending &&
-      !window.confirm(
+      !await confirmDialog(
         `Suspend ${tenant.name}? Everyone at that school loses access until it is reactivated.`
       )
     ) {

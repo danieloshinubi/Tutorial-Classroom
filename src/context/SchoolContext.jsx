@@ -25,7 +25,7 @@ export const useSchool = () => {
 // of it. Everything downstream scopes its queries with `school.id`; row level
 // security is what actually enforces the boundary.
 export const SchoolProvider = ({ children }) => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, sessionReady } = useAuth();
   // The id is stable across token refreshes; the user object is not.
   const userId = user?.id ?? null;
   const slug = useMemo(() => resolveSlug(), []);
@@ -70,38 +70,37 @@ export const SchoolProvider = ({ children }) => {
     if (firstTime) setLoading(true);
     setError("");
     try {
-      const { data: schoolRow, error: schoolError } = await supabase
-        .from("schools")
-        .select(
-          // disabled_modules drives the navigation and every route guard
-          // (see modulesFor/canUseModule). It is an explicit column list, so
-          // leaving it out here does not fail loudly — the school simply
-          // loads without it, disabledModules reads as empty, and every
-          // module stays visible however the admin sets them.
-          `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active,
-           disabled_modules,
-           signature_url, signatory_name, signatory_title,
-           admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
-        )
-        .eq("slug", slug)
-        .maybeSingle();
-
-      if (schoolError) throw schoolError;
-
-      // RLS hides schools you do not belong to, so "not found" and "not a
-      // member" arrive the same way. Say so plainly rather than guessing.
-      if (!schoolRow) {
-        setSchool(null);
-        setError(`You do not have access to ${slug}.schoolivio.com.`);
-        return;
-      }
-      setSchool(schoolRow);
-
-      const [{ data: mine }, { data: all }, { data: platform }] = await Promise.all([
+      // One round trip, not three. This used to fetch the school, THEN its
+      // memberships, THEN its levels — each waiting on the one before for the
+      // school's id — at about 0.65s per trip, on every page load, before
+      // anything could show. The queries that needed the id now find the
+      // school by its slug through a join instead, so all five go at once.
+      const [
+        { data: schoolRow, error: schoolError },
+        { data: mineRow },
+        { data: all },
+        { data: platform },
+        { data: levelRows },
+      ] = await Promise.all([
+        supabase
+          .from("schools")
+          .select(
+            // disabled_modules drives the navigation and every route guard
+            // (see modulesFor/canUseModule). It is an explicit column list, so
+            // leaving it out here does not fail loudly — the school simply
+            // loads without it, disabledModules reads as empty, and every
+            // module stays visible however the admin sets them.
+            `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active,
+             disabled_modules,
+             signature_url, signatory_name, signatory_title,
+             admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
+          )
+          .eq("slug", slug)
+          .maybeSingle(),
         supabase
           .from("school_members")
-          .select("id, role, is_active")
-          .eq("school_id", schoolRow.id)
+          .select("id, role, is_active, schools!inner ( slug )")
+          .eq("schools.slug", slug)
           .eq("user_id", userId)
           .maybeSingle(),
         supabase
@@ -114,15 +113,28 @@ export const SchoolProvider = ({ children }) => {
           .select("user_id")
           .eq("user_id", userId)
           .maybeSingle(),
+        // The school's own class names — "JSS 1", "Year 7", whatever they use.
+        supabase
+          .from("levels")
+          .select("year, label, schools!inner ( slug )")
+          .eq("schools.slug", slug)
+          .order("year"),
       ]);
 
-      // The school's own class names — "JSS 1", "Year 7", whatever they use.
-      const { data: levelRows } = await supabase
-        .from("levels")
-        .select("year, label")
-        .eq("school_id", schoolRow.id)
-        .order("year");
-      setLevels(levelRows || []);
+      if (schoolError) throw schoolError;
+
+      // RLS hides schools you do not belong to, so "not found" and "not a
+      // member" arrive the same way. Say so plainly rather than guessing.
+      if (!schoolRow) {
+        setSchool(null);
+        setError(`You do not have access to ${slug}.schoolivio.com.`);
+        return;
+      }
+      setSchool(schoolRow);
+      // The join columns are dropped so these keep exactly the shape the rest
+      // of the app has always received.
+      setLevels((levelRows || []).map(({ year, label }) => ({ year, label })));
+      const mine = mineRow ? { id: mineRow.id, role: mineRow.role, is_active: mineRow.is_active } : null;
 
       // A person who signed themselves up has no membership yet. Ask the
       // database to add them as a student — it refuses if the school is
@@ -143,9 +155,12 @@ export const SchoolProvider = ({ children }) => {
     }
   }, [userId, slug]);
 
+  // Starts once the session is known, alongside the profile rather than after
+  // it: this needs only the user id. (Consumers still see `loading` until
+  // both have finished — see the value below.)
   useEffect(() => {
-    if (!authLoading) load();
-  }, [authLoading, load]);
+    if (sessionReady) load();
+  }, [sessionReady, load]);
 
   // Recolours the tab (CSS variables), swaps the favicon and sets the tab
   // title for this tenant — covers every page a signed-in member ever sees,

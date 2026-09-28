@@ -30,7 +30,7 @@ const Notifications = () => {
     // current even where pg_cron is not running.
     generateDueReminders()
       .catch(() => {})
-      .then(() => fetchNotifications({ schoolId }))
+      .then(() => fetchNotifications({ schoolId, includeRead: true }))
       .then(setItems)
       .catch(() => setItems([]));
   }, [user, schoolId]);
@@ -59,23 +59,47 @@ const Notifications = () => {
     return () => document.removeEventListener("mousedown", onClick);
   }, [open]);
 
-  // fetchNotifications only ever returns unread rows, so every item here is
-  // pending by definition — the count is just the list length.
-  const unread = items.length;
+  // Read notifications stay, under "Earlier". They used to vanish the moment
+  // they were opened, so a parent who tapped "First Term fees for Ada" had
+  // no way back to it — nothing on the page said what the bill was for, and
+  // the notification was the only record of it arriving.
+  const pending = items.filter((row) => !row.read_at);
+  const earlier = items.filter((row) => row.read_at);
+  const unread = pending.length;
 
   const openItem = async (item) => {
     setOpen(false);
-    // Attended to — drop it rather than leaving it sitting there read but
-    // still listed.
-    setItems((current) => current.filter((row) => row.id !== item.id));
-    markNotificationRead(item.id, schoolId).catch(() => load());
+    if (!item.read_at) {
+      const now = new Date().toISOString();
+      setItems((current) => current.map((row) => (row.id === item.id ? { ...row, read_at: now } : row)));
+      markNotificationRead(item.id, schoolId).catch(() => load());
+    }
     if (item.link) navigate(item.link);
   };
 
   const readAll = async () => {
-    setItems([]);
+    const now = new Date().toISOString();
+    setItems((current) => current.map((row) => (row.read_at ? row : { ...row, read_at: now })));
     markAllNotificationsRead(user.id, schoolId).catch(() => load());
   };
+
+  const renderItem = (item) => (
+    <button
+      key={item.id}
+      type="button"
+      className={`notif-item${item.read_at ? "" : " unread"}`}
+      onClick={() => openItem(item)}
+    >
+      {/* An unread dot on the left, so the row that needs a look
+          reads at a glance without colouring the whole card. */}
+      <span className="notif-dot" aria-hidden="true" />
+      <span className="notif-body">
+        <span className="notif-title">{item.title}</span>
+        {item.body ? <span className="notif-desc">{item.body}</span> : null}
+        <span className="notif-time">{formatDate(item.created_at)}</span>
+      </span>
+    </button>
+  );
 
   if (!user) return null;
 
@@ -152,29 +176,25 @@ const Notifications = () => {
                     />
                   </svg>
                 </span>
-                <p>{"Nothing new."}</p>
+                <p>{"Nothing yet."}</p>
                 <p className="notif-empty-hint">
-                  {"Announcements, join requests and due-soon reminders show up here."}
+                  {"Bills, announcements, join requests and due-soon reminders show up here."}
                 </p>
               </div>
             ) : (
-              items.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className="notif-item unread"
-                  onClick={() => openItem(item)}
-                >
-                  {/* An unread dot on the left, so the row that needs a look
-                      reads at a glance without colouring the whole card. */}
-                  <span className="notif-dot" aria-hidden="true" />
-                  <span className="notif-body">
-                    <span className="notif-title">{item.title}</span>
-                    {item.body ? <span className="notif-desc">{item.body}</span> : null}
-                    <span className="notif-time">{formatDate(item.created_at)}</span>
-                  </span>
-                </button>
-              ))
+              <>
+                {pending.length === 0 ? (
+                  <p className="notif-caught-up">{"You're all caught up."}</p>
+                ) : (
+                  pending.map(renderItem)
+                )}
+                {earlier.length ? (
+                  <>
+                    <div className="notif-section">{"Earlier"}</div>
+                    {earlier.map(renderItem)}
+                  </>
+                ) : null}
+              </>
             )}
           </div>
         </div>

@@ -182,7 +182,7 @@ const STATS = [
   { value: "3 min", label: "Average offer turnaround" },
   { value: "100%",  label: "Actions logged to audit trail" },
   { value: "5",     label: "Modules in one workspace" },
-  { value: "45d",   label: "Free trial, no card needed" },
+  { value: "30d",   label: "Free trial, no card needed" },
 ];
 
 const FEATURES = [
@@ -512,7 +512,7 @@ const Hero = () => {
               {"Book a demo"}
             </a>
           </div>
-          <p className="mkt-hero-fine">{"45-day free trial · No credit card required · Configure it your way from day one"}</p>
+          <p className="mkt-hero-fine">{"30-day free trial · No credit card required · Configure it your way from day one"}</p>
         </div>
 
         {/* Mockup + floating stat cards */}
@@ -893,7 +893,7 @@ const FinalCta = () => (
 
           <ul className="mkt-final-bullets">
             {[
-              ["45-day free trial", "y"],
+              ["30-day free trial", "y"],
               ["No credit card",    "lv"],
               ["Setup in minutes",  "g"],
             ].map(([label, tone]) => (
@@ -920,7 +920,7 @@ const FinalCta = () => (
             </a>
           </div>
           <p className="mkt-final-fine">
-            {"No long-term commitment. 45 days free — talk to our team whenever you need help getting started."}
+            {"No long-term commitment. 30 days free — talk to our team whenever you need help getting started."}
           </p>
         </div>
       </div>

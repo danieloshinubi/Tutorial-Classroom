@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { eyeOff } from "react-icons-kit/feather/eyeOff";
@@ -8,6 +8,7 @@ import GoogleButton from "../../Components/GoogleButton";
 import { useAuth } from "../../context/AuthContext";
 import { Field, Button, Notice } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { lastUserId } from "../../lib/lastUser";
 
 const Login = () => {
   const { signIn, session } = useAuth();
@@ -32,7 +33,17 @@ const Login = () => {
   const safeFromParam = fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//")
     ? fromParam
     : null;
-  const redirectTo = location.state?.from?.pathname || safeFromParam || "/Dashboard";
+  // The whole address, query included: coming back to /Store without its
+  // ?tab=items after a sign-in put you on the wrong tab.
+  const fromState = location.state?.from;
+  const redirectTo = (fromState?.pathname ? fromState.pathname + (fromState.search || "") : null) || safeFromParam || "/Dashboard";
+  // Read once, before anyone signs in here: whoever had this device last.
+  // redirectTo is only for them (or for a device nobody has used yet, so a
+  // link from an email still lands where it points); anyone else starts on
+  // their own Dashboard, never on the last person's page.
+  const previousUserRef = useRef(lastUserId());
+  const destinationFor = (userId) =>
+    !previousUserRef.current || previousUserRef.current === userId ? redirectTo : "/Dashboard";
   const [email, setEmail] = useState(params.get("email") || "");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
@@ -41,7 +52,8 @@ const Login = () => {
 
   // Someone already signed in should not sit on the login screen.
   useEffect(() => {
-    if (session) navigate(redirectTo, { replace: true });
+    if (session) navigate(destinationFor(session.user?.id), { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, navigate, redirectTo]);
 
   const handleSubmit = async (event) => {
@@ -55,8 +67,8 @@ const Login = () => {
 
     setSubmitting(true);
     try {
-      await signIn({ email: email.trim(), password });
-      navigate(redirectTo, { replace: true });
+      const result = await signIn({ email: email.trim(), password });
+      navigate(destinationFor(result?.user?.id), { replace: true });
     } catch (err) {
       // Supabase says "Invalid login credentials" for both a wrong password
       // and an unknown address. Say what to do instead of restating that.
@@ -104,7 +116,7 @@ const Login = () => {
         ) : null}
         {params.get("reason") === "inactivity" ? (
           <Notice tone="muted">
-            {"You were signed out after 7 minutes of inactivity. Sign in again to continue."}
+            {"You were signed out after 10 minutes of inactivity. Sign in again to continue."}
           </Notice>
         ) : null}
         <Field label="Email">

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { todayISO } from "../lib/dates";
 import { Link } from "react-router-dom";
 import {
   fetchAllBillingRecords,
@@ -21,7 +22,7 @@ const AddRecordModal = ({ schools, onClose, onDone }) => {
     plan: "basic",
     amount: "",
     currency: "NGN",
-    periodStart: new Date().toISOString().slice(0, 10),
+    periodStart: todayISO(),
     periodEnd: "",
     status: "pending",
     note: "",
