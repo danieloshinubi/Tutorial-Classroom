@@ -4129,7 +4129,7 @@ export const deleteFeeCatalogueItem = async (id) => {
 export const fetchDiscountRules = async (schoolId, { includeInactive = false } = {}) => {
   let query = supabase
     .from("discount_rules")
-    .select("id, label, kind, value, position, is_active")
+    .select("id, label, kind, value, position, is_active, items:discount_rule_items(catalogue_id, kind, value)")
     .eq("school_id", schoolId)
     .order("position")
     .order("label");
@@ -4139,20 +4139,33 @@ export const fetchDiscountRules = async (schoolId, { includeInactive = false } =
   return data || [];
 };
 
-export const upsertDiscountRule = async ({ id, schoolId, label, kind, value, position, isActive }) => {
+// items: the particular fees it comes off, [{ catalogueId, kind, value }]
+// (supabase/191). Left out, the fees it covers are not touched; an empty list
+// makes it a whole-bill discount again.
+export const upsertDiscountRule = async ({ id, schoolId, label, kind, value, position, isActive, items }) => {
+  const itemised = Array.isArray(items) && items.length > 0;
   const row = {
     school_id: schoolId,
     label,
-    kind,
-    value: Number(value),
+    // An itemised rule takes its figures from its fees; its own are unused.
+    kind: itemised ? "percent" : kind,
+    value: itemised ? 0 : Number(value),
     position: position ?? 0,
     is_active: isActive ?? true,
   };
   const query = id
-    ? supabase.from("discount_rules").update(row).eq("id", id)
-    : supabase.from("discount_rules").insert(row);
-  const { error } = await query;
+    ? supabase.from("discount_rules").update(row).eq("id", id).select("id").single()
+    : supabase.from("discount_rules").insert(row).select("id").single();
+  const { data, error } = await query;
   if (error) throw error;
+  if (items === undefined) return;
+  const { error: clearError } = await supabase.from("discount_rule_items").delete().eq("rule_id", data.id);
+  if (clearError) throw clearError;
+  if (!itemised) return;
+  const { error: itemsError } = await supabase.from("discount_rule_items").insert(
+    items.map((it) => ({ rule_id: data.id, catalogue_id: it.catalogueId, kind: it.kind, value: Number(it.value) }))
+  );
+  if (itemsError) throw itemsError;
 };
 
 export const deleteDiscountRule = async (id) => {
@@ -4351,6 +4364,17 @@ export const issueInvoice = async (invoiceId) => {
 // discount off with ruleId null. The amount is worked out by the database
 // from the invoice's own lines (supabase/181) — never sent from here — so it
 // always matches what raise_invoice would have given. Refused once issued.
+// What a discount would come to on this bill, worked out by the database from
+// the bill's own lines, the same way applying it does.
+export const previewDiscount = async ({ invoiceId, ruleId }) => {
+  const { data, error } = await supabase.rpc("preview_discount", {
+    target_invoice: invoiceId,
+    target_rule: ruleId,
+  });
+  if (error) throw error;
+  return Number(data || 0);
+};
+
 export const applyDiscountRule = async ({ invoiceId, ruleId }) => {
   const { data, error } = await supabase.rpc("apply_discount_rule", {
     target_invoice: invoiceId,
@@ -5247,4 +5271,42 @@ export const saveOpeningBalances = async ({ schoolId, lines }) => {
   });
   if (error) throw error;
   return data;
+};
+
+// ------------------------------------------------------------------ push --
+// This device's web-push subscription, and the chat-email preference
+// (supabase/190). Used by src/lib/push.js and Account settings.
+
+export const savePushSubscription = async ({ endpoint, p256dh, auth, schoolId = null, userAgent = null }) => {
+  const { error } = await supabase.rpc("save_push_subscription", {
+    endpoint_in: endpoint,
+    p256dh_in: p256dh,
+    auth_in: auth,
+    school_in: schoolId,
+    agent_in: userAgent,
+  });
+  if (error) throw error;
+};
+
+export const forgetMyPushSubscription = async (endpoint) => {
+  const { error } = await supabase.from("push_subscriptions").delete().eq("endpoint", endpoint);
+  if (error) throw error;
+};
+
+// How many devices this person has notifications on for, across the app.
+export const countMyPushDevices = async () => {
+  const { count, error } = await supabase.from("push_subscriptions").select("id", { count: "exact", head: true });
+  if (error) throw error;
+  return count || 0;
+};
+
+export const fetchNotificationPrefs = async () => {
+  const { data, error } = await supabase.from("notification_prefs").select("chat_email").maybeSingle();
+  if (error) throw error;
+  return { chatEmail: data ? data.chat_email : true };
+};
+
+export const saveNotificationPrefs = async ({ chatEmail }) => {
+  const { error } = await supabase.rpc("save_notification_prefs", { chat_email_in: chatEmail });
+  if (error) throw error;
 };

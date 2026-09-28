@@ -25,6 +25,7 @@ import Notifications from "../Notifications";
 import AccountMenu from "./AccountMenu";
 import GlobalSearch from "../GlobalSearch";
 import Logo from "../Logo";
+import PushPrompt from "../PushPrompt";
 import { modulesFor, groupModules } from "../../lib/modules";
 import { fetchChatOverview, subscribeToMyChannels, subscribeToSchoolChatActivity } from "../../lib/api";
 
@@ -145,6 +146,8 @@ const Navbar = () => {
 
   return (
     <>
+      {/* Asks once per device to turn on instant notifications. */}
+      <PushPrompt />
       {/* The drawer's backdrop on small screens. */}
       {open ? <button type="button" className="scrim" aria-label="Close menu" onClick={() => setOpen(false)} /> : null}
 

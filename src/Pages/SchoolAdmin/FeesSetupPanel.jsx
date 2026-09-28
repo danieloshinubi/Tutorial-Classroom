@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Card, Field, Button, Tabs, Select, MoneyInput } from "../../Components/UI";
+import { Card, Field, Button, Tabs, Select, MoneyInput, Switch } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { useConfirm } from "../../Components/Confirm";
 import { useSchool } from "../../context/SchoolContext";
@@ -190,7 +190,7 @@ const FeeCatalogue = ({ schoolId, currency }) => {
         <p style={editingLine}>
           {draft.id ? `Editing “${rows.find((r) => r.id === draft.id)?.label || draft.label}”` : ""}
         </p>
-        <div style={formGrid}>
+        <div className="fs-form-grid" style={formGrid}>
           <Field label="Charge">
             <input
               className="input"
@@ -288,11 +288,17 @@ const FeeCatalogue = ({ schoolId, currency }) => {
 
 /* ---------------------------------------------------------------- discounts */
 
-const blankRule = { id: null, label: "", kind: "percent", value: "", isActive: true };
+// "items" is not a kind the database stores: it means the rule lists the
+// particular charges it comes off, each with its own figure (supabase/191).
+const blankRule = { id: null, label: "", kind: "percent", value: "", isActive: true, items: {} };
+
+const itemsFromRow = (row) =>
+  Object.fromEntries((row.items || []).map((it) => [it.catalogue_id, { kind: it.kind, value: String(Number(it.value)) }]));
 
 const DiscountRules = ({ schoolId, currency }) => {
   const money = useMoney(currency);
   const [rows, setRows] = useState([]);
+  const [fees, setFees] = useState([]);
   const [draft, setDraft] = useState(blankRule);
   // Toasts, not an inline Notice: the message pops in the corner instead of
   // appearing above the form and shoving every field down as it renders.
@@ -305,9 +311,25 @@ const DiscountRules = ({ schoolId, currency }) => {
     fetchDiscountRules(schoolId, { includeInactive: true })
       .then(setRows)
       .catch((err) => setError(err.message || "Could not load discounts."));
+    fetchFeeCatalogue(schoolId, { includeInactive: true })
+      .then(setFees)
+      .catch(() => setFees([]));
   }, [schoolId, setError]);
 
   useEffect(load, [load]);
+
+  const feeName = (id) => fees.find((f) => f.id === id)?.label || "a removed charge";
+
+  const toggleFee = (id, on) =>
+    setDraft((d) => {
+      const items = { ...d.items };
+      if (on) items[id] = items[id] || { kind: "percent", value: "" };
+      else delete items[id];
+      return { ...d, items };
+    });
+
+  const editFee = (id, patch) =>
+    setDraft((d) => ({ ...d, items: { ...d.items, [id]: { ...d.items[id], ...patch } } }));
 
   const edit = (patch) => {
     setError("");
@@ -332,20 +354,52 @@ const DiscountRules = ({ schoolId, currency }) => {
       if (!ok) return;
     }
     setError("");
-    setDraft({ id: row.id, label: row.label, kind: row.kind, value: row.value, isActive: row.is_active });
+    const items = itemsFromRow(row);
+    const itemisedRow = Object.keys(items).length > 0;
+    setDraft({
+      id: row.id,
+      label: row.label,
+      kind: itemisedRow ? "items" : row.kind,
+      value: itemisedRow ? "" : row.value,
+      isActive: row.is_active,
+      items,
+    });
   };
+
+  const chosen = Object.entries(draft.items);
+  const itemised = draft.kind === "items";
+  const ready = Boolean(
+    draft.label.trim() &&
+      (itemised ? chosen.length > 0 && chosen.every(([, it]) => it.value !== "") : draft.value !== "")
+  );
 
   const save = async (event) => {
     event?.preventDefault();
-    if (!draft.label.trim() || draft.value === "") return;
-    if (draft.kind === "percent" && Number(draft.value) > 100) {
+    if (!ready) return;
+    if (!itemised && draft.kind === "percent" && Number(draft.value) > 100) {
       setError("A percentage discount can't be more than 100.");
+      return;
+    }
+    if (itemised && chosen.some(([, it]) => it.kind === "percent" && Number(it.value) > 100)) {
+      setError("A percentage can't be more than 100.");
+      return;
+    }
+    if (itemised && chosen.some(([, it]) => !(Number(it.value) > 0))) {
+      setError("Give each chosen charge an amount or percentage above 0, or switch it off.");
       return;
     }
     setBusy(true);
     setError("");
     try {
-      await upsertDiscountRule({ ...draft, schoolId, label: draft.label.trim() });
+      await upsertDiscountRule({
+        id: draft.id,
+        schoolId,
+        label: draft.label.trim(),
+        kind: draft.kind,
+        value: draft.value,
+        isActive: draft.isActive,
+        items: itemised ? chosen.map(([catalogueId, it]) => ({ catalogueId, kind: it.kind, value: it.value })) : [],
+      });
       setDraft(blankRule);
       load();
     } catch (err) {
@@ -392,10 +446,25 @@ const DiscountRules = ({ schoolId, currency }) => {
     }
   };
 
+  const figure = (kind, value) => (kind === "percent" ? `${Number(value)}%` : money(value));
+  const takesOff = (row) =>
+    row.items?.length
+      ? row.items
+          .map((it) =>
+            it.kind === "percent" && Number(it.value) === 100
+              ? `${feeName(it.catalogue_id)} free`
+              : `${figure(it.kind, it.value)} off ${feeName(it.catalogue_id)}`
+          )
+          .join(" · ")
+      : `${figure(row.kind, row.value)} off the whole bill`;
+
+  // Switched-off charges are offered only if this rule already uses them.
+  const pickable = fees.filter((f) => f.is_active || draft.items[f.id]);
+
   return (
     <Card>
       <p style={intro}>
-        {"Discounts the school gives — a staff child, a second sibling, a parent who works here. Defined once, the amount is worked out from the bill itself, so nobody calculates it per invoice."}
+        {"Discounts the school gives — a staff child, a second sibling, a parent who works here. Defined once, the amount is worked out from the bill itself, so nobody calculates it per invoice. A discount can come off the whole bill, or off particular charges only, such as 50% off tuition and 40% off the party."}
       </p>
 
       <form onSubmit={save}>
@@ -404,7 +473,7 @@ const DiscountRules = ({ schoolId, currency }) => {
         <p style={editingLine}>
           {draft.id ? `Editing “${rows.find((r) => r.id === draft.id)?.label || draft.label}”` : ""}
         </p>
-        <div style={formGrid}>
+        <div className="fs-form-grid" style={formGrid}>
           <Field label="Discount">
             <input
               className="input"
@@ -413,16 +482,24 @@ const DiscountRules = ({ schoolId, currency }) => {
               onChange={(e) => edit({ label: e.target.value })}
             />
           </Field>
-          <Field label="Type">
+          <Field label="Comes off">
             <Select
               value={draft.kind}
               onChange={changeKind}
               options={[
-                { value: "percent", label: "Percentage off" },
-                { value: "fixed", label: "Fixed amount off" },
+                { value: "percent", label: "Whole bill, percentage" },
+                { value: "fixed", label: "Whole bill, fixed amount" },
+                { value: "items", label: "Particular charges" },
               ]}
             />
           </Field>
+          {itemised ? (
+            <Field label="Charges">
+              <p style={{ margin: 0, padding: "9px 0", fontSize: 13, color: "var(--ink-3)" }}>
+                {chosen.length ? `${chosen.length} chosen below` : "Choose them below"}
+              </p>
+            </Field>
+          ) : (
           <Field label={draft.kind === "percent" ? "Percent (max 100)" : "Amount"}>
             {draft.kind === "percent" ? (
               <input
@@ -443,8 +520,9 @@ const DiscountRules = ({ schoolId, currency }) => {
               />
             )}
           </Field>
+          )}
           <div className="btn-row">
-            <Button type="submit" size="sm" disabled={!draft.label.trim() || draft.value === "" || busy}>
+            <Button type="submit" size="sm" disabled={!ready || busy}>
               {busy ? "Saving..." : draft.id ? "Save" : "Add"}
             </Button>
             {draft.id ? (
@@ -454,6 +532,58 @@ const DiscountRules = ({ schoolId, currency }) => {
             ) : null}
           </div>
         </div>
+
+        {itemised ? (
+          pickable.length === 0 ? (
+            <p style={{ ...emptyNote, marginBottom: 18 }}>
+              {"Add the school's charges on the Charges tab first, then choose which ones this discount comes off."}
+            </p>
+          ) : (
+            <div className="dr-fees">
+              {pickable.map((f) => {
+                const it = draft.items[f.id];
+                return (
+                  <div key={f.id} className={`dr-fee${it ? " is-on" : ""}`}>
+                    <Switch compact checked={Boolean(it)} onChange={(on) => toggleFee(f.id, on)} label={f.label} />
+                    {it ? (
+                      <div className="dr-fee-figure">
+                        <Select
+                          value={it.kind}
+                          onChange={(kind) => editFee(f.id, { kind, value: "" })}
+                          options={[
+                            { value: "percent", label: "% off" },
+                            { value: "fixed", label: "Amount off" },
+                          ]}
+                        />
+                        {it.kind === "percent" ? (
+                          <input
+                            className="input"
+                            type="number"
+                            min="1"
+                            max="100"
+                            step="1"
+                            placeholder="50"
+                            aria-label={`Percent off ${f.label}`}
+                            value={it.value}
+                            onChange={(e) => editFee(f.id, { value: e.target.value })}
+                          />
+                        ) : (
+                          <MoneyInput
+                            placeholder="5,000"
+                            aria-label={`Amount off ${f.label}`}
+                            value={it.value}
+                            onChange={(raw) => editFee(f.id, { value: raw })}
+                          />
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+              <p className="dr-hint">{"100% makes that charge free. Charges left off are billed in full."}</p>
+            </div>
+          )
+        ) : null}
       </form>
 
       {rows.length === 0 ? (
@@ -462,8 +592,8 @@ const DiscountRules = ({ schoolId, currency }) => {
         <div className="table-wrap table-wrap-plain">
           <table className="data" style={fixedTable}>
             <colgroup>
+              <col style={{ width: "28%" }} />
               <col />
-              <col style={{ width: 160 }} />
               <col style={{ width: 250 }} />
             </colgroup>
             <thead>
@@ -485,9 +615,7 @@ const DiscountRules = ({ schoolId, currency }) => {
                       <span style={{ marginLeft: 8, fontSize: 12, color: "var(--ink-3)" }}>{"(off)"}</span>
                     )}
                   </td>
-                  <td style={row.is_active ? undefined : dimCell}>
-                    {row.kind === "percent" ? `${Number(row.value)}%` : money(row.value)}
-                  </td>
+                  <td style={{ ...(row.is_active ? {} : dimCell), whiteSpace: "normal" }}>{takesOff(row)}</td>
                   <td>
                     <div className="btn-row">
                       <Button size="sm" variant="secondary" onClick={() => startEdit(row)}>{"Edit"}</Button>

@@ -27,6 +27,7 @@ import {
   fetchCollectionSummary,
   fetchDiscountRules,
   applyDiscountRule,
+  previewDiscount,
   PAYMENT_METHODS,
 } from "../../lib/api";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
@@ -953,8 +954,25 @@ const InvoiceRow = ({ invoice, who, money, discounts = [], onChange, onError }) 
   // amount out again, from the invoice's own lines, when it is applied.
   const gross = Number(invoice.gross || 0);
   const chosen = discounts.find((d) => d.id === ruleId);
+  // A rule on particular charges needs the bill's lines, which this row does
+  // not have, so the database works that one out (supabase/191).
+  const itemisedRule = Boolean(chosen?.items?.length);
+  const [itemisedPreview, setItemisedPreview] = useState(null);
+  useEffect(() => {
+    if (!itemisedRule) return undefined;
+    let live = true;
+    setItemisedPreview(null);
+    previewDiscount({ invoiceId: invoice.invoice_id, ruleId: chosen.id })
+      .then((n) => live && setItemisedPreview(n))
+      .catch(() => live && setItemisedPreview(null));
+    return () => {
+      live = false;
+    };
+  }, [itemisedRule, chosen?.id, invoice.invoice_id]);
   const previewAmount = chosen
-    ? chosen.kind === "percent"
+    ? itemisedRule
+      ? itemisedPreview ?? 0
+      : chosen.kind === "percent"
       ? Math.round(gross * Number(chosen.value)) / 100
       : Math.min(Number(chosen.value), gross)
     : 0;
@@ -1141,13 +1159,19 @@ const InvoiceRow = ({ invoice, who, money, discounts = [], onChange, onError }) 
                     onChange={setRuleId}
                     options={discounts.map((d) => ({
                       value: d.id,
-                      label: `${d.label} — ${d.kind === "percent" ? `${Number(d.value)}% off` : `${money(d.value)} off`}`,
+                      label: d.items?.length
+                        ? `${d.label} — on particular charges`
+                        : `${d.label} — ${d.kind === "percent" ? `${Number(d.value)}% off` : `${money(d.value)} off`}`,
                     }))}
                   />
                 </label>
                 {chosen ? (
                   <span className="bz-take-preview">
-                    {`− ${money(previewAmount)} · they would pay ${money(Math.max(0, gross - previewAmount))}`}
+                    {itemisedRule && itemisedPreview == null
+                      ? "Working it out..."
+                      : itemisedRule && previewAmount === 0
+                      ? "None of the charges it covers are on this bill"
+                      : `− ${money(previewAmount)} · they would pay ${money(Math.max(0, gross - previewAmount))}`}
                   </span>
                 ) : null}
                 <div className="bz-take-buttons">

@@ -13,6 +13,7 @@ import {
   displayName,
   } from "../../Components/UI";
 import { ImageUpload } from "../../Components/ImageUpload";
+import NotificationSettings from "../../Components/NotificationSettings";
 import { useActionFeedback } from "../../Components/Toast";
 
 const Profile = () => {
@@ -151,6 +152,7 @@ const Profile = () => {
             </Button>
           </form>
         </Card>
+        <NotificationSettings />
       </Page>
     </div>
   );
