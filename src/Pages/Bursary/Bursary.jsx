@@ -32,6 +32,7 @@ import {
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 import { useActionFeedback } from "../../Components/Toast";
 import {
+  Switch,
   Page,
   Field,
   Button,
@@ -702,14 +703,12 @@ const Structures = ({
                   />
                 </Field>
                 <Field label="Optional">
-                  <label className="check">
-                    <input
-                      type="checkbox"
-                      checked={itemOptional}
-                      onChange={(e) => setItemOptional(e.target.checked)}
-                    />
-                    <span>{"Charged only to families who ask for it"}</span>
-                  </label>
+                  <Switch
+                    compact
+                    label="Charged only to families who ask for it"
+                    checked={itemOptional}
+                    onChange={setItemOptional}
+                  />
                 </Field>
                 <div className="btn-row" style={{ alignSelf: "end", marginBottom: 16 }}>
                   <Button size="sm" disabled={itemBusy} onClick={() => addItem(s.id)}>

@@ -15,7 +15,7 @@ import {
   upsertDocumentRequirement,
   deleteDocumentRequirement,
 } from "../../lib/api";
-import { Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput, Select, SkeletonText, SkeletonTable } from "../../Components/UI";
+import { Switch, Card, Field, Button, Badge, Notice, Empty, Tabs, MoneyInput, Select, SkeletonText, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import ClearanceDepartmentsPanel from "./ClearanceDepartmentsPanel";
 import { confirmDialog } from "../../Components/Confirm";
@@ -41,15 +41,8 @@ const CONFIG_DEFAULTS = {
   allow_anonymous_apply: true,
 };
 
-const Toggle = ({ label, hint, checked, onChange }) => (
-  <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} style={{ marginTop: 3 }} />
-    <span>
-      <div style={{ fontWeight: 600 }}>{label}</div>
-      {hint ? <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>{hint}</div> : null}
-    </span>
-  </label>
-);
+// A setting row: the shared Switch (Components/UI.jsx).
+const Toggle = (props) => <Switch {...props} />;
 
 /* ----------------------------------------------------------- application & fees ---- */
 const ConfigPanel = ({ schoolId, sessionId }) => {
@@ -111,9 +104,9 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
 
   if (loading) return (
     <>
-      <Card style={{ marginBottom: 16, maxWidth: 640 }}><SkeletonText lines={4} /></Card>
-      <Card style={{ marginBottom: 16, maxWidth: 640 }}><SkeletonText lines={3} /></Card>
-      <Card style={{ marginBottom: 16, maxWidth: 640 }}><SkeletonText lines={5} /></Card>
+      <Card className="as-card"><SkeletonText lines={4} /></Card>
+      <Card className="as-card"><SkeletonText lines={3} /></Card>
+      <Card className="as-card"><SkeletonText lines={5} /></Card>
     </>
   );
 
@@ -125,8 +118,9 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
         </Notice>
       ) : null}
 
-      <Card style={{ marginBottom: 16, maxWidth: 640 }}>
-        <h3 style={{ marginTop: 0 }}>{"Application fee"}</h3>
+      <div className="as-grid">
+      <Card className="as-card">
+        <h3 className="as-card-title">{"Application fee"}</h3>
         <Toggle label="Charge an application fee" checked={form.application_fee_enabled}
           onChange={set("application_fee_enabled")} />
         {form.application_fee_enabled ? (
@@ -153,8 +147,8 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
         </Field>
       </Card>
 
-      <Card style={{ marginBottom: 16, maxWidth: 640 }}>
-        <h3 style={{ marginTop: 0 }}>{"Acceptance fee"}</h3>
+      <Card className="as-card">
+        <h3 className="as-card-title">{"Acceptance fee"}</h3>
         <p style={{ fontSize: 13, color: "var(--ink-3)", marginTop: 0 }}>
           {"Charged once an applicant accepts their offer — a separate invoice from the application fee."}
         </p>
@@ -167,8 +161,8 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
         ) : null}
       </Card>
 
-      <Card style={{ marginBottom: 16, maxWidth: 640 }}>
-        <h3 style={{ marginTop: 0 }}>{"What the form asks for"}</h3>
+      <Card className="as-card">
+        <h3 className="as-card-title">{"What the form asks for"}</h3>
         <Toggle label="Require an interview before a decision" checked={form.require_interview}
           onChange={set("require_interview")} />
         <Toggle label="Require referees" checked={form.require_referees}
@@ -181,8 +175,8 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
           onChange={set("require_matric")} />
       </Card>
 
-      <Card style={{ marginBottom: 16, maxWidth: 640 }}>
-        <h3 style={{ marginTop: 0 }}>{"How applicants reach the form"}</h3>
+      <Card className="as-card">
+        <h3 className="as-card-title">{"How applicants reach the form"}</h3>
         <Field label="Academic structure" hint="Controls whether a programme carries a faculty and/or department.">
           <Select className="select" value={form.academic_hierarchy}
             onChange={set("academic_hierarchy")}
@@ -198,7 +192,13 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
           onChange={set("allow_anonymous_apply")} />
       </Card>
 
-      <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save configuration"}</Button>
+      </div>
+
+      {/* Pinned to the foot of the screen, so saving never means scrolling to find it. */}
+      <div className="as-save">
+        <span className="as-save-note">{"Changes apply to new applications from the moment they are saved."}</span>
+        <Button type="submit" disabled={saving}>{saving ? "Saving..." : "Save configuration"}</Button>
+      </div>
     </form>
   );
 };
@@ -265,7 +265,7 @@ const ProgrammesPanel = ({ schoolId, sessionId }) => {
         {"What an applicant chooses from at Apply/Start — leave faculty and department blank for a school that doesn't use them."}
       </p>
 
-      <Card style={{ maxWidth: 680, marginBottom: 16 }}>
+      <Card style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>{"Add a programme"}</h3>
         <form onSubmit={add}>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "2fr 1fr" }}>
@@ -401,7 +401,7 @@ const ChecklistPanel = ({
     <>
       <p style={{ color: "var(--ink-2)", maxWidth: "62ch" }}>{description}</p>
 
-      <Card style={{ maxWidth: 640, marginBottom: 16 }}>
+      <Card style={{ marginBottom: 16 }}>
         <h3 style={{ marginTop: 0 }}>{`Add ${title.toLowerCase()}`}</h3>
         <form onSubmit={add}>
           <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 2fr" }}>
@@ -418,11 +418,15 @@ const ChecklistPanel = ({
             <input className="input" value={form.notes}
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
           </Field>
-          <label style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-            <input type="checkbox" checked={form.is_required}
-              onChange={(e) => setForm((f) => ({ ...f, is_required: e.target.checked }))} />
-            {"Required"}
-          </label>
+          <div style={{ marginBottom: 12 }}>
+            <Switch
+              compact
+              label="Required"
+              hint="Off makes it optional for applicants."
+              checked={form.is_required}
+              onChange={(v) => setForm((f) => ({ ...f, is_required: v }))}
+            />
+          </div>
           <Button type="submit" disabled={busy}>{"Add"}</Button>
         </form>
       </Card>
@@ -508,20 +512,12 @@ const AdmissionsSettingsPanel = () => {
 
   return (
     <>
-      {/* .panel-top below pulls itself up 14px to sit flush under the
-          sticky page header when it's the page-body's first element — here
-          it isn't, so that pull-up used to eat into this paragraph's own
-          last line. Matching margin-bottom cancels it out (sibling margins
-          collapse: 16 + -14 nets a clean 2px gap). */}
-      <p style={{ color: "var(--ink-2)", maxWidth: "68ch", marginBottom: 16 }}>
-        {"Not every school runs admissions the same way — fees, required documents, screening steps and clearance departments are all configured here, per school, per session. Nothing here needs a developer."}
-      </p>
-
-      <div className="panel-top">
-        <Field label="Session this applies to" hint="A session-specific setting overrides the school default for that session only.">
+      {/* One pinned bar: which session is being set, and which part of it. */}
+      <div className="panel-top as-bar">
+        <div className="as-session">
+          <span className="as-session-label">{"Settings for"}</span>
           <Select
             className="select"
-            style={{ maxWidth: 320 }}
             value={sessionId}
             onChange={setSessionId}
             options={[
@@ -529,10 +525,9 @@ const AdmissionsSettingsPanel = () => {
               ...sessions.map((s) => ({ value: s.id, label: s.name })),
             ]}
           />
-        </Field>
-      </div>
-
-      <Tabs
+          <span className="as-session-hint">{sessionId ? "Overrides the school default for this session only." : "Applies to every session that has no settings of its own."}</span>
+        </div>
+        <Tabs
         tabs={[
           { id: "config", label: "Application & fees" },
           { id: "programmes", label: "Programmes" },
@@ -543,8 +538,9 @@ const AdmissionsSettingsPanel = () => {
         active={subTab}
         onChange={changeSubTab}
       />
+      </div>
 
-      <div style={{ marginTop: 16 }}>
+      <div className="as-body">
         {subTab === "config" ? (
           <ConfigPanel schoolId={schoolId} sessionId={effectiveSessionId} />
         ) : null}

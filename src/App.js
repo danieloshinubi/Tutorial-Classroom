@@ -55,6 +55,7 @@ import { isPlatformHost, isMarketingHost } from "./lib/tenant";
 import News from "./Pages/News/News";
 import Bursary from "./Pages/Bursary/Bursary";
 import Store from "./Pages/Store/Store";
+import Accounts from "./Pages/Accounts/Accounts";
 import Attendance from "./Pages/Attendance/Attendance";
 import Fees from "./Pages/Fees/Fees";
 import PaymentReturn from "./Pages/Fees/PaymentReturn";
@@ -222,6 +223,10 @@ function App() {
 
             <Route element={<SchoolRoute module="store" />}>
               <Route path="/Store" element={<Store />} />
+            </Route>
+            {/* The school's books: owner, admin and bursar (modules.js). */}
+            <Route element={<SchoolRoute module="accounts" />}>
+              <Route path="/Accounts" element={<Accounts />} />
             </Route>
 
             {/* Daily, per-class marks — form/subject teachers and school

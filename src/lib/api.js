@@ -5094,3 +5094,157 @@ export const sendTicketEmailReply = async ({ ticketId, schoolId, body, to, cc, b
   if (data?.error) throw new Error(data.error);
   return data;
 };
+
+// ---------------------------------------------------------------- accounts --
+// The school's books (supabase/188). Every write goes through a function that
+// checks the caller is bursary staff and keeps each entry balanced; the tables
+// themselves are read-only to the app.
+
+export const fetchAccountingSettings = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("accounting_settings")
+    .select("school_id, start_date, restock_paid_from, created_at")
+    .eq("school_id", schoolId)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+// Returns how many past events were posted into the books.
+export const setupAccounting = async ({ schoolId, startDate, restockFrom = "bank" }) => {
+  const { data, error } = await supabase.rpc("accounting_setup", {
+    target_school: schoolId,
+    start_on: startDate,
+    restock_from: restockFrom,
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const backfillAccounting = async (schoolId) => {
+  const { data, error } = await supabase.rpc("accounting_backfill", { target_school: schoolId });
+  if (error) throw error;
+  return data;
+};
+
+export const fetchChartOfAccounts = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("chart_of_accounts")
+    .select("id, code, name, type, system_key, description, is_active, position")
+    .eq("school_id", schoolId)
+    .order("code");
+  if (error) throw error;
+  return data || [];
+};
+
+export const saveAccount = async ({ schoolId, id = null, code, name, type, description = null, isActive = true }) => {
+  const { data, error } = await supabase.rpc("save_account", {
+    target_school: schoolId,
+    target_account: id,
+    code_in: code,
+    name_in: name,
+    type_in: type,
+    description_in: description,
+    active_in: isActive,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// Every account's opening, movement and closing over a period, signed
+// debit-minus-credit. Omit from for "since the books began", to for "to date".
+export const fetchAccountBalances = async (schoolId, { from = null, to = null } = {}) => {
+  const { data, error } = await supabase.rpc("account_balances", {
+    target_school: schoolId,
+    from_date: from,
+    to_date: to,
+  });
+  if (error) throw error;
+  return (data || []).map((row) => ({
+    ...row,
+    opening: Number(row.opening || 0),
+    debit: Number(row.debit || 0),
+    credit: Number(row.credit || 0),
+    closing: Number(row.closing || 0),
+  }));
+};
+
+const JOURNAL_FIELDS = `
+  id, entry_date, memo, source_type, source_id, source_event, reverses, reversed_by, created_at,
+  lines:journal_lines ( id, account_id, debit, credit, memo, position )
+`;
+
+// Newest first. The embed brings each entry's lines; filtering by account is
+// done after, so an entry keeps all its lines (both sides) on screen.
+export const fetchJournal = async (schoolId, { from = null, to = null, sourceType = null, limit = 300, offset = 0 } = {}) => {
+  let q = supabase.from("journal_entries").select(JOURNAL_FIELDS).eq("school_id", schoolId);
+  if (sourceType) q = q.eq("source_type", sourceType);
+  if (from) q = q.gte("entry_date", from);
+  if (to) q = q.lte("entry_date", to);
+  q = q.order("entry_date", { ascending: false }).order("created_at", { ascending: false }).range(offset, offset + limit - 1);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data || []).map((e) => ({
+    ...e,
+    lines: [...(e.lines || [])]
+      .sort((a, b) => a.position - b.position)
+      .map((l) => ({ ...l, debit: Number(l.debit || 0), credit: Number(l.credit || 0) })),
+  }));
+};
+
+// One account's lines over a period, oldest first, for its ledger.
+export const fetchAccountLedger = async (schoolId, accountId, { from = null, to = null } = {}) => {
+  let q = supabase
+    .from("journal_lines")
+    .select("id, debit, credit, memo, journal_entries!inner ( id, entry_date, memo, source_type, created_at )")
+    .eq("school_id", schoolId)
+    .eq("account_id", accountId);
+  if (from) q = q.gte("journal_entries.entry_date", from);
+  if (to) q = q.lte("journal_entries.entry_date", to);
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data || [])
+    .map(({ journal_entries: entry, ...l }) => ({ ...l, debit: Number(l.debit || 0), credit: Number(l.credit || 0), entry }))
+    .sort(
+      (a, b) =>
+        a.entry.entry_date.localeCompare(b.entry.entry_date) ||
+        String(a.entry.created_at).localeCompare(String(b.entry.created_at))
+    );
+};
+
+// lines: [{ accountId, debit, credit, memo }]
+export const postManualJournal = async ({ schoolId, date, memo, lines }) => {
+  const { data, error } = await supabase.rpc("post_manual_journal", {
+    target_school: schoolId,
+    entry_on: date,
+    memo_in: memo,
+    lines: lines.map((l) => ({
+      account_id: l.accountId,
+      debit: Number(l.debit || 0),
+      credit: Number(l.credit || 0),
+      memo: l.memo || null,
+    })),
+  });
+  if (error) throw error;
+  return data;
+};
+
+export const reverseJournal = async ({ entryId, reason, date = null }) => {
+  const { data, error } = await supabase.rpc("reverse_journal", {
+    target_entry: entryId,
+    reason,
+    entry_on: date,
+  });
+  if (error) throw error;
+  return data;
+};
+
+// lines: [{ accountId, debit, credit }]. Replaces the opening entry whole.
+export const saveOpeningBalances = async ({ schoolId, lines }) => {
+  const { data, error } = await supabase.rpc("save_opening_balances", {
+    target_school: schoolId,
+    lines: lines.map((l) => ({ account_id: l.accountId, debit: Number(l.debit || 0), credit: Number(l.credit || 0) })),
+  });
+  if (error) throw error;
+  return data;
+};

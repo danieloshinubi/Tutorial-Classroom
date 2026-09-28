@@ -207,7 +207,7 @@ const TableMenu = ({ editor, inTable }) => {
 // this component) can still put text into it — Tiptap owns its DOM, so
 // there is no other way in from outside.
 export const RichTextEditor = forwardRef(({
-  value, onChange, placeholder, onSubmitEditor, showToolbar = true, autoFocus = false, toolbar = "basic",
+  value, onChange, placeholder, onSubmitEditor, showToolbar = true, autoFocus = false, toolbar = "basic", onPasteFiles,
 }, ref) => {
   // A ref, not a plain closure over the prop — editorProps.handleKeyDown is
   // captured once when Tiptap builds the view, and onSubmitEditor is a fresh
@@ -216,6 +216,13 @@ export const RichTextEditor = forwardRef(({
   // permanently invoke whatever it was on the very first render.
   const onSubmitRef = useRef(onSubmitEditor);
   onSubmitRef.current = onSubmitEditor;
+  // Same reason as onSubmitRef: handlePaste is captured once by Tiptap.
+  const onPasteFilesRef = useRef(onPasteFiles);
+  onPasteFilesRef.current = onPasteFiles;
+  // Read when the editor redraws, so a placeholder that changes (chat's
+  // "press Enter to send" once a picture is attached) is shown.
+  const placeholderRef = useRef(placeholder);
+  placeholderRef.current = placeholder;
   const full = toolbar === "full";
 
   const editor = useEditor({
@@ -226,7 +233,7 @@ export const RichTextEditor = forwardRef(({
       StarterKit.configure({ link: false, underline: false }),
       Underline,
       Link.configure({ openOnClick: false, autolink: true }),
-      Placeholder.configure({ placeholder: placeholder || "Type your response here..." }),
+      Placeholder.configure({ placeholder: () => placeholderRef.current || "Type your response here..." }),
       ...(full
         ? [
             TextStyle,
@@ -249,6 +256,20 @@ export const RichTextEditor = forwardRef(({
     onUpdate: ({ editor: e }) => onChange(e.getHTML()),
     editorProps: {
       attributes: { class: "rte-prose" },
+      // A pasted picture or file goes to the caller (chat attaches it) rather
+      // than being dropped: the editor has no image node, so a pasted
+      // screenshot used to vanish without a word. Text pastes as usual.
+      handlePaste: (_view, event) => {
+        if (!onPasteFilesRef.current) return false;
+        const data = event.clipboardData;
+        const files = data?.files?.length
+          ? Array.from(data.files)
+          : Array.from(data?.items || []).filter((i) => i.kind === "file").map((i) => i.getAsFile()).filter(Boolean);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        onPasteFilesRef.current(files);
+        return true;
+      },
       handleKeyDown: (_view, event) => {
         if (!onSubmitRef.current) return false;
         const isEnter = event.key === "Enter" || event.code === "Enter" || event.keyCode === 13 || event.which === 13;

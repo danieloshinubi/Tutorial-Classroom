@@ -31,7 +31,6 @@ import {
 import { openPaystackPayment } from "../../lib/paystack";
 import {
   Page,
-  Card,
   Field,
   Button,
   Notice,
@@ -141,6 +140,53 @@ const STATUS_META = {
   withdrawn: ["Withdrawn", "muted"],
 };
 
+// What the payment state means to a parent. "processing" only means an online
+// payment was started; on its own it read as though money was on its way.
+const PAYMENT_LABEL = {
+  unpaid: ["Not paid yet", "warn"],
+  processing: ["Payment started, not confirmed", "warn"],
+  pending: ["Waiting for the school to confirm", "brand"],
+  partial: ["Part paid", "warn"],
+  verified: ["Paid", "success"],
+  rejected: ["Payment not accepted", "danger"],
+  not_required: ["Not needed", "muted"],
+};
+
+const DOC_STATUS = {
+  not_uploaded: ["Not uploaded", "warn"],
+  uploaded: ["Uploaded", "brand"],
+  under_review: ["Being checked", "brand"],
+  verified: ["Accepted", "success"],
+  rejected: ["Not accepted", "danger"],
+  resubmission_required: ["Please upload again", "danger"],
+  waived: ["Not needed", "muted"],
+};
+
+// The section keys the school's correction request uses, as the form names them.
+const SECTION_TITLE = {
+  personal: "Personal information",
+  education: "Education history",
+  exams: "Examination results",
+  next_of_kin: "Next of kin",
+  referees: "Referees",
+};
+
+// The nineteen workflow steps (application_workflow_steps) in four stages a
+// parent can hold in their head.
+const STAGES = [
+  { key: "apply", label: "Apply", steps: ["account", "programme", "fee_invoice", "fee_paid", "form_personal", "form_education", "form_exams", "form_nok", "form_referees", "documents", "submit"] },
+  { key: "review", label: "School review", steps: ["review", "action", "interview"] },
+  { key: "decision", label: "Decision", steps: ["decision", "offer", "acceptance_fee"] },
+  { key: "enrol", label: "Enrolment", steps: ["clearance", "registration"] },
+];
+
+// "A, B and C"
+const listOf = (items) =>
+  items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+
+// Moves to a part of the page, below the sticky header.
+const goTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
 // A section of the applicant's form. Collapses to a one-line summary once
 // it's locked (already submitted, or not yet the flagged correction target)
 // instead of staying open at full height — five long forms stacked and
@@ -161,7 +207,7 @@ const computeCustomQual = (fields, value) => {
   return map;
 };
 
-const Section = ({ title, description, value, onSave, disabled, fields, defaultOpen }) => {
+const Section = ({ id, title, description, value, onSave, disabled, fields, defaultOpen, flagged = false, lockReason = "" }) => {
   const [draft, setDraft] = useState(value || {});
   const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
@@ -219,7 +265,7 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
   const filled = fields.filter((f) => String(value?.[f.name] || "").trim()).length;
 
   return (
-    <div className="appdash-form-section">
+    <div className={`appdash-form-section${flagged ? " apd-flagged" : ""}`} id={id}>
       <button
         type="button"
         className="appdash-section-head"
@@ -227,6 +273,7 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
         aria-expanded={open}
       >
         <h3>{title}</h3>
+        {flagged ? <Badge tone="danger">{"Needs correcting"}</Badge> : null}
         <span className={`appdash-section-caret${open ? " open" : ""}`} aria-hidden="true">
           {"›"}
         </span>
@@ -239,6 +286,7 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
               {description}
             </p>
           ) : null}
+          {disabled && lockReason ? <p className="apd-lock-note">{lockReason}</p> : null}
           <form onSubmit={save} style={{ marginTop: 12 }}>
             {fields.map((field) => (
               <Field key={field.name} label={field.label} hint={field.hint}>
@@ -326,8 +374,8 @@ const Section = ({ title, description, value, onSave, disabled, fields, defaultO
         <p className="appdash-section-summary">
           {filled === 0
             ? "Nothing entered yet."
-            : `${filled} of ${fields.length} fields filled.`}
-          {disabled ? " · locked" : ""}
+            : `${filled} of ${fields.length} filled.`}
+          {disabled && lockReason ? ` · ${lockReason}` : disabled ? " · locked" : ""}
         </p>
       )}
     </div>
@@ -572,12 +620,6 @@ const ApplicationDashboard = () => {
     application.payment_state !== "not_required" &&
     application.offer_state !== "accepted";
 
-  const feeBadge =
-    application?.payment_state === "verified" ? "success" :
-    application?.payment_state === "processing" ? "brand" :
-    application?.payment_state === "rejected" ? "danger" :
-    "warn";
-
   // The form genuinely locks now (075_application_section_fee_gate.sql
   // added the same check to save_application_section) — this just makes
   // the UI match what the database already enforces, rather than showing
@@ -785,7 +827,7 @@ const ApplicationDashboard = () => {
     application.form_state === "draft";
   const needsCorrection = application.form_state === "action_required";
 
-  const [statusLabel, statusTone] = STATUS_META[application.status] || [application.status, "muted"];
+  const [statusLabel] = STATUS_META[application.status] || [application.status];
 
   const heroTone =
     ["offered", "accepted", "enrolled"].includes(application.status) ? "good" :
@@ -795,8 +837,10 @@ const ApplicationDashboard = () => {
   // One plain-language line telling the applicant exactly what today's
   // situation is and what, if anything, they should do about it — the
   // single most-asked question this whole page exists to answer.
-  const heroMessage = needsCorrection
-    ? "The school asked you to fix something — see “Action required” below."
+  const heroMessage = needsCorrection && feeLocked
+    ? "The school asked for some corrections. Pay the application fee first; that opens the form so you can make them."
+    : needsCorrection
+    ? "The school asked you to correct some answers. The steps are below."
     : offer?.status === "issued"
     ? "Congratulations! Review your offer below and let the school know your decision."
     : offer?.status === "accepted" && application.payment_state !== "verified" && acceptanceInvoice
@@ -815,27 +859,159 @@ const ApplicationDashboard = () => {
     ? "Your application is with the school. This page updates as things move — no need to keep checking back."
     : "Let's get your application started.";
 
+  // ------------------------------------------------ what the page shows --
+
+  const [payLabel, payTone] = PAYMENT_LABEL[application.payment_state] || [application.payment_state, "muted"];
+  const flaggedSections = needsCorrection ? application.correction_sections || [] : [];
+  const flaggedTitles = flaggedSections.map((k) => SECTION_TITLE[k] || k);
+  const docsToUpload = documents.filter(
+    (d) => d.requirement?.is_required && ["not_uploaded", "rejected", "resubmission_required"].includes(d.status)
+  );
+  const lastPaymentStart = [...events].reverse().find((e) => /payment initiated/i.test(e.note || ""));
+  const feeAmount = `${config?.currency || "NGN"} ${(config?.application_fee_amount || 0).toLocaleString()}`;
+  const lockReasonFor = (key) =>
+    feeLocked
+      ? "Opens once the application fee is paid."
+      : isReadonly
+      ? "Locked while the school reviews your application."
+      : needsCorrection && !editable[key]
+      ? "The school has not asked for changes here."
+      : "";
+
+  // The things the parent has to do, in the order they have to be done. Each
+  // one either has its buttons, or says what it is waiting for. This is what
+  // the page is for: the old layout led with "fix something below" while the
+  // form below was locked behind an unpaid fee.
+  const todos = [];
+  if (feeLocked) {
+    todos.push({
+      key: "fee",
+      title: `Pay the application fee · ${feeAmount}`,
+      body:
+        application.payment_state === "processing"
+          ? `A payment was started${lastPaymentStart ? ` on ${formatDate(lastPaymentStart.created_at, { withTime: false })}` : ""} but the bank has not confirmed it. If you finished paying, it confirms on its own shortly. If you did not, pay again or cancel that attempt.`
+          : "Paying unlocks the form so you can finish your application.",
+      actions: (
+        <>
+          <div className="btn-row">
+            <Button disabled={payingOnline} onClick={() => payFee(invoice)}>
+              {payingOnline ? "Opening..." : application.payment_state === "processing" ? "Pay again" : "Pay now"}
+            </Button>
+            {application.payment_state === "processing" ? (
+              <Button variant="secondary" onClick={cancelPayment}>{"Cancel unfinished payment"}</Button>
+            ) : null}
+          </div>
+          {invoice ? (
+            <div className="apd-todo-extra">
+              <DeclareAdmissionsPayment
+                invoice={invoice}
+                amount={config?.application_fee_amount || 0}
+                schoolId={application.school_id}
+                onDeclared={load}
+              />
+            </div>
+          ) : null}
+        </>
+      ),
+    });
+  }
+  if (needsCorrection) {
+    todos.push({
+      key: "fix",
+      title: `Correct ${listOf(flaggedTitles)}`,
+      quote: application.correction_reason,
+      blocked: feeLocked ? "Unlocks once the fee is paid." : null,
+      actions: (
+        <Button variant="secondary" disabled={feeLocked} onClick={() => goTo(`section-${flaggedSections[0]}`)}>
+          {"Go to the sections"}
+        </Button>
+      ),
+    });
+    todos.push({
+      key: "resubmit",
+      title: "Send it back to the school",
+      body: "Once the corrections are saved, resubmit so the school can look again.",
+      blocked: feeLocked ? "After the fee and the corrections." : null,
+      actions: (
+        <Button onClick={resubmit} disabled={submitting || feeLocked}>
+          {submitting ? "Resubmitting..." : "Resubmit application"}
+        </Button>
+      ),
+    });
+  }
+  if (canSubmit) {
+    const formSteps = steps.filter((st) => st.step_key.startsWith("form_"));
+    const formDone = formSteps.filter((st) => st.state === "done").length;
+    todos.push({
+      key: "form",
+      title: "Fill in the application form",
+      body: formSteps.length ? `${formDone} of ${formSteps.length} sections done.` : null,
+      blocked: feeLocked ? "Unlocks once the fee is paid." : null,
+      actions: (
+        <Button variant="secondary" disabled={feeLocked} onClick={() => goTo("apd-form")}>{"Go to the form"}</Button>
+      ),
+    });
+  }
+  if (docsToUpload.length > 0) {
+    todos.push({
+      key: "docs",
+      title: `Upload ${docsToUpload.length === 1 ? "a document" : `${docsToUpload.length} documents`}`,
+      body: listOf(docsToUpload.map((d) => d.requirement?.label || "Document")),
+      actions: <Button variant="secondary" onClick={() => goTo("apd-docs")}>{"Go to documents"}</Button>,
+    });
+  }
+  if (canSubmit) {
+    todos.push({
+      key: "submit",
+      title: "Submit your application",
+      blocked: feeLocked ? "After the fee and the form." : null,
+      actions: <Button variant="secondary" disabled={feeLocked} onClick={() => goTo("apd-submit")}>{"Go to submit"}</Button>,
+    });
+  }
+  if (offer?.status === "issued") {
+    todos.push({
+      key: "offer",
+      title: "Reply to your offer",
+      body: offer.expires_at ? `Please reply by ${formatDate(offer.expires_at, { withTime: false })}.` : null,
+      actions: <Button onClick={() => goTo("apd-offer")}>{"See the offer"}</Button>,
+    });
+  }
+  if (offer?.status === "accepted" && acceptanceInvoice && application.payment_state !== "verified") {
+    todos.push({
+      key: "acceptance",
+      title: "Pay the acceptance fee",
+      actions: <Button onClick={() => goTo("apd-offer")}>{"Pay the acceptance fee"}</Button>,
+    });
+  }
+
+  // Four stages from the nineteen steps.
+  const stepByKey = Object.fromEntries(steps.map((st) => [st.step_key, st]));
+  const stages = STAGES.map((stage) => {
+    const own = stage.steps.map((k) => stepByKey[k]).filter(Boolean);
+    const done = own.filter((st) => st.state === "done").length;
+    return { ...stage, own, done, total: own.length };
+  }).filter((stage) => stage.total > 0);
+  const currentStage = stages.find((stage) => stage.done < stage.total)?.key;
+
+  const [shownEvents, moreEvents] = [[...events].reverse().slice(0, 6), Math.max(0, events.length - 6)];
+
   return (
     <>
       <ApplicantShell school={school} />
-      <Page
-        title={application.reference}
-        subtitle={school ? `Application to ${school.name}` : "Application"}
-      >
+      <Page>
         <LiveUpdateBanner count={live.count} onReload={() => { live.reset(); load(); }} />
 
-        <div className={`appdash-hero ${heroTone}`}>
-          <div>
-            <div className="appdash-hero-ref">{application.reference}</div>
-            <h2 className="appdash-hero-title">{statusLabel}</h2>
-            <p className="appdash-hero-sub">{heroMessage}</p>
+        {/* Who, where, and where it stands. */}
+        <header className={`apd-head ${heroTone}`}>
+          <div className="apd-head-main">
+            <span className="apd-head-ref">{`${application.reference}${school ? ` · ${school.name}` : ""}`}</span>
+            <h1 className="apd-head-title">{statusLabel}</h1>
+            <p className="apd-head-sub">{heroMessage}</p>
           </div>
-          <div className="appdash-hero-status">
-            <Badge tone={statusTone}>{statusLabel}</Badge>
+          {/* The heading already names the status; a badge beside it repeated it. */}
+          <div className="apd-head-side">
             {application.submitted_at ? (
-              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>
-                {`Submitted ${formatDate(application.submitted_at, { withTime: false })}`}
-              </span>
+              <span className="apd-muted">{`Submitted ${formatDate(application.submitted_at, { withTime: false })}`}</span>
             ) : null}
             {["offered", "accepted", "enrolled"].includes(application.status) ? (
               <Button size="sm" variant="secondary" disabled={letterLoading} onClick={openLetter}>
@@ -843,467 +1019,427 @@ const ApplicationDashboard = () => {
               </Button>
             ) : null}
           </div>
-        </div>
+        </header>
 
-        {/* Application fee — deliberately the first card after the hero,
-            not tucked below documents/offer/clearance, so paying (when the
-            school requires it) reads as step one rather than something an
-            applicant might stumble onto later. The database backs this up
-            independently: save_application_section/submit_my_application
-            refuse to unlock the rest of the form until this is verified
-            (075_application_section_fee_gate.sql), and staff can't even
-            start screening until it clears (124_application_fee_gates_
-            and_bursary_alert.sql). */}
-        {feeVisible ? (
-          <Card style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <h3 style={{ margin: 0 }}>{"Application fee"}</h3>
-              <Badge tone={feeBadge}>{application.payment_state}</Badge>
-            </div>
-            {invoice ? (
-              <p style={{ marginBottom: 8 }}>
-                {`Invoice ${invoice.reference} · ${config?.currency || "NGN"} ${(
-                  config?.application_fee_amount || 0
-                ).toLocaleString()}`}
-              </p>
-            ) : null}
-            {application.payment_state === "processing" ? (
-              <Notice tone="brand">
-                {"We are confirming your payment with the bank. If you didn't finish paying, use Retry or Cancel below."}
-              </Notice>
-            ) : null}
-            {application.payment_state === "verified" ? (
-              <Notice tone="success">{"Your fee has been received. The form is unlocked."}</Notice>
-            ) : null}
-            {application.payment_state !== "verified" ? (
-              <div className="btn-row">
-                <Button disabled={payingOnline} onClick={() => payFee(invoice)}>
-                  {payingOnline
-                    ? "Opening..."
-                    : application.payment_state === "processing"
-                    ? "Retry payment"
-                    : "Pay application fee"}
-                </Button>
-                {application.payment_state === "processing" ? (
-                  <Button variant="secondary" onClick={cancelPayment}>
-                    {"Cancel and try again"}
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
-            {application.payment_state !== "verified" && invoice ? (
-              <div style={{ marginTop: 10 }}>
-                <DeclareAdmissionsPayment
-                  invoice={invoice}
-                  amount={config?.application_fee_amount || 0}
-                  schoolId={application.school_id}
-                  onDeclared={load}
-                />
-              </div>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {/* The workflow tracker — steps come from the database, so a session
-            with no fees, no interview and no referees doesn't show them. */}
-        <Card style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0 }}>{"Progress"}</h3>
-          <ul className="appdash-steps">
-            {steps.map((step) => (
-              <AppStep key={step.step_key} step={step} />
-            ))}
-          </ul>
-        </Card>
-
-        {needsCorrection ? (
-          <Card style={{ marginBottom: 16, borderColor: "var(--danger)" }}>
-            <h3 style={{ marginTop: 0, color: "var(--danger)" }}>
-              {"Action required"}
-            </h3>
-            <p>{application.correction_reason}</p>
-            <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>
-              {`Sections to correct: ${(application.correction_sections || []).join(", ")}`}
-            </p>
-            <Button onClick={resubmit} disabled={submitting}>
-              {submitting ? "Resubmitting..." : "Resubmit application"}
-            </Button>
-          </Card>
-        ) : null}
-
-        {documents.length > 0 ? (
-          <Card style={{ marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0 }}>{"Documents"}</h3>
-            <ul className="doc-list">
-              {documents.map((d) => {
-                const canUpload = ["not_uploaded", "rejected", "resubmission_required"].includes(d.status);
-                const uploading = uploadingDocId === d.id;
-                return (
-                  <li key={d.id} className="doc-row">
-                    <div>
-                      <strong>{d.requirement?.label || "Document"}</strong>
-                      {d.requirement?.is_required ? (
-                        <span className="doc-req"> · required</span>
-                      ) : (
-                        <span className="doc-req"> · optional</span>
-                      )}
-                      {d.decision_note ? <div className="doc-note">{d.decision_note}</div> : null}
-                      {d.file?.file_name ? (
-                        <div style={{ fontSize: 12.5, color: "var(--ink-3)", marginTop: 4 }}>
-                          {d.file.file_name}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="doc-actions">
-                      <Badge tone={
-                        d.status === "verified" ? "success" :
-                        d.status === "rejected" ? "danger" :
-                        d.status === "waived" ? "muted" :
-                        (d.status === "uploaded" || d.status === "under_review") ? "brand" : "warn"
-                      }>{d.status.replace(/_/g, " ")}</Badge>
-                      {canUpload ? (
-                        <label className="btn btn-secondary btn-sm" style={{ cursor: uploading ? "not-allowed" : "pointer" }}>
-                          {uploading ? "Uploading..." : d.status === "not_uploaded" ? "Upload" : "Re-upload"}
-                          <input
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/*"
-                            style={{ display: "none" }}
-                            disabled={uploading}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              e.target.value = "";
-                              if (file) uploadDoc(d)(file);
-                            }}
-                          />
-                        </label>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
-        ) : null}
-
-        {/* The same per-step breakdown staff see under "Screening" —
-            previously invisible here entirely, leaving an applicant with
-            nothing but the Progress tracker's generic "Under review" dot
-            even while sitting through named steps (an interview, an exam)
-            they had no way to see the outcome of. Read-only: staff decide
-            each step from the Admissions workspace, not here. */}
-        {screening.length > 0 ? (
-          <Card style={{ marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0 }}>{"Screening"}</h3>
-            <ul className="doc-list">
-              {screening.map((s) => (
-                <li key={s.id} className="doc-row">
-                  <div>
-                    <strong>{s.label || "Screening step"}</strong>
-                    {s.is_required ? (
-                      <span className="doc-req"> · required</span>
-                    ) : (
-                      <span className="doc-req"> · optional</span>
-                    )}
-                    {s.decision_note ? <div className="doc-note">{s.decision_note}</div> : null}
-                  </div>
-                  <Badge tone={
-                    s.status === "passed" ? "success" :
-                    s.status === "failed" ? "danger" :
-                    s.status === "waived" ? "muted" :
-                    s.status === "correction_required" ? "warn" : "warn"
-                  }>
-                    {s.status === "passed" ? "Passed" :
-                     s.status === "failed" ? "Not cleared" :
-                     s.status === "waived" ? "Waived" :
-                     s.status === "correction_required" ? "Needs follow-up" : "Pending"}
-                  </Badge>
+        {/* The four stages at a glance. */}
+        {stages.length ? (
+          <ol className="apd-stages" aria-label="Where your application is">
+            {stages.map((stage, i) => {
+              const state = stage.done === stage.total ? "done" : stage.key === currentStage ? "current" : "todo";
+              return (
+                <li key={stage.key} className={`apd-stage ${state}`}>
+                  <span className="apd-stage-dot" aria-hidden="true">{state === "done" ? "✓" : i + 1}</span>
+                  <span className="apd-stage-text">
+                    <strong>{stage.label}</strong>
+                    <span>{state === "done" ? "Done" : state === "current" ? `${stage.done} of ${stage.total} steps` : "Later"}</span>
+                  </span>
                 </li>
-              ))}
-            </ul>
-          </Card>
+              );
+            })}
+          </ol>
         ) : null}
 
-        {offer ? (
-          <Card
-            className={`appdash-offer ${offer.status}`}
-            style={{ marginBottom: 16 }}
-          >
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <h3 style={{ margin: 0 }}>
-                {offer.status === "issued" ? "You have an offer!" : "Your offer"}
-              </h3>
-              <Badge tone={
-                offer.status === "accepted" ? "success" :
-                offer.status === "declined" ? "danger" :
-                offer.status === "expired" ? "muted" : "brand"
-              }>{offer.status}</Badge>
-            </div>
-            {offer.conditions ? <p>{offer.conditions}</p> : null}
-            {offer.expires_at ? (
-              <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>
-                {offer.status === "issued" && new Date(offer.expires_at) < new Date()
-                  ? `This offer expired ${formatDate(offer.expires_at, { withTime: false })}.`
-                  : `Valid until ${formatDate(offer.expires_at, { withTime: false })}.`}
-              </p>
-            ) : null}
-
-            {offer.status === "issued" ? (
-              decliningOffer ? (
-                <div>
-                  <Field label="Reason" hint="Optional, but it helps the school.">
-                    <textarea className="textarea" value={declineReason}
-                      onChange={(e) => setDeclineReason(e.target.value)} />
-                  </Field>
-                  <div className="btn-row">
-                    <Button variant="danger" disabled={submitting} onClick={declineTheOffer}>
-                      {submitting ? "Sending..." : "Confirm decline"}
-                    </Button>
-                    <Button variant="ghost" disabled={submitting} onClick={() => setDecliningOffer(false)}>
-                      {"Back"}
-                    </Button>
-                  </div>
-                </div>
+        <div className="apd-layout">
+          <div className="apd-main">
+            {/* What to do next: the heart of the page. */}
+            <section className="apd-card apd-next">
+              <h2 className="apd-card-title">{todos.length ? "What to do next" : "Nothing for you to do right now"}</h2>
+              {todos.length === 0 ? (
+                <p className="apd-muted apd-next-calm">{heroMessage}</p>
               ) : (
-                <div className="btn-row">
-                  <Button disabled={submitting} onClick={acceptTheOffer}>
-                    {submitting ? "Accepting..." : "Accept offer"}
-                  </Button>
-                  <Button variant="secondary" disabled={submitting} onClick={() => setDecliningOffer(true)}>
-                    {"Decline"}
-                  </Button>
-                </div>
-              )
-            ) : null}
+                <ol className="apd-todos">
+                  {todos.map((t, i) => {
+                    const waiting = !!t.blocked;
+                    return (
+                      <li key={t.key} className={`apd-todo${waiting ? " waiting" : ""}${!waiting && todos.findIndex((x) => !x.blocked) === i ? " first" : ""}`}>
+                        <span className="apd-todo-num" aria-hidden="true">{i + 1}</span>
+                        <div className="apd-todo-body">
+                          <strong className="apd-todo-title">{t.title}</strong>
+                          {t.quote ? <blockquote className="apd-quote">{`“${t.quote}”`}<span>{"— the school"}</span></blockquote> : null}
+                          {t.body ? <p className="apd-todo-text">{t.body}</p> : null}
+                          {waiting ? <p className="apd-todo-wait">{t.blocked}</p> : null}
+                          {t.actions ? <div className="apd-todo-actions">{t.actions}</div> : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </section>
 
-            {offer.status === "declined" ? (
-              <Notice tone="muted">{"You declined this offer."}</Notice>
-            ) : null}
-
-            {offer.status === "accepted" && acceptanceInvoice ? (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-                  <strong>{"Acceptance fee"}</strong>
-                  <Badge tone={feeBadge}>{application.payment_state}</Badge>
-                </div>
-                <p style={{ margin: "6px 0" }}>{`Invoice ${acceptanceInvoice.reference}`}</p>
-                {application.payment_state === "processing" ? (
-                  <Notice tone="brand">
-                    {"We are confirming your payment with the bank. If you didn't finish paying, use Retry or Cancel below."}
-                  </Notice>
-                ) : null}
-                {application.payment_state === "verified" ? (
-                  <Notice tone="success">{"Your acceptance fee has been received."}</Notice>
-                ) : (
-                  <div className="btn-row">
-                    <Button disabled={payingOnline} onClick={() => payFee(acceptanceInvoice)}>
-                      {payingOnline
-                        ? "Opening..."
-                        : application.payment_state === "processing"
-                        ? "Retry payment"
-                        : "Pay acceptance fee"}
-                    </Button>
-                    {application.payment_state === "processing" ? (
-                      <Button variant="secondary" onClick={cancelPayment}>
-                        {"Cancel and try again"}
-                      </Button>
-                    ) : null}
-                  </div>
-                )}
-                {application.payment_state !== "verified" ? (
-                  <div style={{ marginTop: 10 }}>
-                    <DeclareAdmissionsPayment
-                      invoice={acceptanceInvoice}
-                      amount={config?.acceptance_fee_amount || 0}
-                      schoolId={application.school_id}
-                      onDeclared={load}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </Card>
-        ) : null}
-
-        {offer?.status === "accepted" && clearance.length > 0 ? (
-          <Card style={{ marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0 }}>{"Clearance"}</h3>
-            <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0 }}>
-              {"Departments the school checks before you register. This updates as each one signs off — no action is needed from you here."}
-            </p>
-            <ul className="doc-list">
-              {clearance.map((item) => (
-                <li key={item.id} className="doc-row">
-                  <div>
-                    <strong>{item.department?.name || "Department"}</strong>
-                    {item.decision_note && item.status === "rejected" ? (
-                      <div className="doc-note">{item.decision_note}</div>
-                    ) : null}
-                  </div>
+            {offer ? (
+              <section className={`apd-card appdash-offer ${offer.status}`} id="apd-offer">
+                <div className="apd-card-head">
+                  <h2 className="apd-card-title">{offer.status === "issued" ? "You have an offer!" : "Your offer"}</h2>
                   <Badge tone={
-                    item.status === "cleared" ? "success" :
-                    item.status === "rejected" ? "danger" :
-                    item.status === "waived" ? "muted" :
-                    item.status === "in_progress" ? "brand" : "warn"
-                  }>{item.status === "pending" ? "not started" : item.status}</Badge>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : null}
+                    offer.status === "accepted" ? "success" :
+                    offer.status === "declined" ? "danger" :
+                    offer.status === "expired" ? "muted" : "brand"
+                  }>{{ issued: "Waiting for your reply", accepted: "Accepted", declined: "Declined", expired: "Expired" }[offer.status] || offer.status}</Badge>
+                </div>
+                {offer.conditions ? <p>{offer.conditions}</p> : null}
+                {offer.expires_at ? (
+                  <p className="apd-muted">
+                    {offer.status === "issued" && new Date(offer.expires_at) < new Date()
+                      ? `This offer expired ${formatDate(offer.expires_at, { withTime: false })}.`
+                      : `Valid until ${formatDate(offer.expires_at, { withTime: false })}.`}
+                  </p>
+                ) : null}
 
-        {/* Form sections — disabled with a clear reason when the section
-            cannot be touched, rather than hidden, so an applicant always
-            sees what they submitted. */}
-        {isReadonly || (feeVisible && application.payment_state !== "verified") ? (
-          <Notice tone={isReadonly ? "muted" : "warn"}>
-            {isReadonly
-              ? "Your application is with the school. Sections are locked; the timeline below records anything that changes."
-              : "Complete the fee before the form is unlocked. You can still see the sections but cannot edit them."}
-          </Notice>
-        ) : null}
-
-        <Card style={{ marginBottom: 16 }}>
-          <h3 style={{ marginTop: 0, marginBottom: 4 }}>{"Application form"}</h3>
-          <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0, marginBottom: 4 }}>
-            {"Tap a section to open it."}
-          </p>
-
-          <Section
-            title="Personal information"
-            value={application.personal_info}
-            disabled={!editable.personal || feeLocked}
-            defaultOpen={!!editable.personal && !feeLocked}
-            onSave={saveSection("personal")}
-            fields={[
-              { name: "first_name", label: "First name" },
-              { name: "middle_name", label: "Middle name" },
-              { name: "surname", label: "Surname" },
-              { name: "date_of_birth", label: "Date of birth", type: "date" },
-              { name: "gender", label: "Gender" },
-              { name: "nationality", label: "Nationality", type: "country" },
-              { name: "state_of_origin", label: "State of origin", type: "region", dependsOn: "nationality" },
-              { name: "address", label: "Home address", type: "textarea" },
-              { name: "phone", label: "Phone" },
-              { name: "email", label: "Email", type: "email" },
-            ]}
-          />
-
-          <Section
-            title="Education history"
-            description="Where you have studied so far, most recent first."
-            value={application.education_history}
-            disabled={!editable.education || feeLocked}
-            defaultOpen={!!editable.education && !feeLocked}
-            onSave={saveSection("education")}
-            fields={[
-              { name: "school_name", label: "School name" },
-              { name: "country", label: "Country", type: "country" },
-              { name: "start_year", label: "Start year", type: "year" },
-              { name: "end_year", label: "End year", type: "year" },
-              { name: "qualification", label: "Qualification", type: "qualification" },
-            ]}
-          />
-
-          <Section
-            title="Examination results"
-            description="Your exam results — WAEC/NECO/NABTEB/JAMB or whatever your school runs."
-            value={application.exam_results}
-            disabled={!editable.exams || feeLocked}
-            defaultOpen={!!editable.exams && !feeLocked}
-            onSave={saveSection("exams")}
-            fields={[
-              { name: "exam_type", label: "Exam" },
-              { name: "exam_number", label: "Exam number" },
-              { name: "exam_year", label: "Exam year", type: "year" },
-              { name: "subjects", label: "Subjects and grades", type: "textarea", hint: "One per line, e.g. Mathematics — B3" },
-            ]}
-          />
-
-          {config?.require_next_of_kin !== false ? (
-            <Section
-              title="Next of kin"
-              value={application.next_of_kin}
-              disabled={!editable.next_of_kin || feeLocked}
-              defaultOpen={!!editable.next_of_kin && !feeLocked}
-              onSave={saveSection("next_of_kin")}
-              fields={[
-                { name: "name", label: "Full name" },
-                { name: "relationship", label: "Relationship" },
-                { name: "phone", label: "Phone" },
-                { name: "email", label: "Email", type: "email" },
-                { name: "address", label: "Address", type: "textarea" },
-              ]}
-            />
-          ) : null}
-
-          {config?.require_referees ? (
-            <Section
-              title="Referees"
-              value={application.referees}
-              disabled={!editable.referees || feeLocked}
-              defaultOpen={!!editable.referees && !feeLocked}
-              onSave={saveSection("referees")}
-              fields={[
-                { name: "referee_1_name", label: "Referee 1 — name" },
-                { name: "referee_1_email", label: "Referee 1 — email", type: "email" },
-                { name: "referee_2_name", label: "Referee 2 — name" },
-                { name: "referee_2_email", label: "Referee 2 — email", type: "email" },
-              ]}
-            />
-          ) : null}
-        </Card>
-
-        {canSubmit ? (
-          <Card style={{ marginBottom: 16 }}>
-            <h3 style={{ marginTop: 0 }}>{"Submit"}</h3>
-            {feeLocked ? (
-              <Notice tone="warn">{"Pay the application fee above before you can submit."}</Notice>
-            ) : (
-              <label style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                <input
-                  type="checkbox"
-                  checked={declaration}
-                  onChange={(e) => setDeclaration(e.target.checked)}
-                />
-                <span>
-                  {"I confirm that the information above is accurate and complete. I understand that providing false information may result in cancellation of my admission."}
-                </span>
-              </label>
-            )}
-            <div style={{ marginTop: 12 }}>
-              <Button
-                disabled={!declaration || submitting || feeLocked}
-                onClick={submit}
-              >
-                {submitting ? "Submitting..." : "Submit application"}
-              </Button>
-            </div>
-          </Card>
-        ) : null}
-
-        {/* Timeline — every event the database recorded, in reverse
-            chronological order. This is the audit trail. */}
-        <Card>
-          <h3 style={{ marginTop: 0 }}>{"Application timeline"}</h3>
-          {events.length === 0 ? (
-            <Empty>{"Nothing recorded yet."}</Empty>
-          ) : (
-            <ul className="appdash-timeline">
-              {[...events].reverse().map((event) => (
-                <li key={event.id}>
-                  <span className="appdash-timeline-dot" aria-hidden="true" />
-                  <div>
-                    <div className="appdash-timeline-meta">
-                      {formatDate(event.created_at, { withTime: true })} · {event.actor_label || "System"}
+                {offer.status === "issued" ? (
+                  decliningOffer ? (
+                    <div>
+                      <Field label="Reason" hint="Optional, but it helps the school.">
+                        <textarea className="textarea" value={declineReason} onChange={(e) => setDeclineReason(e.target.value)} />
+                      </Field>
+                      <div className="btn-row">
+                        <Button variant="danger" disabled={submitting} onClick={declineTheOffer}>
+                          {submitting ? "Sending..." : "Confirm decline"}
+                        </Button>
+                        <Button variant="ghost" disabled={submitting} onClick={() => setDecliningOffer(false)}>{"Back"}</Button>
+                      </div>
                     </div>
-                    <div className="appdash-timeline-note">
-                      {event.note || `${event.status_from || "–"} → ${event.status_to}`}
+                  ) : (
+                    <div className="btn-row">
+                      <Button disabled={submitting} onClick={acceptTheOffer}>{submitting ? "Accepting..." : "Accept offer"}</Button>
+                      <Button variant="secondary" disabled={submitting} onClick={() => setDecliningOffer(true)}>{"Decline"}</Button>
                     </div>
+                  )
+                ) : null}
+
+                {offer.status === "declined" ? <Notice tone="muted">{"You declined this offer."}</Notice> : null}
+
+                {offer.status === "accepted" && acceptanceInvoice ? (
+                  <div className="apd-subpanel">
+                    <div className="apd-card-head">
+                      <strong>{"Acceptance fee"}</strong>
+                      <Badge tone={payTone}>{payLabel}</Badge>
+                    </div>
+                    <p className="apd-muted">{`Bill ${acceptanceInvoice.reference}`}</p>
+                    {application.payment_state === "processing" ? (
+                      <Notice tone="warn">{"A payment was started but not confirmed by the bank. If you finished paying it confirms shortly; if not, pay again."}</Notice>
+                    ) : null}
+                    {application.payment_state === "verified" ? (
+                      <Notice tone="success">{"Your acceptance fee has been received."}</Notice>
+                    ) : (
+                      <div className="btn-row">
+                        <Button disabled={payingOnline} onClick={() => payFee(acceptanceInvoice)}>
+                          {payingOnline ? "Opening..." : application.payment_state === "processing" ? "Pay again" : "Pay acceptance fee"}
+                        </Button>
+                        {application.payment_state === "processing" ? (
+                          <Button variant="secondary" onClick={cancelPayment}>{"Cancel unfinished payment"}</Button>
+                        ) : null}
+                      </div>
+                    )}
+                    {application.payment_state !== "verified" ? (
+                      <div className="apd-todo-extra">
+                        <DeclareAdmissionsPayment
+                          invoice={acceptanceInvoice}
+                          amount={config?.acceptance_fee_amount || 0}
+                          schoolId={application.school_id}
+                          onDeclared={load}
+                        />
+                      </div>
+                    ) : null}
                   </div>
-                </li>
+                ) : null}
+              </section>
+            ) : null}
+
+            {offer?.status === "accepted" && clearance.length > 0 ? (
+              <section className="apd-card">
+                <h2 className="apd-card-title">{"Clearance"}</h2>
+                <p className="apd-muted">{"Departments the school checks before you register. Each one signs off here; nothing is needed from you."}</p>
+                <ul className="apd-list">
+                  {clearance.map((item) => (
+                    <li key={item.id}>
+                      <div>
+                        <strong>{item.department?.name || "Department"}</strong>
+                        {item.decision_note && item.status === "rejected" ? <div className="doc-note">{item.decision_note}</div> : null}
+                      </div>
+                      <Badge tone={
+                        item.status === "cleared" ? "success" :
+                        item.status === "rejected" ? "danger" :
+                        item.status === "waived" ? "muted" :
+                        item.status === "in_progress" ? "brand" : "warn"
+                      }>{{ pending: "Not started", in_progress: "In progress", cleared: "Cleared", rejected: "Not cleared", waived: "Not needed" }[item.status] || item.status}</Badge>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {documents.length > 0 ? (
+              <section className="apd-card" id="apd-docs">
+                <h2 className="apd-card-title">{"Documents"}</h2>
+                <ul className="apd-list">
+                  {documents.map((d) => {
+                    const canUpload = ["not_uploaded", "rejected", "resubmission_required"].includes(d.status);
+                    const uploading = uploadingDocId === d.id;
+                    const [docLabel, docTone] = DOC_STATUS[d.status] || [d.status.replace(/_/g, " "), "muted"];
+                    return (
+                      <li key={d.id}>
+                        <div className="apd-list-main">
+                          <strong>{d.requirement?.label || "Document"}</strong>
+                          <span className="apd-muted">{d.requirement?.is_required ? " · Required" : " · Optional"}</span>
+                          {d.decision_note ? <div className="doc-note">{d.decision_note}</div> : null}
+                          {d.file?.file_name ? <div className="apd-file">{d.file.file_name}</div> : null}
+                        </div>
+                        <div className="apd-list-side">
+                          <Badge tone={docTone}>{docLabel}</Badge>
+                          {canUpload ? (
+                            <label className="btn btn-secondary btn-sm" style={{ cursor: uploading ? "not-allowed" : "pointer" }}>
+                              {uploading ? "Uploading..." : d.status === "not_uploaded" ? "Upload" : "Upload again"}
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,application/pdf,image/*"
+                                style={{ display: "none" }}
+                                disabled={uploading}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  e.target.value = "";
+                                  if (file) uploadDoc(d)(file);
+                                }}
+                              />
+                            </label>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : null}
+
+            {/* Form sections: shown locked with the reason rather than hidden,
+                so an applicant always sees what they sent. The ones the
+                school asked to correct are marked and open first. */}
+            <section className="apd-card" id="apd-form">
+              <div className="apd-card-head">
+                <h2 className="apd-card-title">{"Application form"}</h2>
+                {isReadonly ? <Badge>{"With the school"}</Badge> : null}
+              </div>
+              <p className="apd-muted apd-form-hint">
+                {feeLocked
+                  ? "You can read the sections now; they open for editing once the application fee is paid."
+                  : needsCorrection
+                  ? `The school asked you to correct ${listOf(flaggedTitles)}. Those are open below; save each one, then resubmit.`
+                  : isReadonly
+                  ? "Your answers are with the school. They are locked while it reviews them."
+                  : "Tap a section to open it, fill it in and save. You can come back to it any time before you submit."}
+              </p>
+
+              <Section
+                id="section-personal"
+                title="Personal information"
+                value={application.personal_info}
+                disabled={!editable.personal || feeLocked}
+                defaultOpen={!!editable.personal && !feeLocked}
+                flagged={flaggedSections.includes("personal")}
+                lockReason={lockReasonFor("personal")}
+                onSave={saveSection("personal")}
+                fields={[
+                  { name: "first_name", label: "First name" },
+                  { name: "middle_name", label: "Middle name" },
+                  { name: "surname", label: "Surname" },
+                  { name: "date_of_birth", label: "Date of birth", type: "date" },
+                  { name: "gender", label: "Gender" },
+                  { name: "nationality", label: "Nationality", type: "country" },
+                  { name: "state_of_origin", label: "State of origin", type: "region", dependsOn: "nationality" },
+                  { name: "address", label: "Home address", type: "textarea" },
+                  { name: "phone", label: "Phone" },
+                  { name: "email", label: "Email", type: "email" },
+                ]}
+              />
+
+              <Section
+                id="section-education"
+                title="Education history"
+                description="Where you have studied so far, most recent first."
+                value={application.education_history}
+                disabled={!editable.education || feeLocked}
+                defaultOpen={!!editable.education && !feeLocked}
+                flagged={flaggedSections.includes("education")}
+                lockReason={lockReasonFor("education")}
+                onSave={saveSection("education")}
+                fields={[
+                  { name: "school_name", label: "School name" },
+                  { name: "country", label: "Country", type: "country" },
+                  { name: "start_year", label: "Start year", type: "year" },
+                  { name: "end_year", label: "End year", type: "year" },
+                  { name: "qualification", label: "Qualification", type: "qualification" },
+                ]}
+              />
+
+              <Section
+                id="section-exams"
+                title="Examination results"
+                description="Your exam results — WAEC/NECO/NABTEB/JAMB or whatever your school runs."
+                value={application.exam_results}
+                disabled={!editable.exams || feeLocked}
+                defaultOpen={!!editable.exams && !feeLocked}
+                flagged={flaggedSections.includes("exams")}
+                lockReason={lockReasonFor("exams")}
+                onSave={saveSection("exams")}
+                fields={[
+                  { name: "exam_type", label: "Exam" },
+                  { name: "exam_number", label: "Exam number" },
+                  { name: "exam_year", label: "Exam year", type: "year" },
+                  { name: "subjects", label: "Subjects and grades", type: "textarea", hint: "One per line, e.g. Mathematics — B3" },
+                ]}
+              />
+
+              {config?.require_next_of_kin !== false ? (
+                <Section
+                  id="section-next_of_kin"
+                  title="Next of kin"
+                  value={application.next_of_kin}
+                  disabled={!editable.next_of_kin || feeLocked}
+                  defaultOpen={!!editable.next_of_kin && !feeLocked}
+                  flagged={flaggedSections.includes("next_of_kin")}
+                  lockReason={lockReasonFor("next_of_kin")}
+                  onSave={saveSection("next_of_kin")}
+                  fields={[
+                    { name: "name", label: "Full name" },
+                    { name: "relationship", label: "Relationship" },
+                    { name: "phone", label: "Phone" },
+                    { name: "email", label: "Email", type: "email" },
+                    { name: "address", label: "Address", type: "textarea" },
+                  ]}
+                />
+              ) : null}
+
+              {config?.require_referees || flaggedSections.includes("referees") ? (
+                <Section
+                  id="section-referees"
+                  title="Referees"
+                  value={application.referees}
+                  disabled={!editable.referees || feeLocked}
+                  defaultOpen={!!editable.referees && !feeLocked}
+                  flagged={flaggedSections.includes("referees")}
+                  lockReason={lockReasonFor("referees")}
+                  onSave={saveSection("referees")}
+                  fields={[
+                    { name: "referee_1_name", label: "Referee 1 — name" },
+                    { name: "referee_1_email", label: "Referee 1 — email", type: "email" },
+                    { name: "referee_2_name", label: "Referee 2 — name" },
+                    { name: "referee_2_email", label: "Referee 2 — email", type: "email" },
+                  ]}
+                />
+              ) : null}
+            </section>
+
+            {canSubmit ? (
+              <section className="apd-card" id="apd-submit">
+                <h2 className="apd-card-title">{"Submit your application"}</h2>
+                {feeLocked ? (
+                  <Notice tone="warn">{"Pay the application fee first; then fill in the form and submit here."}</Notice>
+                ) : (
+                  <label className="apd-declare">
+                    <input type="checkbox" checked={declaration} onChange={(e) => setDeclaration(e.target.checked)} />
+                    <span>{"I confirm that the information above is accurate and complete. I understand that providing false information may result in cancellation of my admission."}</span>
+                  </label>
+                )}
+                <div className="apd-todo-actions">
+                  <Button disabled={!declaration || submitting || feeLocked} onClick={submit}>
+                    {submitting ? "Submitting..." : "Submit application"}
+                  </Button>
+                </div>
+              </section>
+            ) : null}
+
+            {screening.length > 0 ? (
+              <section className="apd-card">
+                <h2 className="apd-card-title">{"The school's checks"}</h2>
+                <p className="apd-muted">{"Steps the school works through, such as an interview or an entrance test. They update here as each one is decided."}</p>
+                <ul className="apd-list">
+                  {screening.map((sc) => (
+                    <li key={sc.id}>
+                      <div className="apd-list-main">
+                        <strong>{sc.label || "Screening step"}</strong>
+                        <span className="apd-muted">{sc.is_required ? " · Required" : " · Optional"}</span>
+                        {sc.decision_note ? <div className="doc-note">{sc.decision_note}</div> : null}
+                      </div>
+                      <Badge tone={sc.status === "passed" ? "success" : sc.status === "failed" ? "danger" : sc.status === "waived" ? "muted" : "warn"}>
+                        {sc.status === "passed" ? "Passed" : sc.status === "failed" ? "Not cleared" : sc.status === "waived" ? "Not needed" : sc.status === "correction_required" ? "Needs follow-up" : "Waiting"}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
+
+          {/* The rail: every step, the fee, and what has happened so far. */}
+          <aside className="apd-rail">
+            {feeVisible && !feeLocked ? (
+              <section className="apd-card apd-rail-card">
+                <div className="apd-card-head">
+                  <h2 className="apd-card-title">{"Application fee"}</h2>
+                  <Badge tone={payTone}>{payLabel}</Badge>
+                </div>
+                {invoice ? <p className="apd-muted">{`Bill ${invoice.reference} · ${feeAmount}`}</p> : null}
+              </section>
+            ) : null}
+
+            <section className="apd-card apd-rail-card">
+              <h2 className="apd-card-title">{"Every step"}</h2>
+              {stages.map((stage) => (
+                <div key={stage.key} className="apd-rail-stage">
+                  <span className="apd-rail-stage-name">{stage.label}</span>
+                  <ul className="apd-steps">
+                    {stage.own.map((step) => (
+                      <AppStep key={step.step_key} step={step} />
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
-          )}
-        </Card>
+            </section>
+
+            <section className="apd-card apd-rail-card">
+              <h2 className="apd-card-title">{"What has happened"}</h2>
+              {events.length === 0 ? (
+                <Empty>{"Nothing recorded yet."}</Empty>
+              ) : (
+                <ul className="appdash-timeline">
+                  {shownEvents.map((event) => (
+                    <li key={event.id}>
+                      <span className="appdash-timeline-dot" aria-hidden="true" />
+                      <div>
+                        <div className="appdash-timeline-meta">
+                          {formatDate(event.created_at, { withTime: true })} · {event.actor_label || "System"}
+                        </div>
+                        <div className="appdash-timeline-note">
+                          {event.note || `${event.status_from || "–"} → ${event.status_to}`}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {moreEvents > 0 ? (
+                <details className="apd-older">
+                  <summary>{`Show ${moreEvents} earlier ${moreEvents === 1 ? "event" : "events"}`}</summary>
+                  <ul className="appdash-timeline">
+                    {[...events].reverse().slice(6).map((event) => (
+                      <li key={event.id}>
+                        <span className="appdash-timeline-dot" aria-hidden="true" />
+                        <div>
+                          <div className="appdash-timeline-meta">
+                            {formatDate(event.created_at, { withTime: true })} · {event.actor_label || "System"}
+                          </div>
+                          <div className="appdash-timeline-note">
+                            {event.note || `${event.status_from || "–"} → ${event.status_to}`}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </section>
+          </aside>
+        </div>
       </Page>
     </>
   );

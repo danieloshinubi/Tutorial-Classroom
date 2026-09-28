@@ -31,6 +31,7 @@ import {
   notifyApplicant,
 } from "../../lib/api";
 import {
+  Switch,
   Page,
   Card,
   Field,
@@ -999,11 +1000,13 @@ const CorrectionForm = ({ applicationId, schoolId, disabled, onDone, onError }) 
     <form onSubmit={submit}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
         {Object.keys(sections).map((k) => (
-          <label key={k} style={{ display: "flex", gap: 6 }}>
-            <input type="checkbox" checked={sections[k]}
-              onChange={(e) => setSections((s) => ({ ...s, [k]: e.target.checked }))} />
-            {k.replace(/_/g, " ")}
-          </label>
+          <Switch
+            key={k}
+            compact
+            label={k.replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase())}
+            checked={sections[k]}
+            onChange={(v) => setSections((s) => ({ ...s, [k]: v }))}
+          />
         ))}
       </div>
       <Field label="Reason">

@@ -6,6 +6,19 @@ import { lock } from "react-icons-kit/feather/lock";
 import { userX } from "react-icons-kit/feather/userX";
 import { userCheck } from "react-icons-kit/feather/userCheck";
 import { trash2 } from "react-icons-kit/feather/trash2";
+import { users as usersIcon } from "react-icons-kit/feather/users";
+import { gitMerge } from "react-icons-kit/feather/gitMerge";
+import { link as linkIcon } from "react-icons-kit/feather/link";
+import { calendar as calendarIcon } from "react-icons-kit/feather/calendar";
+import { layers } from "react-icons-kit/feather/layers";
+import { grid } from "react-icons-kit/feather/grid";
+import { fileText } from "react-icons-kit/feather/fileText";
+import { tag } from "react-icons-kit/feather/tag";
+import { creditCard } from "react-icons-kit/feather/creditCard";
+import { mail as mailIcon } from "react-icons-kit/feather/mail";
+import { toggleRight } from "react-icons-kit/feather/toggleRight";
+import { settings as settingsIcon } from "react-icons-kit/feather/settings";
+import { chevronDown } from "react-icons-kit/feather/chevronDown";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
@@ -299,11 +312,10 @@ const PeoplePanel = () => {
       {/* Searching a roster of two hundred means scrolling; the box you
           searched with has to still be there when you get to the bottom. */}
       <div className="panel-top">
-        <div className="page-head">
-        <div className="btn-row">
+        <div className="page-head people-bar">
+        <div className="btn-row people-toolbar">
           <input
             className="input"
-            style={{ maxWidth: 280 }}
             placeholder="Search by name or email"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -1300,7 +1312,88 @@ const MailboxesPanel = () => {
   );
 };
 
-const TABS = ["people", "organogram", "academic", "classes", "levels", "admissions", "students", "guardians", "mailboxes", "payments", "fees", "modules", "settings"];
+// The sections, in the groups a school thinks in. Thirteen tabs in one row
+// ran off the side of every screen, and two of them ("Classes & subjects",
+// "Classes & departments") read as the same thing. Each now says what it is.
+const SECTIONS = [
+  {
+    group: "People",
+    items: [
+      { id: "people", label: "People", icon: usersIcon, description: "Everyone who can sign in: add staff, set their roles, reset passwords." },
+      { id: "organogram", label: "Org chart", icon: gitMerge, description: "Who reports to whom across the school." },
+      { id: "students", label: "Student records", icon: userCheck, description: "Registered pupils, their admission numbers and standing." },
+      { id: "guardians", label: "Parents & children", icon: linkIcon, description: "Link each parent to their children, so they see the right bills and reports." },
+    ],
+  },
+  {
+    group: "Teaching",
+    items: [
+      { id: "academic", label: "Calendar", icon: calendarIcon, description: "Sessions and terms, and which one is current." },
+      { id: "levels", label: "Levels & departments", icon: layers, description: "Year groups (JSS 1, Year 7) or departments (Science, Arts) the school sorts by." },
+      { id: "classes", label: "Classes & subjects", icon: grid, description: "The actual classes with pupils in them, their form teachers, and the subjects taught." },
+    ],
+  },
+  {
+    group: "Admissions & money",
+    items: [
+      { id: "admissions", label: "Admissions", icon: fileText, description: "Application and acceptance fees, and what the application form asks for." },
+      { id: "fees", label: "Fees setup", icon: tag, description: "The charges and discounts the school uses, named once for every term." },
+      { id: "payments", label: "Online payments", icon: creditCard, description: "The payment gateway parents pay through, and how the bursary confirms payments." },
+    ],
+  },
+  {
+    group: "School",
+    items: [
+      { id: "mailboxes", label: "Mailboxes", icon: mailIcon, description: "Email accounts whose messages arrive as tickets." },
+      { id: "modules", label: "Modules", icon: toggleRight, description: "Switch parts of Schoolivio on or off for this school." },
+      { id: "settings", label: "School settings", icon: settingsIcon, description: "Name, logo, colours, contact details and letters." },
+    ],
+  },
+];
+const ALL_SECTIONS = SECTIONS.flatMap((g) => g.items.map((item) => ({ ...item, group: g.group })));
+const TABS = ALL_SECTIONS.map((s) => s.id);
+
+const PANELS = {
+  people: PeoplePanel,
+  organogram: OrganogramPanel,
+  academic: AcademicPanel,
+  classes: ClassesPanel,
+  levels: LevelsPanel,
+  admissions: AdmissionsSettingsPanel,
+  students: StudentRegistrationsPanel,
+  guardians: GuardiansPanel,
+  mailboxes: MailboxesPanel,
+  payments: PaymentGatewaySettingsPanel,
+  fees: FeesSetupPanel,
+  modules: ModulesPanel,
+  settings: SettingsPanel,
+};
+
+// The grouped list, shared by the side menu and the phone's section picker.
+const SectionList = ({ active, onPick }) => (
+  <>
+    {SECTIONS.map((g) => (
+      <div key={g.group} className="sa-nav-group">
+        <span className="sa-nav-group-label">{g.group}</span>
+        <ul>
+          {g.items.map((item) => (
+            <li key={item.id}>
+              <button
+                type="button"
+                className={`sa-nav-item${active === item.id ? " active" : ""}`}
+                aria-current={active === item.id ? "page" : undefined}
+                onClick={() => onPick(item.id)}
+              >
+                <Icon icon={item.icon} size={16} />
+                <span>{item.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </>
+);
 
 const SchoolAdmin = () => {
   const { school } = useSchool();
@@ -1309,6 +1402,7 @@ const SchoolAdmin = () => {
     const requested = searchParams.get("tab");
     return TABS.includes(requested) ? requested : "people";
   });
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   // A link elsewhere in the app (e.g. "prepare items from config" finding
   // nothing configured) can point straight at a tab here via ?tab=... —
@@ -1324,6 +1418,7 @@ const SchoolAdmin = () => {
 
   const changeTab = (id) => {
     setTab(id);
+    setPickerOpen(false);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
@@ -1338,48 +1433,59 @@ const SchoolAdmin = () => {
     );
   };
 
+  const current = ALL_SECTIONS.find((s) => s.id === tab) || ALL_SECTIONS[0];
+  const Panel = PANELS[current.id];
+
   return (
     <div className="shell">
       <Navbar />
       <Page
         title="School administration"
         subtitle={school ? `${school.name} · ${school.slug}.schoolivio.com` : ""}
-        toolbar={
-          <Tabs
-            tabs={[
-              { id: "people", label: "People" },
-              { id: "organogram", label: "Org chart" },
-              { id: "academic", label: "Calendar" },
-              { id: "classes", label: "Classes & subjects" },
-              { id: "levels", label: "Classes & departments" },
-              { id: "admissions", label: "Admissions settings" },
-              { id: "students", label: "Students" },
-              { id: "guardians", label: "Parents & children" },
-              { id: "mailboxes", label: "Mailboxes" },
-              { id: "payments", label: "Payments" },
-              { id: "fees", label: "Fees setup" },
-              { id: "modules", label: "Modules" },
-              { id: "settings", label: "School settings" },
-            ]}
-            active={tab}
-            onChange={changeTab}
-          />
-        }
       >
+        <div className="sa-layout">
+          {/* Stays in place while a section scrolls. */}
+          <nav className="sa-nav" aria-label="Administration sections">
+            <SectionList active={current.id} onPick={changeTab} />
+          </nav>
 
-        {tab === "people" ? <PeoplePanel /> : null}
-        {tab === "organogram" ? <OrganogramPanel /> : null}
-        {tab === "academic" ? <AcademicPanel /> : null}
-        {tab === "classes" ? <ClassesPanel /> : null}
-        {tab === "levels" ? <LevelsPanel /> : null}
-        {tab === "admissions" ? <AdmissionsSettingsPanel /> : null}
-        {tab === "students" ? <StudentRegistrationsPanel /> : null}
-        {tab === "guardians" ? <GuardiansPanel /> : null}
-        {tab === "mailboxes" ? <MailboxesPanel /> : null}
-        {tab === "payments" ? <PaymentGatewaySettingsPanel /> : null}
-        {tab === "fees" ? <FeesSetupPanel /> : null}
-        {tab === "modules" ? <ModulesPanel /> : null}
-        {tab === "settings" ? <SettingsPanel /> : null}
+          <div className="sa-content">
+            {/* Phone: no room for the side menu, so the section is a picker. */}
+            <div className="sa-picker">
+              <button
+                type="button"
+                className="sa-picker-button"
+                aria-expanded={pickerOpen}
+                onClick={() => setPickerOpen((v) => !v)}
+              >
+                <Icon icon={current.icon} size={16} />
+                <span className="sa-picker-text">
+                  <span className="sa-picker-group">{current.group}</span>
+                  <strong>{current.label}</strong>
+                </span>
+                <Icon icon={chevronDown} size={18} />
+              </button>
+              {pickerOpen ? (
+                <div className="sa-picker-panel">
+                  <SectionList active={current.id} onPick={changeTab} />
+                </div>
+              ) : null}
+            </div>
+
+            <header className="sa-section-head">
+              <span className="sa-section-icon" aria-hidden="true"><Icon icon={current.icon} size={20} /></span>
+              <div>
+                <span className="sa-section-group">{current.group}</span>
+                <h2>{current.label}</h2>
+                <p>{current.description}</p>
+              </div>
+            </header>
+
+            <div className="sa-panel">
+              <Panel />
+            </div>
+          </div>
+        </div>
       </Page>
     </div>
   );

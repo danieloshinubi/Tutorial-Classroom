@@ -1333,8 +1333,12 @@ const ChatPage = () => {
   // actual upload waits until Send is pressed.
   // One place a file becomes the pending attachment, whether it arrived from
   // the paperclip or was dropped onto the conversation.
-  const attachFile = (file) => {
-    if (!file) return;
+  const attachFile = (incoming) => {
+    if (!incoming) return;
+    const generic = /^image.(png|jpe?g|gif|webp)$/i.test(incoming.name || "") || !incoming.name;
+    const file = generic && incoming.type.startsWith("image/")
+      ? new File([incoming], `Pasted image ${new Date().toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).replace(/[/:]/g, ".")}.${(incoming.type.split("/")[1] || "png").replace("jpeg", "jpg")}`, { type: incoming.type })
+      : incoming;
     if (pendingFile) URL.revokeObjectURL(pendingFile.previewUrl);
     setPendingFile({ file, name: file.name, size: file.size, previewUrl: URL.createObjectURL(file) });
     // A caption is optional — an attachment alone is a complete message, and
@@ -1344,6 +1348,11 @@ const ChatPage = () => {
     // until something was typed. Putting the cursor in the composer makes
     // Enter send the attachment on its own.
     composerRef.current?.focus();
+  };
+
+  const handlePasteFiles = (files) => {
+    attachFile(files[0]);
+    if (files.length > 1) setError("One file per message — the first one was attached.");
   };
 
   const handleFileChange = (e) => {
@@ -2048,7 +2057,28 @@ const ChatPage = () => {
                         </button>
                       </div>
                     ) : null}
-                    {pendingFile ? (
+                    {pendingFile && pendingFile.file.type.startsWith("image/") ? (
+                      <div className="tw-pt-2.5 tw-px-3">
+                        <div className="tw-relative tw-inline-block">
+                          <button
+                            type="button"
+                            className="tw-block tw-p-0 tw-border tw-border-solid tw-border-tix-line tw-rounded-xl tw-overflow-hidden tw-bg-tix-surface-2 tw-cursor-zoom-in"
+                            onClick={previewPendingFile}
+                            title={pendingFile.name}
+                          >
+                            <img src={pendingFile.previewUrl} alt={pendingFile.name} className="tw-block tw-max-h-[160px] tw-max-w-[260px] tw-object-contain" />
+                          </button>
+                          <button
+                            type="button"
+                            className="tw-absolute -tw-top-2 -tw-right-2 tw-w-6 tw-h-6 tw-rounded-full tw-border-none tw-bg-tix-ink tw-text-white tw-flex tw-items-center tw-justify-center tw-cursor-pointer tw-shadow-1 hover:tw-bg-danger"
+                            aria-label="Remove picture"
+                            onClick={clearPendingFile}
+                          >
+                            <Icon icon={xIcon} size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : pendingFile ? (
                       <div className="tw-px-3">
                         <AttachmentChip
                           name={pendingFile.name}
@@ -2080,10 +2110,11 @@ const ChatPage = () => {
                           ref={composerRef}
                           value={composeBody}
                           onChange={(html) => { setComposeBody(html); notifyTyping(); }}
-                          placeholder="Type a message..."
+                          placeholder={pendingFile ? "Add a message, or press Enter to send" : "Type a message..."}
                           onSubmitEditor={send}
                           showToolbar={showFormatting}
                           autoFocus={FOCUS_ON_OPEN}
+                          onPasteFiles={handlePasteFiles}
                         />
                       </div>
                       <button

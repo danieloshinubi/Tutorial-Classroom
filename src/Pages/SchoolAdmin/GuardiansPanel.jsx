@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSchool } from "../../context/SchoolContext";
 import { useActionFeedback } from "../../Components/Toast";
 import {
@@ -9,9 +9,7 @@ import {
 } from "../../lib/api";
 import {
   Card,
-  Field,
   Button,
-  Badge,
   Empty,
   Select,
   SkeletonList,
@@ -117,19 +115,45 @@ const GuardiansPanel = () => {
     }
   };
 
+  // What the list shows: a search across parents and their children, and
+  // which parents (all, with children, none yet).
+  const [query, setQuery] = useState("");
+  const [show, setShow] = useState("all");
+  const childSelectRef = useRef(null);
+
+  const counts = useMemo(() => {
+    const withKids = parents.filter((p) => (links[p.profiles.id] || []).length > 0).length;
+    return { all: parents.length, with: withKids, none: parents.length - withKids };
+  }, [parents, links]);
+
+  const shown = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return parents.filter((p) => {
+      const kids = links[p.profiles.id] || [];
+      if (show === "with" && kids.length === 0) return false;
+      if (show === "none" && kids.length > 0) return false;
+      if (!needle) return true;
+      const haystack = [
+        displayName(p.profiles), p.profiles.email,
+        ...kids.map((k) => `${displayName(k.student)} ${k.student?.email || ""}`),
+      ].join(" ").toLowerCase();
+      return haystack.includes(needle);
+    });
+  }, [parents, links, query, show]);
+
+  // "Link a child" on a row: that parent goes into the form, and the child
+  // picker is next.
+  const startLinkFor = (parentId) => {
+    setSelected(parentId);
+    setChildId("");
+    requestAnimationFrame(() => {
+      childSelectRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      childSelectRef.current?.querySelector("button")?.focus();
+    });
+  };
+
   return (
     <>
-      {/* .panel-top below pulls itself up 14px (margin-top: -14px) to sit
-          flush under the sticky page header when it's the first thing in
-          the page — here it isn't, so that same pull-up ate into this
-          paragraph's own last line instead. Matching margin-bottom cancels
-          it out (sibling margins collapse: 16 + -14 nets a clean 2px gap)
-          instead of leaving the panel's opaque background overlapping the
-          text above it. */}
-      <p style={{ color: "var(--ink-2)", maxWidth: "64ch", marginBottom: 16 }}>
-        {"Choose which children each parent account can see. A parent with no children linked sees nothing at all."}
-      </p>
-
       {loading ? <SkeletonList rows={4} avatar={true} /> : null}
 
       {!loading && parents.length === 0 ? (
@@ -139,22 +163,13 @@ const GuardiansPanel = () => {
       ) : null}
 
       {parents.length > 0 ? (
-        <div className="panel-top">
-        <Card>
-          <h3 style={{ marginTop: 0 }}>{"Link a child to a parent"}</h3>
-          {/* A row instead of four stacked fields — the same form in a
-              fraction of the height, so the list of already-linked parents
-              below doesn't start a full scroll down. */}
-          <form onSubmit={handleLink}>
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                alignItems: "start",
-              }}
-            >
-              <Field label="Parent">
+        <>
+          {/* Stays pinned while the list scrolls: the form to link, then the
+              search and filter for the list below. */}
+          <div className="panel-top gd-top">
+            <form className="gd-link" onSubmit={handleLink}>
+              <span className="gd-link-title">{"Link a child"}</span>
+              <div className="gd-link-field gd-link-parent">
                 <Select
                   className="select"
                   value={selected}
@@ -167,109 +182,134 @@ const GuardiansPanel = () => {
                     })),
                   ]}
                 />
-              </Field>
-
-              <Field
-                label="Child"
-                hint={
-                  students.length
-                    ? "Only student accounts appear here."
-                    : "No student accounts yet — add one under People first."
-                }
-              >
+              </div>
+              <div className="gd-link-field gd-link-child" ref={childSelectRef}>
                 <Select
                   className="select"
                   value={childId}
                   onChange={setChildId}
                   disabled={students.length === 0}
+                  placeholder={students.length ? "Choose a child" : "No pupils yet"}
                   options={[
-                    { value: "", label: "Choose a child" },
+                    { value: "", label: students.length ? "Choose a child" : "No pupils yet — add one under People" },
                     ...students.map((s) => ({
                       value: s.profiles.id,
                       label: `${displayName(s.profiles)} — ${s.profiles.email}`,
                     })),
                   ]}
                 />
-              </Field>
-
-              <Field label="Relationship" hint="Optional — mother, father, guardian.">
+              </div>
+              <div className="gd-link-field gd-link-rel">
                 <input
                   className="input"
                   value={relationship}
-                  placeholder="Mother"
+                  placeholder="Relationship (optional)"
+                  aria-label="Relationship, optional: mother, father, guardian"
                   onChange={(e) => setRelationship(e.target.value)}
                 />
-              </Field>
-            </div>
-
-            <Button type="submit" disabled={busy}>
-              {busy ? "Linking..." : "Link"}
-            </Button>
-          </form>
-        </Card>
-        </div>
-      ) : null}
-
-      {parents.map((p) => {
-        const kids = links[p.profiles.id] || [];
-        return (
-          <Card key={p.profiles.id} style={{ marginBottom: 12 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <span
-                className="brand-mark"
-                style={{ width: 36, height: 36, borderRadius: "50%", fontSize: 13 }}
-              >
-                {initials(p.profiles)}
-              </span>
-              <div style={{ flex: 1, minWidth: 160 }}>
-                <strong>{displayName(p.profiles)}</strong>
-                <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
-                  {p.profiles.email}
-                </div>
               </div>
-              <Badge tone={kids.length ? "brand" : "warn"}>
-                {kids.length
-                  ? `${kids.length} child${kids.length === 1 ? "" : "ren"}`
-                  : "no children linked"}
-              </Badge>
-            </div>
+              <Button type="submit" disabled={busy || !selected || !childId}>
+                {busy ? "Linking..." : "Link"}
+              </Button>
+            </form>
 
-            {kids.length ? (
-              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-                {kids.map((k) => (
-                  <div
-                    key={k.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      flexWrap: "wrap",
-                      padding: "8px 12px",
-                      background: "var(--bg)",
-                      borderRadius: "var(--r-sm)",
-                    }}
+            <div className="gd-filters">
+              <input
+                className="input gd-search"
+                placeholder="Search parents or children"
+                aria-label="Search parents or children"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+              <div className="gd-chips" role="group" aria-label="Show">
+                {[
+                  ["all", `All ${counts.all}`],
+                  ["with", `With children ${counts.with}`],
+                  ["none", `No children linked ${counts.none}`],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={show === key}
+                    className={`gd-chip${show === key ? " active" : ""}${key === "none" && counts.none ? " warn" : ""}`}
+                    onClick={() => setShow(key)}
                   >
-                    <span style={{ flex: 1, minWidth: 140 }}>
-                      {displayName(k.student)}
-                      {k.relationship ? (
-                        <span style={{ color: "var(--ink-3)" }}>{` · ${k.relationship}`}</span>
-                      ) : null}
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      disabled={busy}
-                      onClick={() => handleUnlink(k, displayName(p.profiles))}
-                    >
-                      {"Unlink"}
-                    </Button>
-                  </div>
+                    {label}
+                  </button>
                 ))}
               </div>
-            ) : null}
-          </Card>
-        );
-      })}
+            </div>
+          </div>
+
+          {shown.length === 0 ? (
+            <Empty>{query.trim() ? "No parent or child matches that." : "No parents in this view."}</Empty>
+          ) : (
+            <Card className="pad-0" style={{ padding: "4px 14px" }}>
+              <p className="people-count">
+                {`${shown.length} of ${parents.length} ${parents.length === 1 ? "parent" : "parents"}`}
+              </p>
+              <div className="table-wrap">
+                <table className="data gd-table">
+                  <thead>
+                    <tr>
+                      <th>{"Parent"}</th>
+                      <th>{"Children they can see"}</th>
+                      <th aria-label="Actions" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shown.map((p) => {
+                      const kids = links[p.profiles.id] || [];
+                      return (
+                        <tr key={p.profiles.id} className={kids.length ? "" : "gd-row-empty"}>
+                          <td className="gd-parent">
+                            <span className="people-person">
+                              <span className="people-avatar gd-avatar">{initials(p.profiles)}</span>
+                              <span className="people-person-text">
+                                <span className="people-name">{displayName(p.profiles)}</span>
+                                <span className="people-email">{p.profiles.email}</span>
+                              </span>
+                            </span>
+                          </td>
+                          <td>
+                            {kids.length ? (
+                              <ul className="gd-kids">
+                                {kids.map((k) => (
+                                  <li key={k.id} className="gd-kid">
+                                    <span className="gd-kid-name">{displayName(k.student)}</span>
+                                    {k.relationship ? <span className="gd-kid-rel">{k.relationship}</span> : null}
+                                    <button
+                                      type="button"
+                                      className="gd-kid-x"
+                                      aria-label={`Unlink ${displayName(k.student)}`}
+                                      title="Unlink"
+                                      disabled={busy}
+                                      onClick={() => handleUnlink(k, displayName(p.profiles))}
+                                    >
+                                      {"×"}
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              <span className="gd-none">{"No children linked — sees nothing"}</span>
+                            )}
+                          </td>
+                          <td className="gd-actions">
+                            <Button size="sm" variant="secondary" onClick={() => startLinkFor(p.profiles.id)}>
+                              {"Link a child"}
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </>
+      ) : null}
     </>
   );
 };

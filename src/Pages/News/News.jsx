@@ -18,6 +18,7 @@ import {
   NOTICE_AUDIENCES,
 } from "../../lib/api";
 import {
+  Switch,
   Page,
   Card,
   Field,
@@ -517,26 +518,12 @@ const News = () => {
               </Field>
 
               <Field label="Keep it at the top">
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={pinned}
-                    onChange={(e) => setPinned(e.target.checked)}
-                  />
-                  <span>{"Pin this notice"}</span>
-                </label>
+                <Switch compact label="Pin this notice" checked={pinned} onChange={setPinned} />
               </Field>
             </div>
 
             <Field label="Is it an event?">
-              <label className="check">
-                <input
-                  type="checkbox"
-                  checked={isEvent}
-                  onChange={(e) => setIsEvent(e.target.checked)}
-                />
-                <span>{"This happens at a particular time and place"}</span>
-              </label>
+              <Switch compact label="This happens at a particular time and place" checked={isEvent} onChange={setIsEvent} />
             </Field>
 
             {isEvent ? (

@@ -5,7 +5,7 @@ import {
   updatePaymentGatewaySetting,
   connectPaymentGateway,
 } from "../../lib/api";
-import { Card, Field, Button, Notice, Tabs, Select, SkeletonText } from "../../Components/UI";
+import { Card, Field, Button, Notice, Tabs, Select, SkeletonText, Switch } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 
 // Every provider with a working checkout/webhook adapter (see
@@ -71,15 +71,8 @@ const OTHER_FIELDS = [
   { key: "public_key", label: "Public key", placeholder: "Your gateway's public key (if it has one)" },
 ];
 
-const Toggle = ({ label, hint, checked, onChange, disabled }) => (
-  <label style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-    <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} style={{ marginTop: 3 }} />
-    <span>
-      <div style={{ fontWeight: 600 }}>{label}</div>
-      {hint ? <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>{hint}</div> : null}
-    </span>
-  </label>
-);
+// A setting row: the shared Switch (Components/UI.jsx).
+const Toggle = (props) => <Switch {...props} />;
 
 const PaymentGatewaySettingsPanel = () => {
   const { schoolId } = useSchool();

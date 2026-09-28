@@ -107,6 +107,16 @@ export const MODULES = [
     roles: [...RUNS_THE_SCHOOL, "bursar"],
   },
   {
+    id: "accounts",
+    priority: 37,
+    group: "Money",
+    path: "/Accounts",
+    label: "Accounts",
+    // The books: journals, trial balance, income statement, balance sheet.
+    // The same people who run the bursary, and nobody else.
+    roles: [...RUNS_THE_SCHOOL, "bursar"],
+  },
+  {
     id: "fees",
     priority: 30,
     group: "Money",

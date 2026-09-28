@@ -17,7 +17,7 @@ import {
   uploadExamQuestionImage,
   removeExamQuestionImage,
 } from "../../lib/api";
-import { Page, Card, Field, Button, Badge, Select, DateTimePicker } from "../../Components/UI";
+import { Page, Card, Field, Button, Badge, Select, DateTimePicker, Switch } from "../../Components/UI";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 import { useActionFeedback } from "../../Components/Toast";
 import { confirmDialog } from "../../Components/Confirm";
@@ -468,21 +468,11 @@ const ExamBuilder = () => {
               />
             </Field>
           </div>
-          <label
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "center",
-              fontSize: 14,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={exam.show_results}
-              onChange={setExamField("show_results")}
-            />
-            {"Show students their score as soon as they submit"}
-          </label>
+          <Switch
+            label="Show students their score as soon as they submit"
+            checked={exam.show_results}
+            onChange={(v) => setExam((current) => ({ ...current, show_results: v }))}
+          />
         </Card>
 
         <Card style={{ marginBottom: 20 }}>
@@ -503,23 +493,12 @@ const ExamBuilder = () => {
             ["shuffle_options", "Shuffle answer options per student"],
             ["allow_calculator", "Allow a scientific calculator during the exam"],
           ].map(([field, label]) => (
-            <label
+            <Switch
               key={field}
-              style={{
-                display: "flex",
-                gap: 8,
-                alignItems: "center",
-                fontSize: 14,
-                marginBottom: 10,
-              }}
-            >
-              <input
-                type="checkbox"
-                checked={exam[field]}
-                onChange={setExamField(field)}
-              />
-              {label}
-            </label>
+              label={label}
+              checked={exam[field]}
+              onChange={(v) => setExam((current) => ({ ...current, [field]: v }))}
+            />
           ))}
 
           <Field

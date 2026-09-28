@@ -128,6 +128,29 @@ export const Button = ({ variant = "primary", size, className = "", ...props }) 
   />
 );
 
+// An on/off setting: its name (and a line of explanation) with a switch on
+// the right. Replaces the bare checkboxes settings used to be, which were
+// easy to miss and did not read as "on" or "off" at a glance. compact puts
+// the switch before the words, for a setting inside a row of fields.
+// A statement a person signs ("I confirm that...") stays a checkbox.
+export const Switch = ({ checked, onChange, label, hint, disabled = false, compact = false }) => (
+  <label className={`ui-switch-row${compact ? " compact" : ""}${disabled ? " disabled" : ""}`}>
+    <span className="ui-switch-text">
+      <span className="ui-switch-label">{label}</span>
+      {hint ? <span className="ui-switch-hint">{hint}</span> : null}
+    </span>
+    <input
+      type="checkbox"
+      role="switch"
+      className="ui-switch"
+      checked={!!checked}
+      aria-checked={!!checked}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.checked)}
+    />
+  </label>
+);
+
 export const Field = ({ label, hint, children }) => (
   <label className="field">
     {label ? <span className="label">{label}</span> : null}
@@ -422,6 +445,10 @@ const BaseDatePicker = ({
   value,
   onChange,
   withTime = false,
+  // Optional "YYYY-MM-DD": earlier days are shown greyed and cannot be picked
+  // (the books refuse a journal dated before they start, so offering one only
+  // to refuse it at Post read as a bug).
+  minDate = null,
   className = "input",
   disabled = false,
   placeholder,
@@ -508,7 +535,10 @@ const BaseDatePicker = ({
     close();
   };
 
+  const tooEarly = (date) => Boolean(minDate) && localDateToIso(date) < minDate;
+
   const pickDay = (date) => {
+    if (tooEarly(date)) return;
     if (withTime) {
       setFocusedDate(date);
       setDraftDate(date);
@@ -692,6 +722,7 @@ const BaseDatePicker = ({
                       data-date={iso}
                       tabIndex={isFocused ? 0 : -1}
                       className={`uidate-day${outside ? " outside" : ""}${isSameDay(date, highlightDate) ? " selected" : ""}${isSameDay(date, today) ? " today" : ""}`}
+                      disabled={tooEarly(date)}
                       onClick={() => pickDay(date)}
                       onFocus={() => setFocusedDate(date)}
                     >
