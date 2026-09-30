@@ -4306,6 +4306,21 @@ export const addFeeItem = async ({
   return data;
 };
 
+// A fee structure's name and due date (supabase/205). A new due date also
+// moves its draft bills; issued ones keep the date their family was given.
+export const updateFeeStructure = async ({ id, name, dueOn }) => {
+  const { data, error } = await supabase.rpc("update_fee_structure", { target_structure: id, name_in: name, due_on_in: dueOn || null });
+  if (error) throw error;
+  return data;
+};
+
+// How many bills a structure has raised, by state.
+export const countStructureInvoices = async (structureId) => {
+  const { data, error } = await supabase.from("invoices").select("status").eq("structure_id", structureId);
+  if (error) throw error;
+  return (data || []).reduce((t, r) => ({ ...t, [r.status]: (t[r.status] || 0) + 1 }), {});
+};
+
 export const updateFeeItem = async ({ id, schoolId, name, amount, isOptional }) => {
   const { data: owned, error: ownerError } = await supabase
     .from("fee_items")

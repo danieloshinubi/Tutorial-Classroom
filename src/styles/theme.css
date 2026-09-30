@@ -8290,3 +8290,10 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
 /* A dropdown near the right edge opens leftwards instead of off the screen. */
 .uiselect-panel.align-end { left: auto; right: 0; }
 .uiselect-panel { max-width: calc(100vw - 24px); }
+
+/* Bursary: editing a fee structure in place. */
+.bz-edit { display: flex; flex-direction: column; gap: 12px; padding: 12px 0 4px; }
+.bz-edit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 14px; }
+.bz-edit-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bz-edit-lines li { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 10px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; }
+@media (max-width: 560px) { .bz-edit-lines li { grid-template-columns: 1fr 1fr; } .bz-edit-lines li .bz-line-name { grid-column: 1 / -1; } }

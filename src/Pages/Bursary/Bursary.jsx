@@ -15,6 +15,9 @@ import {
   deleteFeeStructure,
   addFeeItem,
   deleteFeeItem,
+  updateFeeItem,
+  updateFeeStructure,
+  countStructureInvoices,
   raiseInvoicesForClass,
   issueInvoice,
   cancelInvoice,
@@ -469,6 +472,60 @@ const Structures = ({
     }
   };
 
+  // Editing a structure in place: its name, due date and the amount of each
+  // charge (supabase/205). Who it applies to and the term stay as they are;
+  // bills may already hang off them.
+  const [editing, setEditing] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const startEdit = (structure) =>
+    setEditing({
+      id: structure.id,
+      name: structure.name,
+      dueOn: structure.due_on || "",
+      lines: Object.fromEntries((items[structure.id] || []).map((l) => [l.id, { name: l.name, amount: String(Number(l.amount)), optional: l.is_optional }])),
+    });
+  const saveEdit = async (structure) => {
+    if (!editing?.name.trim()) {
+      onError("Give the structure a name.");
+      return;
+    }
+    const before = Object.fromEntries((items[structure.id] || []).map((l) => [l.id, l]));
+    const changed = Object.entries(editing.lines).filter(([id, v]) => {
+      const b = before[id];
+      return b && (Number(v.amount) !== Number(b.amount) || Boolean(v.optional) !== Boolean(b.is_optional));
+    });
+    if (changed.some(([, v]) => !(Number(v.amount) >= 0) || v.amount === "")) {
+      onError("Every charge needs an amount (0 or more).");
+      return;
+    }
+    const counts = await countStructureInvoices(structure.id).catch(() => ({}));
+    const drafts = counts.draft || 0;
+    const issued = counts.issued || 0;
+    if (changed.length && issued) {
+      const ok = await confirmDialog({
+        title: "Change these charges?",
+        body: `${issued} bill${issued === 1 ? " has" : "s have"} already been issued from this structure and will not change. Only bills raised from now on use the new amounts.`,
+        confirmLabel: "Save",
+      });
+      if (!ok) return;
+    }
+    setSavingEdit(true);
+    onError("");
+    try {
+      await updateFeeStructure({ id: structure.id, name: editing.name.trim(), dueOn: editing.dueOn || null });
+      for (const [id, v] of changed) {
+        await updateFeeItem({ id, schoolId, amount: Number(v.amount), isOptional: Boolean(v.optional) });
+      }
+      setEditing(null);
+      const movedDue = (editing.dueOn || null) !== (structure.due_on || null) && drafts;
+      onChange(`Saved.${movedDue ? ` The due date of ${drafts} draft bill${drafts === 1 ? "" : "s"} moved too.` : ""}`);
+    } catch (err) {
+      onError(err.message || "Could not save the changes.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   const remove = async (structure) => {
     if (!await confirmDialog(`Delete "${structure.name}"?`)) return;
     try {
@@ -611,7 +668,38 @@ const Structures = ({
               </div>
             </div>
 
-            {lines.length ? (
+            {editing?.id === s.id ? (
+              <div className="bz-edit">
+                <div className="bz-edit-grid">
+                  <Field label="Name">
+                    <input className="input" value={editing.name} onChange={(e) => setEditing((x) => ({ ...x, name: e.target.value }))} />
+                  </Field>
+                  <Field label="Due by" hint="Draft bills from this structure move too; issued bills keep their date.">
+                    <DatePicker value={editing.dueOn} onChange={(v) => setEditing((x) => ({ ...x, dueOn: v || "" }))} />
+                  </Field>
+                </div>
+                {lines.length ? (
+                  <ul className="bz-edit-lines">
+                    {lines.map((l) => {
+                      const v = editing.lines[l.id] || { amount: String(Number(l.amount)), optional: l.is_optional };
+                      const setLine = (patch) => setEditing((x) => ({ ...x, lines: { ...x.lines, [l.id]: { ...v, ...patch } } }));
+                      return (
+                        <li key={l.id}>
+                          <span className="bz-line-name">{l.name}</span>
+                          <MoneyInput value={v.amount} onChange={(raw) => setLine({ amount: raw })} aria-label={`Amount for ${l.name}`} />
+                          <Switch compact label="Optional" checked={Boolean(v.optional)} onChange={(on) => setLine({ optional: on })} />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+                <p className="bz-sub">{"Who it applies to and the term stay as they are. To change those, make a new structure."}</p>
+                <div className="btn-row">
+                  <Button size="sm" disabled={savingEdit} onClick={() => saveEdit(s)}>{savingEdit ? "Saving..." : "Save"}</Button>
+                  <Button size="sm" variant="secondary" disabled={savingEdit} onClick={() => setEditing(null)}>{"Cancel"}</Button>
+                </div>
+              </div>
+            ) : lines.length ? (
               <ul className="bz-lines">
                 {lines.map((l) => (
                   <li key={l.id} className="bz-line">
@@ -775,6 +863,11 @@ const Structures = ({
                 </Button>
               )}
               <span className="bz-spacer" />
+              {editing?.id === s.id ? null : (
+                <Button size="sm" variant="secondary" onClick={() => startEdit(s)}>
+                  {"Edit"}
+                </Button>
+              )}
               <Button size="sm" variant="ghost" onClick={() => remove(s)}>
                 {"Delete"}
               </Button>
