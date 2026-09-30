@@ -250,7 +250,7 @@ const TenantDetail = () => {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [showExtend, setShowExtend] = useState(false);
-  const [extendDays, setExtendDays] = useState("45");
+  const [extendDays, setExtendDays] = useState("21");
   const { setError, setNotice } = useActionFeedback();
 
   const load = useCallback(() => {

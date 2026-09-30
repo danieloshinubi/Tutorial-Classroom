@@ -150,7 +150,7 @@ const StartTrial = () => {
       <div className="mkt-auth-card">
         <Link to="/" className="mkt-back-link">{"← Back to schoolivio.com"}</Link>
         <Mark size={34} />
-        <h1>{user ? "Start another school" : "Start your 30-day free trial"}</h1>
+        <h1>{user ? "Start another school" : "Start your 21-day free trial"}</h1>
         <p className="lede">
           {user
             ? "You're signed in — just name the school and pick its address."

@@ -20,6 +20,13 @@ import { award } from "react-icons-kit/feather/award";
 import { user } from "react-icons-kit/feather/user";
 import { check } from "react-icons-kit/feather/check";
 import { zap } from "react-icons-kit/feather/zap";
+import { shoppingBag } from "react-icons-kit/feather/shoppingBag";
+import { bookOpen } from "react-icons-kit/feather/bookOpen";
+import { briefcase } from "react-icons-kit/feather/briefcase";
+import { messageCircle } from "react-icons-kit/feather/messageCircle";
+import { download } from "react-icons-kit/feather/download";
+import { smartphone } from "react-icons-kit/feather/smartphone";
+import { percent } from "react-icons-kit/feather/percent";
 import { supabase } from "../lib/supabaseClient";
 import { Mark } from "../Components/Logo";
 
@@ -130,6 +137,42 @@ const MODULES = [
     ],
   },
   {
+    key: "payroll",
+    label: "Payroll",
+    icon: briefcase,
+    eyebrow: "September 2026",
+    title: "Payroll this month",
+    stats: [
+      { value: "₦9.8M", label: "Gross pay" },
+      { value: "₦1.1M", label: "PAYE" },
+      { value: "38",    label: "Payslips" },
+      { value: "1",     label: "Awaiting approval" },
+    ],
+    rows: [
+      { text: "September run — approved by owner",  tone: "g", badge: "Approved" },
+      { text: "Payslips released to 38 staff",      tone: "g", badge: "Sent" },
+      { text: "WHT on 3 consultants — due 21 Oct",  tone: "y", badge: "Due" },
+    ],
+  },
+  {
+    key: "assistant",
+    label: "Assistant",
+    icon: cpu,
+    eyebrow: "AI assistant",
+    title: "Ask Schoolivio",
+    stats: [
+      { value: "42",  label: "Families owing" },
+      { value: "₦6.4M", label: "Still to collect" },
+      { value: "12",  label: "Applicants to screen" },
+      { value: "1",   label: "Action to confirm" },
+    ],
+    rows: [
+      { text: "“Who still owes First Term fees?” — answered", tone: "g", badge: "Done" },
+      { text: "Post news: PTA meeting on Friday",            tone: "y", badge: "Confirm" },
+      { text: "Chart: collections by class",                  tone: "p", badge: "Chart" },
+    ],
+  },
+  {
     key: "reports",
     label: "Reports",
     icon: barChart2,
@@ -181,8 +224,8 @@ const SCHOOL_NAMES = [
 const STATS = [
   { value: "3 min", label: "Average offer turnaround" },
   { value: "100%",  label: "Actions logged to audit trail" },
-  { value: "5",     label: "Modules in one workspace" },
-  { value: "30d",   label: "Free trial, no card needed" },
+  { value: "18",    label: "Modules in one workspace" },
+  { value: "21d",   label: "Free trial, no card needed" },
 ];
 
 const FEATURES = [
@@ -202,7 +245,7 @@ const FEATURES = [
     icon: creditCard,
     accent: "c",
     title: "Fees parents actually understand",
-    body: "Line-item invoices, plain-language payment status, online or manual payment — never just a wall of numbers.",
+    body: "Line-item bills per class and term, staff and sibling discounts applied automatically, unpaid balances carried forward — paid online or at the desk.",
   },
   {
     icon: edit,
@@ -221,6 +264,42 @@ const FEATURES = [
     accent: "c",
     title: "Every action, accounted for",
     body: "Who did what, when, and from where — a full audit trail across admissions, bursary, teaching and every role.",
+  },
+  {
+    icon: cpu,
+    accent: "a",
+    title: "An AI assistant that does the work",
+    body: "Ask who still owes fees, chart this term's collections, or have it create accounts, post news and set exam questions — nothing happens until you confirm.",
+  },
+  {
+    icon: shoppingBag,
+    accent: "b",
+    title: "A school store with real stock",
+    body: "Uniforms, textbooks and stationery with stock counts and profit per item — sold at the counter or added to a pupil's bill.",
+  },
+  {
+    icon: briefcase,
+    accent: "c",
+    title: "Payroll with Nigerian tax built in",
+    body: "PAYE under the Nigeria Tax Act 2025, pension, NHF and withholding tax worked out for you, owner approval before pay, and payslips staff open themselves.",
+  },
+  {
+    icon: bookOpen,
+    accent: "a",
+    title: "Accounts that keep themselves",
+    body: "Every fee paid, sale made and salary run posts to the school's books automatically — ledger, trial balance and balance sheet, always up to date.",
+  },
+  {
+    icon: messageCircle,
+    accent: "b",
+    title: "Chat, news and a help desk",
+    body: "Message staff and parents directly or in groups, post school news, and handle requests and email in one queue — alerts reach their phone.",
+  },
+  {
+    icon: download,
+    accent: "c",
+    title: "Export any list, your way",
+    body: "Download debtors, bills, applicants or staff as Excel, CSV or PDF from any list, in one click.",
   },
 ];
 
@@ -246,8 +325,32 @@ const CAPABILITIES = [
     icon: bell,
     tab: "Real-time alerts",
     title: "Nobody has to go looking for news",
-    body: "An offer, a status change, a new invoice, a graded result — the right person is notified the moment it happens, in-app, without refreshing.",
-    checks: ["Delivered the instant it happens", "Scoped to the right person", "Read state tracked"],
+    body: "An offer, a status change, a new bill, a payslip, a graded result — the right person is notified the moment it happens, in the app and on their phone.",
+    checks: ["Push notifications to phone and desktop", "Scoped to the right person", "Read state tracked"],
+  },
+  {
+    key: "assistant",
+    icon: cpu,
+    tab: "AI assistant",
+    title: "Ask it anything, have it do the task",
+    body: "The assistant answers from your school's own records and acts for you — create accounts, send news, set exam questions, move applicants along. Paste a photo straight into the chat.",
+    checks: ["Sees only what you're allowed to see", "Every action waits for your confirm", "Charts and reports on request"],
+  },
+  {
+    key: "discounts",
+    icon: percent,
+    tab: "Discounts + carry-forward",
+    title: "The school's own fee rules, applied every time",
+    body: "Staff-child and sibling discounts on exactly the charges they cover, optional items like coding club, and last term's unpaid balance brought onto the new bill.",
+    checks: ["Discounts per charge, by percent or amount", "Unpaid balances carried forward", "Due dates you can change later"],
+  },
+  {
+    key: "mobile",
+    icon: smartphone,
+    tab: "Phone-ready",
+    title: "Works like an app on any phone",
+    body: "Install Schoolivio on a phone's home screen and it opens like an app — full screen, with notifications, and nothing that says it's a website.",
+    checks: ["Add to home screen", "Your school's own name and address", "Files saved straight to the phone"],
   },
   {
     key: "documents",
@@ -500,7 +603,7 @@ const Hero = () => {
           </h1>
 
           <p className="mkt-hero-sub">
-            {"Admissions, fees, exams and results in one place — built for how your school actually runs, not the other way round."}
+            {"Admissions, fees, exams, results, payroll and accounts in one place — with an AI assistant that does the busywork. Built for how your school actually runs."}
           </p>
 
           <div className="mkt-hero-ctas">
@@ -512,7 +615,7 @@ const Hero = () => {
               {"Book a demo"}
             </a>
           </div>
-          <p className="mkt-hero-fine">{"30-day free trial · No credit card required · Configure it your way from day one"}</p>
+          <p className="mkt-hero-fine">{"21-day free trial · No credit card required · Configure it your way from day one"}</p>
         </div>
 
         {/* Mockup + floating stat cards */}
@@ -833,7 +936,7 @@ const Pricing = () => (
         <div className="mkt-eyebrow">{"PRICING"}</div>
         <h2 className="mkt-h2">{"Simple pricing, one platform"}</h2>
         <p className="mkt-lede">
-          {"Every plan includes the full platform — admissions, fees, exams, results and the audit trail. Pricing scales with how many students you run it for."}
+          {"Every plan includes the core platform — admissions, fees, exams, results and the audit trail. Pricing scales with how many students you run it for."}
         </p>
       </div>
       <div className="mkt-pricing-grid">
@@ -888,12 +991,12 @@ const FinalCta = () => (
           </h2>
 
           <p className="mkt-final-sub">
-            {"Create your school's workspace and start bringing admissions, fees, exams and results together."}
+            {"Create your school's workspace and bring admissions, fees, the store, payroll, accounts, exams and results together."}
           </p>
 
           <ul className="mkt-final-bullets">
             {[
-              ["30-day free trial", "y"],
+              ["21-day free trial", "y"],
               ["No credit card",    "lv"],
               ["Setup in minutes",  "g"],
             ].map(([label, tone]) => (
@@ -920,7 +1023,7 @@ const FinalCta = () => (
             </a>
           </div>
           <p className="mkt-final-fine">
-            {"No long-term commitment. 30 days free — talk to our team whenever you need help getting started."}
+            {"No long-term commitment. 21 days free — talk to our team whenever you need help getting started."}
           </p>
         </div>
       </div>
@@ -935,7 +1038,7 @@ const Footer = () => (
       <div className="mkt-footer-brand">
         <span className="mkt-footer-logo"><Mark size={22} />{"Schoolivio"}</span>
         <p className="mkt-footer-tagline">
-          {"Admissions, fees, exams and results — one calm workspace for the whole school year."}
+          {"Admissions, fees, exams, results, payroll and accounts — one calm workspace for the whole school year."}
         </p>
       </div>
       <div className="mkt-footer-cols">

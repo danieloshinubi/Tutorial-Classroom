@@ -151,6 +151,7 @@ const Tenants = () => {
       {adding ? (
         <Card style={{ marginBottom: 22 }}>
           <h3>{"A new school"}</h3>
+          <p style={{ marginTop: -6, color: "var(--ink-2)" }}>{"It starts on a 21-day free trial."}</p>
           <form onSubmit={add}>
             <div className="split">
               <Field label="Name">
