@@ -34,7 +34,7 @@ import {
 } from "../Components/UI";
 import { StatRow } from "../Components/Charts";
 import { useActionFeedback } from "../Components/Toast";
-import { downloadCsv } from "../lib/csv";
+import { ExportMenu } from "../Components/ExportButton";
 import { confirmDialog } from "../Components/Confirm";
 
 const Fact = ({ label, children }) =>
@@ -487,20 +487,16 @@ const TenantDetail = () => {
         title="Who runs it"
         action={
           admins.length > 0 ? (
-            <Button
-              size="sm"
-              variant="secondary"
-              onClick={() =>
-                downloadCsv(`${tenant.slug}-admins`, admins, [
-                  { key: "name", label: "Name" },
-                  { key: "email", label: "Email" },
-                  { key: "role", label: "Role" },
-                  { key: (a) => (a.is_active ? "active" : "deactivated"), label: "Status" },
-                ])
-              }
-            >
-              {"Export CSV"}
-            </Button>
+            <ExportMenu
+              filename={`${tenant.slug}-admins`}
+              rows={admins}
+              columns={[
+                { key: "name", label: "Name" },
+                { key: "email", label: "Email" },
+                { key: "role", label: "Role" },
+                { key: (a) => (a.is_active ? "active" : "deactivated"), label: "Status" },
+              ]}
+            />
           ) : null
         }
       >

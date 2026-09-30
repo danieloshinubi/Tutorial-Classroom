@@ -15,7 +15,7 @@ import {
   formatDate,
   SkeletonTable,
 } from "../Components/UI";
-import { downloadCsv } from "../lib/csv";
+import { ExportMenu } from "../Components/ExportButton";
 import { useActionFeedback } from "../Components/Toast";
 import { confirmDialog } from "../Components/Confirm";
 
@@ -123,18 +123,17 @@ const Tenants = () => {
 
   const preview = slugTouched ? slugify(slug) : slugify(name);
 
-  const exportCsv = () => {
-    downloadCsv("schools", filtered, [
-      { key: "name", label: "School" },
-      { key: (t) => `${t.slug}.schoolivio.com`, label: "Address" },
-      { key: (t) => t.plan || "trial", label: "Plan" },
-      { key: "students", label: "Students" },
-      { key: "teachers", label: "Staff" },
-      { key: "courses", label: "Courses" },
-      { key: (t) => formatDate(t.created_at, { withTime: false }), label: "Added" },
-      { key: (t) => (t.is_active ? "active" : "suspended"), label: "Status" },
-    ]);
-  };
+  // Spooled as Excel, CSV or PDF, whichever is picked (ExportMenu).
+  const exportColumns = [
+    { key: "name", label: "School" },
+    { key: (t) => `${t.slug}.schoolivio.com`, label: "Address" },
+    { key: (t) => t.plan || "trial", label: "Plan" },
+    { key: "students", label: "Students" },
+    { key: "teachers", label: "Staff" },
+    { key: "courses", label: "Courses" },
+    { key: (t) => formatDate(t.created_at, { withTime: false }), label: "Added" },
+    { key: (t) => (t.is_active ? "active" : "suspended"), label: "Status" },
+  ];
 
   return (
     <Page
@@ -142,9 +141,7 @@ const Tenants = () => {
       subtitle={`${tenants.length} tenant${tenants.length === 1 ? "" : "s"} on the platform`}
       action={
         <div className="btn-row">
-          <Button variant="secondary" disabled={!filtered.length} onClick={exportCsv}>
-            {"Export CSV"}
-          </Button>
+          <ExportMenu size={undefined} filename="schools" rows={filtered} columns={exportColumns} />
           <Button onClick={() => setAdding((v) => !v)}>
             {adding ? "Cancel" : "Add a school"}
           </Button>

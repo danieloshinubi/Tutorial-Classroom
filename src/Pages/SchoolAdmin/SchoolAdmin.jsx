@@ -338,7 +338,7 @@ const PeoplePanel = () => {
           <ExportButton
             columns={PEOPLE_EXPORT_COLUMNS}
             rows={filtered}
-            filename={`people-${new Date().toISOString().slice(0, 10)}.csv`}
+            filename="people"
           />
           <Button
             variant={showInvite ? "secondary" : "primary"}
@@ -534,7 +534,7 @@ const PeoplePanel = () => {
           <p className="people-count">
             {`${filtered.length} of ${members.length} ${members.length === 1 ? "person" : "people"}`}
           </p>
-          <div className="table-wrap">
+          <div className="table-wrap table-wrap-fill">
             <table className="data people-table">
               <thead>
                 <tr>

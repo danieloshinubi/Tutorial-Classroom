@@ -23,6 +23,7 @@ import {
 } from "../../Components/UI";
 import { useLiveApplicationsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
+import ExportButton from "../../Components/ExportButton";
 
 // The staff dashboard for admissions: one door into every queue the team
 // works, plus the full roster.
@@ -164,6 +165,28 @@ const copyText = async (text) => {
     return false;
   }
 };
+
+// What the export carries for the queue on screen, and for the roster: the
+// same facts each row shows, in words rather than database values.
+const statusText = (status) => STATUS_LABEL[status] || sentence(status);
+
+const QUEUE_COLUMNS = [
+  { key: "reference", label: "Reference" },
+  { key: (r) => r.applicant || "Unnamed applicant", label: "Applicant" },
+  { key: (r) => statusText(r.status), label: "Status" },
+  { key: (r) => chipsFor(r).map((c) => c.text).join(", "), label: "Progress" },
+  { key: (r) => r.updated_at || r.submitted_at, label: "Last updated", type: "datetime" },
+];
+
+const ROSTER_COLUMNS = [
+  { key: "reference", label: "Reference" },
+  { key: (a) => `${a.first_name} ${a.surname}`, label: "Applicant" },
+  { key: "date_of_birth", label: "Date of birth", type: "date" },
+  { key: (a) => a.guardian_name || "", label: "Guardian" },
+  { key: (a) => a.guardian_phone || a.guardian_email || "", label: "Guardian contact" },
+  { key: (a) => statusText(a.status), label: "Status" },
+  { key: "created_at", label: "Received", type: "date" },
+];
 
 const Chevron = () => (
   <svg className="aq-chevron" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
@@ -468,11 +491,30 @@ const AdmissionsQueues = () => {
                   </p>
                 </div>
                 {!loading && view ? (
-                  <span className="aq-main-count">
-                    {view === "all"
-                      ? `${filteredRoster.length} of ${applications.length}`
-                      : `${queueRows.length} waiting`}
-                  </span>
+                  <div className="btn-row" style={{ flex: "none" }}>
+                    <span className="aq-main-count">
+                      {view === "all"
+                        ? `${filteredRoster.length} of ${applications.length}`
+                        : `${queueRows.length} waiting`}
+                    </span>
+                    {view === "all" ? (
+                      <ExportButton
+                        roles={["admissions"]}
+                        filename="applications"
+                        sheetName="All applications"
+                        rows={filteredRoster}
+                        columns={ROSTER_COLUMNS}
+                      />
+                    ) : (
+                      <ExportButton
+                        roles={["admissions"]}
+                        filename={`admissions-${view}`}
+                        sheetName={QUEUES[view].label}
+                        rows={queueRows}
+                        columns={QUEUE_COLUMNS}
+                      />
+                    )}
+                  </div>
                 ) : null}
               </header>
 

@@ -120,8 +120,21 @@ export const AuthProvider = ({ children }) => {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       const nextId = newSession?.user?.id ?? null;
+      // Every way out (the menu, the inactivity timer, another tab) ends here.
+      // The AI assistant's saved conversations go with the person, so the
+      // next one to sign in on this device never sees them.
+      if (event === "SIGNED_OUT") {
+        try {
+          for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+            const key = window.sessionStorage.key(i);
+            if (key && key.startsWith("schoolivio.assistant.")) window.sessionStorage.removeItem(key);
+          }
+        } catch {
+          // Storage unavailable: nothing was saved.
+        }
+      }
       setSession(newSession);
       rememberUser(nextId);
 

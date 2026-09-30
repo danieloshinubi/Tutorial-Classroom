@@ -215,6 +215,21 @@ export const Select = ({
   const wrapRef = useRef(null);
   const triggerRef = useRef(null);
   const listRef = useRef(null);
+  // Opens to the right unless that would run off the screen, in which case
+  // it lines up with the trigger's right edge. A term menu at the right of
+  // Bursary's header grew past the window and made the whole page scroll
+  // sideways.
+  const [alignEnd, setAlignEnd] = useState(false);
+  useLayoutEffect(() => {
+    if (!open) {
+      setAlignEnd(false);
+      return;
+    }
+    const panel = listRef.current;
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    if (r.right > (window.innerWidth || document.documentElement.clientWidth) - 8) setAlignEnd(true);
+  }, [open]);
   const typeAhead = useRef({ text: "", timer: null });
   // Picking an option removes the <li> that was actually clicked, mid
   // pointer-event, and at least on Chromium the click that follows gets
@@ -331,7 +346,7 @@ export const Select = ({
       </button>
 
       {open ? (
-        <ul id={id ? `${id}-listbox` : undefined} className="uiselect-panel" role="listbox" ref={listRef}>
+        <ul id={id ? `${id}-listbox` : undefined} className={`uiselect-panel${alignEnd ? " align-end" : ""}`} role="listbox" ref={listRef}>
           {options.length === 0 ? (
             <li className="uiselect-empty">{"No options"}</li>
           ) : (

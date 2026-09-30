@@ -425,7 +425,7 @@ const AttendanceRecords = ({ schoolId }) => {
   return (
     <section className="at-card">
       <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo}>
-        <ExportButton columns={RECORD_EXPORT_COLUMNS} rows={records} filename={`class-attendance-${from}-to-${to}.csv`} />
+        <ExportButton columns={RECORD_EXPORT_COLUMNS} rows={records} filename={`class-attendance-${from}-to-${to}`} />
       </RangeBar>
 
       {loading ? (
@@ -525,7 +525,7 @@ const SchoolAttendance = ({ schoolId }) => {
         {"Resumption for students and staff alike: every scan from a connected device, plus anything the front desk logs by hand."}
       </p>
       <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo}>
-        <ExportButton columns={SCHOOL_EXPORT_COLUMNS} rows={records} filename={`school-attendance-${from}-to-${to}.csv`} />
+        <ExportButton columns={SCHOOL_EXPORT_COLUMNS} rows={records} filename={`school-attendance-${from}-to-${to}`} />
       </RangeBar>
 
       {loading ? (

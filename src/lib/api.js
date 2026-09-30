@@ -897,6 +897,22 @@ export const markNotificationRead = async (id, schoolId) => {
   if (error) throw error;
 };
 
+// Payslip notices are read once the payslips page has been opened; the bell
+// is told to recount (Notifications.jsx listens for this event).
+export const markPayslipNotificationsRead = async () => {
+  const { data } = await supabase.auth.getSession();
+  const userId = data?.session?.user?.id;
+  if (!userId) return;
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("kind", "payslip_ready")
+    .is("read_at", null);
+  if (error) throw error;
+  window.dispatchEvent(new Event("schoolivio:notifications-changed"));
+};
+
 export const markAllNotificationsRead = async (userId, schoolId) => {
   const { error } = await supabase
     .from("notifications")
@@ -4364,6 +4380,14 @@ export const issueInvoice = async (invoiceId) => {
 // discount off with ruleId null. The amount is worked out by the database
 // from the invoice's own lines (supabase/181) — never sent from here — so it
 // always matches what raise_invoice would have given. Refused once issued.
+// Moves unpaid balances from earlier terms' bills onto each child's draft
+// bill for this term (supabase/196). Returns { moved, amount, no_draft_bill }.
+export const carryForwardBalances = async (termId) => {
+  const { data, error } = await supabase.rpc("carry_forward_balances", { target_term: termId });
+  if (error) throw error;
+  return data || { moved: 0, amount: 0, no_draft_bill: [] };
+};
+
 // What a discount would come to on this bill, worked out by the database from
 // the bill's own lines, the same way applying it does.
 export const previewDiscount = async ({ invoiceId, ruleId }) => {
@@ -5310,3 +5334,160 @@ export const saveNotificationPrefs = async ({ chatEmail }) => {
   const { error } = await supabase.rpc("save_notification_prefs", { chat_email_in: chatEmail });
   if (error) throw error;
 };
+
+/* ---------------------------------------------------------------- payroll
+   Monthly payroll (supabase/197). Staff, deductions, consultants and settings
+   are edited directly (owner/admin/bursar only, by row level security); runs
+   and payslips change only through the functions, which do the arithmetic and
+   post to the books. */
+
+const rpc = async (name, args) => {
+  const { data, error } = await supabase.rpc(name, args);
+  if (error) throw error;
+  return data;
+};
+
+export const fetchPayrollSettings = async (schoolId) => {
+  const { data, error } = await supabase.from("payroll_settings").select("*").eq("school_id", schoolId).maybeSingle();
+  if (error) throw error;
+  return data;
+};
+
+export const setupPayroll = (schoolId) => rpc("payroll_setup", { target_school: schoolId });
+
+export const savePayrollSettings = async (schoolId, patch) => {
+  const { error } = await supabase.from("payroll_settings").update(patch).eq("school_id", schoolId);
+  if (error) throw error;
+};
+
+export const confirmPayrollBands = (schoolId) => rpc("payroll_confirm_bands", { target_school: schoolId });
+
+export const fetchPayrollStaff = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payroll_staff")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("is_active", { ascending: false })
+    .order("full_name");
+  if (error) throw error;
+  return data || [];
+};
+
+export const savePayrollStaff = async ({ id, ...row }) => {
+  const query = id
+    ? supabase.from("payroll_staff").update({ ...row, updated_at: new Date().toISOString() }).eq("id", id)
+    : supabase.from("payroll_staff").insert(row);
+  const { error } = await query;
+  if (error) throw error;
+};
+
+export const fetchDeductionTypes = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payroll_deduction_types")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("position")
+    .order("label");
+  if (error) throw error;
+  return data || [];
+};
+
+export const saveDeductionType = async ({ id, ...row }) => {
+  const query = id
+    ? supabase.from("payroll_deduction_types").update(row).eq("id", id)
+    : supabase.from("payroll_deduction_types").insert(row);
+  const { error } = await query;
+  if (error) throw error;
+};
+
+export const fetchStaffDeductions = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payroll_staff_deductions")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("created_at");
+  if (error) throw error;
+  return data || [];
+};
+
+export const saveStaffDeduction = async ({ id, ...row }) => {
+  const query = id
+    ? supabase.from("payroll_staff_deductions").update(row).eq("id", id)
+    : supabase.from("payroll_staff_deductions").insert(row);
+  const { error } = await query;
+  if (error) throw error;
+};
+
+export const deleteStaffDeduction = async (id) => {
+  const { error } = await supabase.from("payroll_staff_deductions").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const fetchPayrollRuns = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payroll_runs")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("period", { ascending: false });
+  if (error) throw error;
+  return data || [];
+};
+
+export const fetchPayslips = async (runId) => {
+  const { data, error } = await supabase.from("payslips").select("*").eq("run_id", runId).order("full_name");
+  if (error) throw error;
+  return data || [];
+};
+
+export const preparePayroll = (schoolId, period) => rpc("payroll_prepare", { target_school: schoolId, period_in: period });
+export const refreshPayroll = (runId) => rpc("payroll_refresh_run", { target_run: runId });
+export const deletePayrollDraft = (runId) => rpc("payroll_delete_draft", { target_run: runId });
+export const approvePayroll = (runId) => rpc("payroll_approve", { target_run: runId });
+export const markPayrollPaid = (runId, paidOn) => rpc("payroll_mark_paid", { target_run: runId, paid_on_in: paidOn });
+
+export const fetchPayees = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payroll_payees")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("is_active", { ascending: false })
+    .order("name");
+  if (error) throw error;
+  return data || [];
+};
+
+export const savePayee = async ({ id, ...row }) => {
+  const query = id ? supabase.from("payroll_payees").update(row).eq("id", id) : supabase.from("payroll_payees").insert(row);
+  const { error } = await query;
+  if (error) throw error;
+};
+
+export const deletePayee = async (id) => {
+  const { error } = await supabase.from("payroll_payees").delete().eq("id", id);
+  if (error) throw error;
+};
+
+export const fetchPayeePayments = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("payroll_payee_payments")
+    .select("*")
+    .eq("school_id", schoolId)
+    .order("paid_on", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return data || [];
+};
+
+export const recordPayeePayment = ({ payeeId, description, gross, paidOn, paidFrom, whtRate, reference }) =>
+  rpc("record_payee_payment", {
+    target_payee: payeeId,
+    description_in: description,
+    gross_in: Number(gross),
+    paid_on_in: paidOn,
+    paid_from_in: paidFrom || "bank",
+    wht_rate_in: whtRate === "" || whtRate == null ? null : Number(whtRate),
+    reference_in: reference || null,
+  });
+
+// The signed-in person’s own released payslips, in every school they are paid by.
+export const fetchMyPayslips = async () => (await rpc("my_payslips", {})) || [];

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { resolveSlug } from "../lib/tenant";
-import { applyTenantBranding } from "../lib/branding";
+import { applyTenantBranding, cachedPublicSchool, rememberPublicSchool, revealPage } from "../lib/branding";
 import { Mark } from "./Logo";
 
 // What the platform ties together, drawn as an orbit around the school.
@@ -102,30 +102,39 @@ const PITCHES = [
 ];
 
 const AuthLayout = ({ title, subtitle, badge, children, footer }) => {
-  const [school, setSchool] = useState(null);
-  const [slide, setSlide] = useState(0);
   const slug = resolveSlug();
+  // What this device saw last time, so the first paint is already this
+  // school's page; the lookup below then refreshes it.
+  const [school, setSchool] = useState(() => cachedPublicSchool(slug));
+  const [slide, setSlide] = useState(0);
 
   useEffect(() => {
     let active = true;
     supabase
       .rpc("public_school", { target_slug: slug })
       .then(({ data }) => {
-        if (active && data?.length) setSchool(data[0]);
+        if (!active) return;
+        if (data?.length) {
+          setSchool(data[0]);
+          rememberPublicSchool(data[0]);
+        } else {
+          revealPage();
+        }
       })
       // A school that cannot be read is not an error worth showing on a login
       // screen — the panel simply falls back to the product name.
-      .catch(() => {});
+      .catch(() => revealPage());
     return () => {
       active = false;
     };
   }, [slug]);
 
   useEffect(() => {
+    if (!school) return;
     applyTenantBranding({
-      name: school?.name,
-      logoUrl: school?.logo_url,
-      themeColor: school?.theme_color,
+      name: school.name,
+      logoUrl: school.logo_url,
+      themeColor: school.theme_color,
     });
   }, [school]);
 
@@ -169,7 +178,9 @@ const AuthLayout = ({ title, subtitle, badge, children, footer }) => {
                 <Mark size={26} />
               )}
               <span className="logo-text">
-                <span className="logo-name">{"Schoolivio"}</span>
+                {/* The school's own name on its own page; the product name
+                    only where no school is known. */}
+                <span className="logo-name">{school?.name || "Schoolivio"}</span>
               </span>
             </span>
           </div>
@@ -215,7 +226,11 @@ const AuthLayout = ({ title, subtitle, badge, children, footer }) => {
             <div className="auth-art">
               <Orbit />
               <span className="auth-art-core">
-                <Mark size={34} />
+                {school?.logo_url ? (
+                  <img src={school.logo_url} alt="" width={34} height={34} style={{ borderRadius: 8, objectFit: "contain" }} />
+                ) : (
+                  <Mark size={34} />
+                )}
               </span>
             </div>
 

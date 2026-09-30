@@ -88,7 +88,6 @@ const BRAND_CSS_VARS = [
   "--brand-soft",
 ];
 
-const DEFAULT_TITLE = "Schoolivio";
 
 // Read back by the inline script in public/index.html before the first paint,
 // so a refresh shows the school rather than Schoolivio while the app loads.
@@ -138,6 +137,13 @@ const captureOriginalIcons = () => {
 // touches the DOM, no state of its own.
 export function applyTenantBranding({ name, logoUrl, themeColor } = {}) {
   if (typeof document === "undefined") return;
+  // No school yet means "not loaded yet", never "this school has no
+  // branding". Every public page (sign-in, the Apply forms, the applicant
+  // portal) calls this once on mount with nothing, before its lookup
+  // returns. Treating that as a reset repainted the page in Schoolivio's
+  // purple for a moment on every visit, AND deleted the saved branding the
+  // boot script in index.html relies on, so the next refresh flashed too.
+  if (!name) return;
   captureOriginalIcons();
 
   const root = document.documentElement;
@@ -180,25 +186,56 @@ export function applyTenantBranding({ name, logoUrl, themeColor } = {}) {
     );
   }
 
-  document.title = name ? `${name} · Schoolivio` : DEFAULT_TITLE;
+  document.title = `${name} · Schoolivio`;
 
   try {
-    if (name) {
-      window.localStorage.setItem(
-        CACHE_KEY,
-        JSON.stringify({
-          v: 1,
-          title: document.title,
-          palette,
-          icon: logoUrl || null,
-          themeColor: palette ? palette["--brand"] : null,
-        })
-      );
-    } else {
-      window.localStorage.removeItem(CACHE_KEY);
-    }
+    window.localStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        v: 1,
+        title: document.title,
+        palette,
+        icon: logoUrl || null,
+        themeColor: palette ? palette["--brand"] : null,
+      })
+    );
   } catch {
     // Storage unavailable (private browsing, blocked cookies). Nothing is
     // lost: the next load brands itself once the school arrives, as before.
+  }
+
+  revealPage();
+}
+
+// index.html hides a school's page on a device that has never seen that
+// school, so nothing shows in Schoolivio's colours before the school's own
+// arrive. Branding lifts it; so does a lookup that finds no school (call
+// this then), and index.html's own few-second safety timer.
+export function revealPage() {
+  if (typeof document === "undefined") return;
+  document.documentElement.classList.remove("brand-pending");
+}
+
+// The school's public details (name, logo, colour, address), saved on this
+// device so the sign-in page can show the right school on its very first
+// paint instead of a generic one while the lookup is in flight. Each school
+// is its own subdomain, so each has its own storage; the slug is checked
+// anyway, since plain localhost serves every school in development.
+const SCHOOL_KEY = "schoolivio:public-school";
+
+export function cachedPublicSchool(slug) {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(SCHOOL_KEY) || "null");
+    return saved && saved.slug === slug ? saved : null;
+  } catch {
+    return null;
+  }
+}
+
+export function rememberPublicSchool(school) {
+  try {
+    if (school?.slug) window.localStorage.setItem(SCHOOL_KEY, JSON.stringify(school));
+  } catch {
+    // Not saved; the page just waits for the lookup next time.
   }
 }

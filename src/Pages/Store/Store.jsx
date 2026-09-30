@@ -33,6 +33,23 @@ import {
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { confirmDialog } from "../../Components/Confirm";
+import ExportButton from "../../Components/ExportButton";
+
+// Spreadsheet columns for the store's lists (Export).
+const ITEM_COLUMNS = [
+  { key: "name", label: "Item" },
+  { key: "size", label: "Size" },
+  { key: (p) => CATEGORY_LABEL[p.category] || p.category, label: "Category" },
+  { key: "supplier", label: "Vendor / publisher" },
+  { key: "cost_price", label: "Cost price", type: "money" },
+  { key: "trade_discount", label: "Vendor discount", type: "money" },
+  { key: "net_cost", label: "Net cost", type: "money" },
+  { key: "sell_price", label: "Sells for", type: "money" },
+  { key: "unit_profit", label: "Profit each", type: "money" },
+  { key: "stock_qty", label: "In stock", type: "number" },
+  { key: "reorder_level", label: "Reorder at", type: "number" },
+  { key: (p) => (p.is_active ? "On sale" : "Switched off"), label: "Status" },
+];
 
 // The school store: sell at the counter, keep the shelves stocked, and see
 // what the store actually makes.
@@ -695,6 +712,7 @@ const Items = ({ schoolId, products, money, onChange, onError }) => {
         </div>
         <div className="st-toolbar-end">
           <input className="input st-search" placeholder="Find an item" value={query} onChange={(e) => setQuery(e.target.value)} />
+          <ExportButton roles={["bursar"]} filename="store-items" sheetName="Store items" columns={ITEM_COLUMNS} rows={shown} />
           <Button onClick={() => setForm(form && !form.id ? null : { ...blankForm })}>
             {form && !form.id ? "Cancel" : "Add item"}
           </Button>
@@ -1011,7 +1029,24 @@ const Sales = ({ schoolId, money, refreshKey, onChange, onError }) => {
 
   return (
     <div className="st-stack">
-      <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      <div className="st-range-row">
+        <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} />
+        <ExportButton
+          roles={["bursar"]}
+          filename={`store-sales-${from}-to-${to}`}
+          sheetName="Store sales"
+          rows={sales}
+          columns={[
+            { key: "sold_at", label: "Sold", type: "datetime" },
+            { key: "reference", label: "Reference" },
+            { key: (x) => (x.student ? displayName(x.student) : x.buyer_name || "Walk-in"), label: "Buyer" },
+            { key: (x) => (x.items || []).map((i) => `${i.size ? `${i.name} (${i.size})` : i.name}${i.qty > 1 ? ` x ${i.qty}` : ""}`).join(", "), label: "Items" },
+            { key: (x) => PAYMENT_BADGE[x.payment] || x.payment, label: "Paid by" },
+            { key: "total", label: "Total", type: "money" },
+            { key: (x) => (x.voided_at ? `Voided: ${x.void_reason || ""}` : ""), label: "Voided" },
+          ]}
+        />
+      </div>
 
       {loading ? (
         <SkeletonTable rows={5} cols={5} />
@@ -1161,7 +1196,29 @@ const Profit = ({ schoolId, products, money, refreshKey, onError }) => {
 
   return (
     <div className="st-stack">
-      <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} />
+      <div className="st-range-row">
+        <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} />
+        <ExportButton
+          roles={["bursar"]}
+          filename={`store-profit-${from}-to-${to}`}
+          sheets={[
+            { name: "By item", rows, columns: [
+              { key: (r) => (r.size ? `${r.name} (${r.size})` : r.name), label: "Item" },
+              { key: (r) => CATEGORY_LABEL[r.category] || r.category, label: "Category" },
+              { key: "qty_sold", label: "Sold", type: "number" },
+              { key: "revenue", label: "Takings", type: "money" },
+              { key: "cost", label: "Cost", type: "money" },
+              { key: "profit", label: "Profit", type: "money" },
+            ] },
+            { name: "By category", rows: byCategory, columns: [
+              { key: "label", label: "Category" },
+              { key: "qty", label: "Sold", type: "number" },
+              { key: "revenue", label: "Takings", type: "money" },
+              { key: "profit", label: "Profit", type: "money" },
+            ] },
+          ]}
+        />
+      </div>
 
       {loading ? (
         <SkeletonCards count={3} lines={2} />

@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { fetchPlatformAdmins, addPlatformAdmin, removePlatformAdmin } from "../lib/platformApi";
 import { Page, Card, Button, Badge, Empty, Field, Modal, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
-import { downloadCsv } from "../lib/csv";
+import { ExportMenu } from "../Components/ExportButton";
 import { confirmDialog } from "../Components/Confirm";
 
 // Who has access to this console. classroom.platform_admins existed since
@@ -63,13 +63,12 @@ const PlatformTeam = () => {
     }
   };
 
-  const exportCsv = () => {
-    downloadCsv("platform-team", admins, [
-      { key: "name", label: "Name" },
-      { key: "email", label: "Email" },
-      { key: (a) => formatDate(a.added_at, { withTime: false }), label: "Added" },
-    ]);
-  };
+  // Spooled as Excel, CSV or PDF, whichever is picked (ExportMenu).
+  const exportColumns = [
+    { key: "name", label: "Name" },
+    { key: "email", label: "Email" },
+    { key: (a) => formatDate(a.added_at, { withTime: false }), label: "Added" },
+  ];
 
   return (
     <Page
@@ -77,7 +76,7 @@ const PlatformTeam = () => {
       subtitle="Everyone with access to this console"
       action={
         <div className="btn-row">
-          <Button variant="secondary" disabled={!admins.length} onClick={exportCsv}>{"Export CSV"}</Button>
+          <ExportMenu size={undefined} filename="platform-team" rows={admins} columns={exportColumns} />
           <Button onClick={() => setShowAdd(true)}>{"Grant access"}</Button>
         </div>
       }

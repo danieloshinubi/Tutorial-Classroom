@@ -17,6 +17,7 @@ import {
   initials,
 } from "../../Components/UI";
 import { confirmDialog } from "../../Components/Confirm";
+import ExportButton from "../../Components/ExportButton";
 
 // Links a parent account to the children it may see. Without a link a parent
 // sees nothing, which is the safe default — a guardian's access to a child's
@@ -238,6 +239,22 @@ const GuardiansPanel = () => {
                   </button>
                 ))}
               </div>
+              <ExportButton
+                filename="parents-children"
+                sheetName="Parents and children"
+                rows={shown}
+                columns={[
+                  { key: (p) => displayName(p.profiles), label: "Parent" },
+                  { key: (p) => p.profiles.email, label: "Email" },
+                  { key: (p) => (links[p.profiles.id] || []).length, label: "Children linked", type: "number" },
+                  {
+                    key: (p) => (links[p.profiles.id] || [])
+                      .map((k) => (k.relationship ? `${displayName(k.student)} (${k.relationship})` : displayName(k.student)))
+                      .join(", "),
+                    label: "Children they can see",
+                  },
+                ]}
+              />
             </div>
           </div>
 

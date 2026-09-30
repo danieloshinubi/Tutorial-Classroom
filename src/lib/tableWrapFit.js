@@ -37,7 +37,13 @@ const fit = () => {
     }
     const top = el.getBoundingClientRect().top;
     const available = window.innerHeight - top - PAGE_BOTTOM_PADDING - BREATHING_ROOM;
-    el.style.maxHeight = `${Math.max(MIN_HEIGHT, available)}px`;
+    const height = `${Math.max(MIN_HEIGHT, available)}px`;
+    el.style.maxHeight = height;
+    // .table-wrap-fill also takes that whole height when its rows are few, so
+    // the card reaches the bottom of the screen instead of leaving a gap
+    // below a short list (School admin → People).
+    if (el.classList.contains("table-wrap-fill")) el.style.height = height;
+    else if (el.style.height) el.style.height = "";
   });
 };
 

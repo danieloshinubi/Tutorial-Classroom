@@ -56,6 +56,8 @@ import News from "./Pages/News/News";
 import Bursary from "./Pages/Bursary/Bursary";
 import Store from "./Pages/Store/Store";
 import Accounts from "./Pages/Accounts/Accounts";
+import Payroll from "./Pages/Payroll/Payroll";
+import MyPayslips from "./Pages/Payroll/MyPayslips";
 import Attendance from "./Pages/Attendance/Attendance";
 import Fees from "./Pages/Fees/Fees";
 import PaymentReturn from "./Pages/Fees/PaymentReturn";
@@ -147,6 +149,7 @@ function App() {
             <Route path="/Set-Password" element={<SetPassword />} />
             <Route path="/Dashboard" element={<Dashboard />} />
             <Route path="/Profile" element={<Profile />} />
+            <Route path="/Payslips" element={<MyPayslips />} />
             {/* The school's noticeboard, and what a family owes. Both are
                 scoped in Postgres: a staff notice is not readable by a
                 parent, and an invoice is only visible to its own family. */}
@@ -225,6 +228,9 @@ function App() {
               <Route path="/Store" element={<Store />} />
             </Route>
             {/* The school's books: owner, admin and bursar (modules.js). */}
+            <Route element={<SchoolRoute module="payroll" />}>
+              <Route path="/Payroll" element={<Payroll />} />
+            </Route>
             <Route element={<SchoolRoute module="accounts" />}>
               <Route path="/Accounts" element={<Accounts />} />
             </Route>

@@ -5,6 +5,7 @@ import { fetchStudentRegistrations, updateStudentRegistration } from "../../lib/
 import { Card, Button, Badge, Empty, formatDate, displayName, Select, SkeletonTable } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { promptDialog } from "../../Components/Confirm";
+import ExportButton from "../../Components/ExportButton";
 
 const STATUS_LABEL = {
   active: "Active",
@@ -103,6 +104,21 @@ const StudentRegistrationsPanel = () => {
           options={[
             { value: "all", label: `Everyone (${rows.length})` },
             ...Object.keys(STATUS_LABEL).map((s) => ({ value: s, label: `${STATUS_LABEL[s]} (${counts[s] || 0})` })),
+          ]}
+        />
+        <ExportButton
+          filename="student-records"
+          sheetName="Student records"
+          rows={filtered}
+          columns={[
+            { key: "registration_number", label: "Reg. number" },
+            { key: (r) => displayName(r.student), label: "Student" },
+            { key: (r) => r.student?.email || "", label: "Email" },
+            { key: (r) => r.session?.name || "", label: "Session" },
+            { key: (r) => r.class?.name || "Not placed", label: "Class" },
+            { key: (r) => STATUS_LABEL[r.status] || r.status, label: "Status" },
+            { key: (r) => r.notes || "", label: "Notes" },
+            { key: "registered_at", label: "Registered", type: "date" },
           ]}
         />
       </div>

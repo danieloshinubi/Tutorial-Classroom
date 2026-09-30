@@ -9,6 +9,7 @@ import { users as usersIcon } from "react-icons-kit/feather/users";
 import { award } from "react-icons-kit/feather/award";
 import { creditCard } from "react-icons-kit/feather/creditCard";
 import { home } from "react-icons-kit/feather/home";
+import { fileText } from "react-icons-kit/feather/fileText";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { schoolUrl } from "../../lib/tenant";
@@ -23,7 +24,9 @@ import { displayName, initials } from "../UI";
 // modules room and the account somewhere it can be read properly.
 const AccountMenu = () => {
   const { user, profile, signOut } = useAuth();
-  const { school, memberships, role, roles, isAdmin, isParent } = useSchool();
+  const { school, memberships, role, roles, isAdmin, isParent, disabledModules } = useSchool();
+  // Staff paid through payroll (supabase/197) read their own payslips.
+  const paidStaff = !(disabledModules || []).includes("payroll") && roles.some((r) => !["parent", "student"].includes(r));
 
   const [open, setOpen] = useState(false);
   const wrapRef = useRef(null);
@@ -66,6 +69,7 @@ const AccountMenu = () => {
     isParent || roles.includes("student")
       ? { to: "/Fees", label: "Fees and payments", icon: creditCard }
       : null,
+    paidStaff ? { to: "/Payslips", label: "My payslips", icon: fileText } : null,
     isAdmin ? { to: "/School", label: "School settings", icon: settingsIcon } : null,
   ].filter(Boolean);
 

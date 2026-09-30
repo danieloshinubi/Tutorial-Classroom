@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { fetchPlatformMailboxHealth } from "../lib/platformApi";
 import { Page, Card, Badge, Empty, Select, Modal, Button, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
-import { downloadCsv } from "../lib/csv";
+import { ExportMenu } from "../Components/ExportButton";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -46,20 +46,19 @@ const PlatformMailboxes = () => {
     });
   }, [rows, status, query]);
 
-  const exportCsv = () => {
-    downloadCsv("mailboxes", filtered, [
-      { key: "school_name", label: "School" },
-      { key: "address", label: "Address" },
-      { key: (m) => (m.last_poll_at ? formatDate(m.last_poll_at) : "never"), label: "Last poll" },
-      { key: (m) => STATUS_LABEL[statusOf(m)], label: "Status" },
-    ]);
-  };
+  // Spooled as Excel, CSV or PDF, whichever is picked (ExportMenu).
+  const exportColumns = [
+    { key: "school_name", label: "School" },
+    { key: "address", label: "Address" },
+    { key: (m) => (m.last_poll_at ? formatDate(m.last_poll_at) : "never"), label: "Last poll" },
+    { key: (m) => STATUS_LABEL[statusOf(m)], label: "Status" },
+  ];
 
   return (
     <Page
       title="Mailboxes"
       subtitle="Every school's support mailbox, and whether its last connection succeeded"
-      action={<Button variant="secondary" disabled={!filtered.length} onClick={exportCsv}>{"Export CSV"}</Button>}
+      action={<ExportMenu size={undefined} filename="mailboxes" rows={filtered} columns={exportColumns} />}
       toolbar={
         <div className="filters">
           <Select value={status} onChange={setStatus} options={STATUS_OPTIONS} style={{ minWidth: 180 }} />

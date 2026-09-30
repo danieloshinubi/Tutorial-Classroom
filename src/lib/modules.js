@@ -117,6 +117,16 @@ export const MODULES = [
     roles: [...RUNS_THE_SCHOOL, "bursar"],
   },
   {
+    id: "payroll",
+    priority: 38,
+    group: "Money",
+    path: "/Payroll",
+    label: "Payroll",
+    // Salaries are the most sensitive data in the system (supabase/197):
+    // owner, admin and bursar only. Staff read their own at /Payslips.
+    roles: [...RUNS_THE_SCHOOL, "bursar"],
+  },
+  {
     id: "fees",
     priority: 30,
     group: "Money",

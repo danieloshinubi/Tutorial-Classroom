@@ -39,6 +39,7 @@ const METHOD_LABEL = Object.fromEntries(PAYMENT_METHODS);
 
 const STANDING_TONE = {
   paid: "success",
+  "carried forward": undefined,
   "part paid": "warn",
   unpaid: undefined,
   overdue: "danger",
@@ -49,6 +50,7 @@ const STANDING_TONE = {
 // stored, in lower case.
 const STANDING_LABEL = {
   paid: "Paid",
+  "carried forward": "Moved to next term",
   "part paid": "Part paid",
   unpaid: "Unpaid",
   overdue: "Overdue",
@@ -60,6 +62,7 @@ const STANDING_LABEL = {
 // next to the badge, every time — never just the badge on its own.
 const STANDING_EXPLAINER = {
   paid: "Fully paid — nothing more owed on this bill.",
+  "carried forward": "What was still owing here has been added to this child’s bill for the next term, so it is paid there, not here.",
   "part paid": "Some of this has been paid; the rest is still owing.",
   unpaid: "Nothing has been paid on this bill yet.",
   overdue: "This is past its due date and still has money owing.",
@@ -538,6 +541,8 @@ const InvoiceCard = ({
         <div className="fe-bill-amount">
           {cancelled ? (
             <span className="fe-muted">{"Nothing to pay"}</span>
+          ) : settled && invoice.standing === "carried forward" ? (
+            <span className="fe-muted">{"Moved to next term"}</span>
           ) : settled ? (
             <>
               <strong className="paid">{"Paid in full"}</strong>

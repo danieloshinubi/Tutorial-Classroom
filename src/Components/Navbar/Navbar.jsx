@@ -7,6 +7,7 @@ import { users as usersIcon } from "react-icons-kit/feather/users";
 import { creditCard } from "react-icons-kit/feather/creditCard";
 import { shoppingBag } from "react-icons-kit/feather/shoppingBag";
 import { pieChart } from "react-icons-kit/feather/pieChart";
+import { briefcase } from "react-icons-kit/feather/briefcase";
 import { award } from "react-icons-kit/feather/award";
 import { checkSquare } from "react-icons-kit/feather/checkSquare";
 import { fileText } from "react-icons-kit/feather/fileText";
@@ -26,6 +27,7 @@ import AccountMenu from "./AccountMenu";
 import GlobalSearch from "../GlobalSearch";
 import Logo from "../Logo";
 import PushPrompt from "../PushPrompt";
+import Assistant from "../Assistant/Assistant";
 import { modulesFor, groupModules } from "../../lib/modules";
 import { fetchChatOverview, subscribeToMyChannels, subscribeToSchoolChatActivity } from "../../lib/api";
 
@@ -52,6 +54,7 @@ const ICONS = {
   fees: creditCard,
   store: shoppingBag,
   accounts: pieChart,
+  payroll: briefcase,
   admissions: fileText,
   attendance: checkSquare,
   reports: fileText,
@@ -250,6 +253,7 @@ const Navbar = () => {
         <GlobalSearch />
 
         <span className="topbar-spacer" />
+        <Assistant />
         <Notifications />
         <AccountMenu />
       </header>

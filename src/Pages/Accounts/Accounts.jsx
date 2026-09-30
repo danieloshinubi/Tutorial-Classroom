@@ -32,6 +32,7 @@ import {
   SkeletonCards,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import ExportButton from "../../Components/ExportButton";
 
 // The school's books: double entry, kept by the events themselves.
 //
@@ -484,7 +485,23 @@ const JournalTab = ({ schoolId, settings, journal, hasMore, loadingMore, onLoadM
       <section className="ac-card">
         <div className="ac-card-head">
           <h2 className="ac-card-title">{"Journal"}</h2>
-          {!composing ? <Button size="sm" onClick={() => setComposing(true)}>{"New journal"}</Button> : null}
+          <div className="btn-row">
+            <ExportButton
+              roles={["bursar"]}
+              filename="journal"
+              sheetName="Journal"
+              rows={shown.flatMap((e) => (e.lines || []).map((l) => ({ entry: e, line: l })))}
+              columns={[
+                { key: "entry.entry_date", label: "Date", type: "date" },
+                { key: "entry.memo", label: "Entry" },
+                { key: (r) => { const a = chartById[r.line.account_id]; return a ? `${a.code} ${a.name}` : ""; }, label: "Account" },
+                { key: "line.memo", label: "Line note" },
+                { key: (r) => (Number(r.line.debit) ? Number(r.line.debit) : ""), label: "Debit", type: "money" },
+                { key: (r) => (Number(r.line.credit) ? Number(r.line.credit) : ""), label: "Credit", type: "money" },
+              ]}
+            />
+            {!composing ? <Button size="sm" onClick={() => setComposing(true)}>{"New journal"}</Button> : null}
+          </div>
         </div>
         <div className="ac-filters">
           <input className="input" placeholder="Search what entries are for" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search the journal" />
@@ -585,6 +602,78 @@ const ReportsTab = ({ schoolId, settings, chart, accountOptions, money, schoolNa
   const period = periodic
     ? `${formatDate(from, { withTime: false })} to ${formatDate(to, { withTime: false })}`
     : `As at ${formatDate(to, { withTime: false })}`;
+
+  // The report on screen as rows, for Export: the same arithmetic as below.
+  const exportSheet = () => {
+    if (!rows) return { columns: [], rows: [] };
+    const line = (label, amount, extra = {}) => ({ label, amount, ...extra });
+    if (report === "trial") {
+      const live = rows.filter((r) => Math.round(r.closing * 100) !== 0);
+      return {
+        columns: [
+          { key: "code", label: "Code", type: "text" }, { key: "label", label: "Account" },
+          { key: "debit", label: "Debit", type: "money" }, { key: "credit", label: "Credit", type: "money" },
+        ],
+        rows: [
+          ...live.map((r) => ({ code: r.code, label: r.name, debit: r.closing > 0 ? r.closing : "", credit: r.closing < 0 ? -r.closing : "" })),
+          { label: "Totals", debit: sum(live, (r) => (r.closing > 0 ? r.closing : 0)), credit: sum(live, (r) => (r.closing < 0 ? -r.closing : 0)) },
+        ],
+      };
+    }
+    const two = [{ key: "label", label: "Account" }, { key: "amount", label: "Amount", type: "money" }];
+    if (report === "income") {
+      const income = rows.filter((r) => r.type === "income").map((r) => ({ ...r, amount: r.credit - r.debit })).filter((r) => toCents(r.amount) !== 0);
+      const expenses = rows.filter((r) => r.type === "expense").map((r) => ({ ...r, amount: r.debit - r.credit })).filter((r) => toCents(r.amount) !== 0);
+      const ti = sum(income, (r) => r.amount);
+      const te = sum(expenses, (r) => r.amount);
+      return {
+        columns: two,
+        rows: [
+          line("INCOME", ""), ...income.map((r) => line(`${r.code} · ${r.name}`, r.amount)), line("Total income", ti),
+          line("EXPENSES", ""), ...expenses.map((r) => line(`${r.code} · ${r.name}`, r.amount)), line("Total expenses", te),
+          line(ti - te < 0 ? "Deficit for the period" : "Surplus for the period", Math.abs(ti - te)),
+        ],
+      };
+    }
+    if (report === "balance") {
+      const side = (type) => rows.filter((r) => r.type === type).map((r) => ({ ...r, amount: natural(type, r.closing) })).filter((r) => toCents(r.amount) !== 0);
+      const assets = side("asset");
+      const liabilities = side("liability");
+      const equity = side("equity");
+      const surplus = sum(rows.filter((r) => r.type === "income"), (r) => -r.closing) - sum(rows.filter((r) => r.type === "expense"), (r) => r.closing);
+      const block = (title, list, extra = []) => [
+        line(title.toUpperCase(), ""), ...list.map((r) => line(`${r.code} · ${r.name}`, r.amount)), ...extra,
+        line(`Total ${title.toLowerCase()}`, sum(list, (r) => r.amount) + sum(extra, (x) => Number(x.amount) || 0)),
+      ];
+      return {
+        columns: two,
+        rows: [
+          ...block("Assets", assets),
+          ...block("Liabilities", liabilities),
+          ...block("Equity", equity, toCents(surplus) !== 0 ? [line(surplus < 0 ? "Deficit to date" : "Surplus to date", surplus)] : []),
+        ],
+      };
+    }
+    const acct = rows.find((r) => r.account_id === accountId);
+    if (!acct || !ledger) return { columns: [], rows: [] };
+    let running = acct.opening;
+    return {
+      columns: [
+        { key: "date", label: "Date", type: "date" }, { key: "label", label: "Entry" },
+        { key: "debit", label: "Debit", type: "money" }, { key: "credit", label: "Credit", type: "money" },
+        { key: "balance", label: "Balance", type: "money" },
+      ],
+      rows: [
+        { date: from, label: "Brought forward", balance: natural(acct.type, acct.opening) },
+        ...ledger.map((l) => {
+          running += l.debit - l.credit;
+          return { date: l.entry.entry_date, label: l.memo ? `${l.entry.memo} · ${l.memo}` : l.entry.memo, debit: l.debit > 0 ? l.debit : "", credit: l.credit > 0 ? l.credit : "", balance: natural(acct.type, running) };
+        }),
+        { label: "Carried forward", debit: acct.debit, credit: acct.credit, balance: natural(acct.type, acct.closing) },
+      ],
+    };
+  };
+  const reportLabel = `${REPORTS.find((r) => r.value === report)?.label}${report === "ledger" && accountId ? `: ${accountLabel(chart.find((a) => a.id === accountId))}` : ""}`;
 
   const body = () => {
     if (report === "ledger" && !accountId) return <Empty>{"Choose an account above to see its ledger."}</Empty>;
@@ -766,7 +855,14 @@ const ReportsTab = ({ schoolId, settings, chart, accountOptions, money, schoolNa
         <Field label={periodic ? "To" : "As at"}>
           <DatePicker value={to} onChange={setTo} />
         </Field>
-        <Button variant="secondary" onClick={() => window.print()}>{"Print"}</Button>
+        <ExportButton
+          roles={["bursar"]}
+          size={undefined}
+          filename={`${String(reportLabel).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${periodic ? `${from}-to-${to}` : to}`}
+          title={`${reportLabel} · ${period}`}
+          sheetName={REPORTS.find((r) => r.value === report)?.label}
+          {...exportSheet()}
+        />
       </div>
       <header className="ac-report-title">
         <strong>{schoolName}</strong>

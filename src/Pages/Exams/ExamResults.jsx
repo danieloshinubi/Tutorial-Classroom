@@ -23,6 +23,7 @@ import {
   formatDate,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import ExportButton from "../../Components/ExportButton";
 
 // The invigilator's record for one paper. Read-only by design: there is no
 // update or delete policy on exam_events, so this log cannot be rewritten.
@@ -186,6 +187,25 @@ const AttemptDetail = ({ attempt, schoolId, onGraded }) => {
   );
 };
 
+// One row per attempt, the same facts each result card shows.
+const RESULT_COLUMNS = [
+  { key: (a) => displayName(a.profiles), label: "Student" },
+  { key: (a) => (a.submitted_at ? "Submitted" : "In progress"), label: "Status" },
+  { key: "submitted_at", label: "Submitted", type: "datetime" },
+  { key: (a) => (a.submitted_at ? a.total_score ?? 0 : null), label: "Score", type: "number" },
+  { key: (a) => (a.submitted_at ? a.max_score ?? 0 : null), label: "Out of", type: "number" },
+  { key: (a) => (a.submitted_at ? (a.graded_at ? "Yes" : "No") : ""), label: "Marked" },
+  { key: (a) => a.violations || 0, label: "Violations", type: "number" },
+  {
+    key: (a) => [
+      a.disqualified ? "Disqualified" : null,
+      a.auto_submitted && !a.disqualified ? "Auto-submitted" : null,
+      a.submitted_late ? "Late" : null,
+    ].filter(Boolean).join(", "),
+    label: "Flags",
+  },
+];
+
 const ExamResults = () => {
   const { examId } = useParams();
   const { schoolId } = useSchool();
@@ -224,11 +244,21 @@ const ExamResults = () => {
         title={exam ? exam.title : "Results"}
         subtitle={exam?.courses ? `${exam.courses.code} · ${submitted.length} submitted` : ""}
         action={
-          exam?.courses ? (
-            <Link to={`/Courses/${exam.courses.code}`}>
-              <Button variant="secondary">{"Back to course"}</Button>
-            </Link>
-          ) : null
+          <div className="btn-row">
+            <ExportButton
+              roles={["teacher"]}
+              filename="exam-results"
+              sheetName="Exam results"
+              title={exam ? `${exam.title} results` : "Exam results"}
+              rows={attempts}
+              columns={RESULT_COLUMNS}
+            />
+            {exam?.courses ? (
+              <Link to={`/Courses/${exam.courses.code}`}>
+                <Button variant="secondary">{"Back to course"}</Button>
+              </Link>
+            ) : null}
+          </div>
         }
       >
         {loading ? <SkeletonCards count={4} lines={2} /> : null}

@@ -11,7 +11,7 @@ import {
 } from "../lib/platformApi";
 import { Page, Card, Badge, Empty, Select, Modal, Button, Field, MoneyInput, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
-import { downloadCsv } from "../lib/csv";
+import { ExportMenu } from "../Components/ExportButton";
 
 const BILLING_TONE = { paid: "success", pending: "warn", overdue: "danger", waived: "muted" };
 const STATUS_OPTIONS = [{ value: "", label: "All statuses" }, ...BILLING_STATUSES.map((s) => ({ value: s, label: s }))];
@@ -161,17 +161,16 @@ const PlatformBilling = () => {
     }
   };
 
-  const exportCsv = () => {
-    downloadCsv("billing", filtered, [
-      { key: "school_name", label: "School" },
-      { key: "plan", label: "Plan" },
-      { key: (r) => `${r.currency} ${Number(r.amount).toLocaleString()}`, label: "Amount" },
-      { key: (r) => formatDate(r.period_start, { withTime: false }), label: "Period start" },
-      { key: (r) => formatDate(r.period_end, { withTime: false }), label: "Period end" },
-      { key: "status", label: "Status" },
-      { key: (r) => r.note || "", label: "Note" },
-    ]);
-  };
+  // Spooled as Excel, CSV or PDF, whichever is picked (ExportMenu).
+  const exportColumns = [
+    { key: "school_name", label: "School" },
+    { key: "plan", label: "Plan" },
+    { key: (r) => `${r.currency} ${Number(r.amount).toLocaleString()}`, label: "Amount" },
+    { key: (r) => formatDate(r.period_start, { withTime: false }), label: "Period start" },
+    { key: (r) => formatDate(r.period_end, { withTime: false }), label: "Period end" },
+    { key: "status", label: "Status" },
+    { key: (r) => r.note || "", label: "Note" },
+  ];
 
   return (
     <Page
@@ -179,7 +178,7 @@ const PlatformBilling = () => {
       subtitle="A manual ledger of what every school was invoiced, and whether it was paid"
       action={
         <div className="btn-row">
-          <Button variant="secondary" disabled={!filtered.length} onClick={exportCsv}>{"Export CSV"}</Button>
+          <ExportMenu size={undefined} filename="billing" rows={filtered} columns={exportColumns} />
           <Button onClick={() => setAdding(true)}>{"Record a period"}</Button>
         </div>
       }

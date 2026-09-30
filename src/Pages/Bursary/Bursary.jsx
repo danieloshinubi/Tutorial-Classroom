@@ -28,6 +28,7 @@ import {
   fetchDiscountRules,
   applyDiscountRule,
   previewDiscount,
+  carryForwardBalances,
   PAYMENT_METHODS,
 } from "../../lib/api";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
@@ -51,6 +52,18 @@ import {
   SkeletonList,
 } from "../../Components/UI";
 import { confirmDialog, promptDialog } from "../../Components/Confirm";
+import ExportButton from "../../Components/ExportButton";
+
+// Spreadsheet columns for the bursary's lists (Export to Excel).
+const DEBTOR_COLUMNS = [
+  { key: "student", label: "Student" },
+  { key: "class_name", label: "Class" },
+  { key: "payable", label: "Billed", type: "money" },
+  { key: "paid", label: "Paid", type: "money" },
+  { key: "balance", label: "Owing", type: "money" },
+  { key: "oldest_due", label: "Oldest due", type: "date" },
+  { key: "guardians", label: "Parents" },
+];
 
 // Two charge names are the same charge when they differ only in case or
 // spacing. The database tidies spaces the same way (supabase/185).
@@ -193,6 +206,7 @@ const Overview = ({ summary, debtors, money, termName, draftCount, queueCount, q
           {debtors.length ? (
             <span className="bz-muted">{`${debtors.length} ${debtors.length === 1 ? "student" : "students"}`}</span>
           ) : null}
+          <ExportButton roles={["bursar"]} filename={`debtors${termName ? `-${termName}` : ""}`} sheetName="Who owes" columns={DEBTOR_COLUMNS} rows={debtors} />
         </div>
         {debtors.length === 0 ? (
           <div className="bz-empty">
@@ -785,8 +799,9 @@ const Structures = ({
 // Filter chips and a search box, not a second row of tabs inside the Invoices
 // tab — two tab strips stacked read as two levels of navigation. The filter
 // lives in the page, so "Open drafts" on the Overview lands on the drafts.
-const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilter, discounts = [] }) => {
+const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilter, discounts = [], term = null }) => {
   const [query, setQuery] = useState("");
+  const [carrying, setCarrying] = useState(false);
 
   // An application/acceptance-fee invoice has no student_id at all (the
   // applicant is not a student yet) — invoice_balances carries the
@@ -842,6 +857,37 @@ const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilte
     }
   };
 
+  // Unpaid balances from earlier terms onto this term’s drafts (196). Only
+  // offered once a term is chosen and it has drafts to carry them.
+  const carryForward = async () => {
+    if (!term || carrying) return;
+    const ok = await confirmDialog({
+      title: `Bring unpaid balances into ${term.name}?`,
+      body: `Whatever is still owed on earlier terms’ bills is added to each child’s draft bill for ${term.name} as “Balance brought forward”, and the earlier bill is marked as moved. Nothing is sent to families until you issue the drafts. Deleting or voiding a draft puts its balance back where it came from.`,
+      confirmLabel: "Bring forward",
+    });
+    if (!ok) return;
+    setCarrying(true);
+    onError("");
+    try {
+      const result = await carryForwardBalances(term.id);
+      const missing = result.no_draft_bill || [];
+      const names = missing.map((m) => nameOf({ student_id: m.student_id })).filter((v, i, a) => a.indexOf(v) === i);
+      const moved = result.moved
+        ? `${money(result.amount)} brought forward on ${result.moved} bill${result.moved === 1 ? "" : "s"}.`
+        : "Nothing was owing on earlier bills.";
+      onChange(
+        missing.length
+          ? `${moved} ${names.length} child${names.length === 1 ? " has" : "ren have"} money owing but no draft bill for ${term.name} yet (${names.slice(0, 5).join(", ")}${names.length > 5 ? "…" : ""}). Raise their bills, then bring forward again.`
+          : moved
+      );
+    } catch (err) {
+      onError(err.message || "Could not bring the balances forward.");
+    } finally {
+      setCarrying(false);
+    }
+  };
+
   const filters = [
     { id: "all", label: "All", count: invoices.length },
     { id: "draft", label: "Drafts", count: drafts.length },
@@ -883,6 +929,30 @@ const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilte
             placeholder="Search name or reference"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+          />
+          {term && drafts.length ? (
+            <Button variant="secondary" disabled={carrying} onClick={carryForward}>
+              {carrying ? "Bringing forward..." : "Bring forward unpaid"}
+            </Button>
+          ) : null}
+          <ExportButton
+            roles={["bursar"]}
+            filename={`invoices${term ? `-${term.name}` : ""}`}
+            sheetName="Invoices"
+            rows={shown}
+            columns={[
+              { key: "reference", label: "Reference" },
+              { key: (i) => nameOf(i), label: "Student" },
+              { key: (i) => standingLabel(i), label: "Standing" },
+              { key: "gross", label: "Billed", type: "money" },
+              { key: "discount", label: "Discount", type: "money" },
+              { key: "discount_reason", label: "Discount for" },
+              { key: "payable", label: "Payable", type: "money" },
+              { key: "paid", label: "Paid", type: "money" },
+              { key: "balance", label: "Balance", type: "money" },
+              { key: "due_on", label: "Due", type: "date" },
+              { key: "issued_at", label: "Issued", type: "datetime" },
+            ]}
           />
           {drafts.length ? (
             <Button onClick={issueAll}>{`Issue ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}</Button>
@@ -1293,6 +1363,21 @@ const Queue = ({ queue, queueContext, money, onChange, onError }) => {
         </p>
       </div>
       <div className="bz-queue-summary">
+        <ExportButton
+          roles={["bursar"]}
+          filename="payments-waiting"
+          sheetName="Payments waiting"
+          rows={queue}
+          columns={[
+            { key: (p) => refOf(p.invoice_id), label: "Bill" },
+            { key: (p) => contextOf(p.invoice_id).applicant_name || "", label: "Applicant" },
+            { key: "amount", label: "Amount", type: "money" },
+            { key: (p) => METHOD_LABEL[p.method] || p.method, label: "Method" },
+            { key: "reference", label: "Reference", type: "text" },
+            { key: "paid_on", label: "Paid on", type: "date" },
+            { key: (p) => (p.proof_path ? "Yes" : "No"), label: "Receipt" },
+          ]}
+        />
         <span>
           <strong>{queue.length}</strong>
           {` waiting · `}
@@ -1557,6 +1642,7 @@ const Bursary = () => {
             filter={invoiceFilter}
             setFilter={setInvoiceFilter}
             discounts={discounts}
+            term={terms.find((t) => t.id === termId) || null}
           />
         ) : null}
 

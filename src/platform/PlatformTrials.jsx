@@ -4,7 +4,7 @@ import { fetchTenants } from "../lib/platformApi";
 import { Page, Card, Badge, Empty, Select, Button, formatDate, SkeletonTable } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import ExtendTrialModal from "./ExtendTrialModal";
-import { downloadCsv } from "../lib/csv";
+import { ExportMenu } from "../Components/ExportButton";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -57,20 +57,19 @@ const PlatformTrials = () => {
       .sort((a, b) => new Date(a.trial_ends_at || 0) - new Date(b.trial_ends_at || 0));
   }, [trials, status, query]);
 
-  const exportCsv = () => {
-    downloadCsv("trials", filtered, [
-      { key: "name", label: "School" },
-      { key: "students", label: "Students" },
-      { key: (t) => (t.trial_ends_at ? formatDate(t.trial_ends_at, { withTime: false }) : "not set"), label: "Trial ends" },
-      { key: (t) => STATUS_LABEL[statusOf(t)], label: "Status" },
-    ]);
-  };
+  // Spooled as Excel, CSV or PDF, whichever is picked (ExportMenu).
+  const exportColumns = [
+    { key: "name", label: "School" },
+    { key: "students", label: "Students" },
+    { key: (t) => (t.trial_ends_at ? formatDate(t.trial_ends_at, { withTime: false }) : "not set"), label: "Trial ends" },
+    { key: (t) => STATUS_LABEL[statusOf(t)], label: "Status" },
+  ];
 
   return (
     <Page
       title="Trials"
       subtitle={`${trials.length} school${trials.length === 1 ? "" : "s"} currently on a trial plan`}
-      action={<Button variant="secondary" disabled={!filtered.length} onClick={exportCsv}>{"Export CSV"}</Button>}
+      action={<ExportMenu size={undefined} filename="trials" rows={filtered} columns={exportColumns} />}
       toolbar={
         <div className="filters">
           <Select value={status} onChange={setStatus} options={STATUS_OPTIONS} style={{ minWidth: 220 }} />

@@ -21,6 +21,10 @@ export const useSchool = () => {
   return context;
 };
 
+// The same, or null outside a school (the platform console), for shared
+// components that only use the school when there is one.
+export const useSchoolIfAny = () => useContext(SchoolContext) || null;
+
 // Resolves the tenant from the subdomain and the signed-in user's membership
 // of it. Everything downstream scopes its queries with `school.id`; row level
 // security is what actually enforces the boundary.

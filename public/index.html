@@ -38,12 +38,32 @@
       // loads, so a change an admin makes still lands on the next visit. The
       // originals are kept on each tag (data-default-*) so that removing a
       // school's logo still restores Schoolivio's own icon correctly.
+      //
+      // A device that has never seen this school has nothing saved, so on a
+      // school's own address the page stays hidden (brand-pending) until the
+      // school's colours arrive, rather than showing Schoolivio's purple and
+      // name first. applyTenantBranding lifts it; a safety timer lifts it
+      // anyway after a few seconds so a slow network never leaves it blank.
       (function () {
+        var host = window.location.hostname.toLowerCase();
+        var parts = host.split(".");
+        var first = parts[0];
+        var onSchoolHost =
+          first !== "admin" &&
+          first !== "www" &&
+          (parts.length >= 3 || (parts.length === 2 && parts[1] === "localhost"));
+        var hide = function () {
+          if (!onSchoolHost) return;
+          document.documentElement.classList.add("brand-pending");
+          setTimeout(function () {
+            document.documentElement.classList.remove("brand-pending");
+          }, 4000);
+        };
         try {
           var raw = window.localStorage.getItem("schoolivio:brand");
-          if (!raw) return;
+          if (!raw) return hide();
           var brand = JSON.parse(raw);
-          if (!brand || brand.v !== 1) return;
+          if (!brand || brand.v !== 1) return hide();
 
           var root = document.documentElement;
           if (brand.palette) {
@@ -77,8 +97,9 @@
             }
           }
         } catch (e) {
-          // Private browsing or blocked storage: nothing saved, so the page
-          // simply brands itself once the school loads, as it always did.
+          // Private browsing or blocked storage: nothing saved, so hide until
+          // the school brands the page itself.
+          hide();
         }
       })();
     </script>
@@ -87,6 +108,11 @@
         margin: 0;
         padding: 0;
       }
+      /* See the boot script above. Plain white rather than any colour, so
+         the wait shows nobody's branding at all. */
+      html.brand-pending body { background: #fff; }
+      html.brand-pending #root { opacity: 0; }
+      #root { transition: opacity .12s ease-out; }
     </style>
   </head>
   <body>

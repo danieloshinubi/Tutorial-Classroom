@@ -3,6 +3,7 @@ import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchAuditLog, fetchAuditLogTables } from "../../lib/api";
 import { useActionFeedback } from "../../Components/Toast";
+import ExportButton from "../../Components/ExportButton";
 import {
   Page,
   Card,
@@ -90,6 +91,18 @@ const describe = (row) => {
 // is the one place in the app where the audience is explicitly "someone
 // technical enough to be running the school", not a parent or student.
 const fieldList = (fields) => (fields && fields.length ? fields.join(", ") : null);
+
+// The page of entries currently loaded, as each card reads.
+const AUDIT_COLUMNS = [
+  { key: "created_at", label: "When", type: "datetime" },
+  { key: (r) => ACTION_VERB[r.action] || r.action, label: "Action" },
+  { key: describe, label: "What" },
+  { key: "actor_label", label: "Person" },
+  { key: (r) => r.actor_role || "", label: "Role" },
+  { key: (r) => r.ip_address || "", label: "IP address" },
+  { key: (r) => r.country || "", label: "Country" },
+  { key: (r) => (r.action === "UPDATE" ? fieldList(r.changed_fields) || "" : ""), label: "Fields changed" },
+];
 
 const AuditRow = ({ row }) => {
   const [open, setOpen] = useState(false);
@@ -285,11 +298,12 @@ const AuditLog = () => {
               <DateTimePicker value={to} onChange={applyFilter(setTo)} />
             </Field>
           </div>
-          {hasFilters ? (
-            <div style={{ marginTop: 10 }}>
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            {hasFilters ? (
               <Button variant="ghost" size="sm" onClick={clearFilters}>{"Clear filters"}</Button>
-            </div>
-          ) : null}
+            ) : null}
+            <ExportButton filename="audit-log" sheetName="Audit log" rows={rows} columns={AUDIT_COLUMNS} />
+          </div>
         </Card>
 
 

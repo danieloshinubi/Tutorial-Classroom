@@ -37,6 +37,12 @@ const Notifications = () => {
 
   useEffect(load, [load]);
 
+  // Something else marked notifications read (the payslips page): recount.
+  useEffect(() => {
+    window.addEventListener("schoolivio:notifications-changed", load);
+    return () => window.removeEventListener("schoolivio:notifications-changed", load);
+  }, [load]);
+
   // New notifications arrive over realtime, so a tutor sees a join request
   // without refreshing.
   useEffect(() => {
