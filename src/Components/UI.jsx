@@ -220,15 +220,23 @@ export const Select = ({
   // Bursary's header grew past the window and made the whole page scroll
   // sideways.
   const [alignEnd, setAlignEnd] = useState(false);
+  // Opens upward when the list would run off the bottom of the screen and
+  // there is more room above. On a phone, a class list near the foot of a
+  // form opened below the fold, so its last options (SS3) were out of sight.
+  const [dropUp, setDropUp] = useState(false);
   useLayoutEffect(() => {
     if (!open) {
       setAlignEnd(false);
+      setDropUp(false);
       return;
     }
     const panel = listRef.current;
     if (!panel) return;
     const r = panel.getBoundingClientRect();
     if (r.right > (window.innerWidth || document.documentElement.clientWidth) - 8) setAlignEnd(true);
+    const viewH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
+    const t = triggerRef.current?.getBoundingClientRect();
+    if (t && r.bottom > viewH - 8 && t.top > viewH - t.bottom) setDropUp(true);
   }, [open]);
   const typeAhead = useRef({ text: "", timer: null });
   // Picking an option removes the <li> that was actually clicked, mid
@@ -241,7 +249,10 @@ export const Select = ({
   // treated as an echo of the same selection, not a fresh open request.
   const justClosedAtRef = useRef(0);
 
-  const selectedIndex = options.findIndex((o) => o.value === value);
+  // Compared as text: a form often holds "6" while its options carry 6
+  // (a class year), and a strict match showed nothing as picked.
+  const sameValue = (a, b) => a === b || (a != null && b != null && String(a) === String(b));
+  const selectedIndex = options.findIndex((o) => sameValue(o.value, value));
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
 
   useEffect(() => {
@@ -268,7 +279,7 @@ export const Select = ({
     setOpen(false);
     justClosedAtRef.current = performance.now();
     triggerRef.current?.focus();
-    if (opt && opt.value !== value) onChange(opt.value);
+    if (opt && !sameValue(opt.value, value)) onChange(opt.value);
   };
 
   const onKeyDown = (e) => {
@@ -346,7 +357,7 @@ export const Select = ({
       </button>
 
       {open ? (
-        <ul id={id ? `${id}-listbox` : undefined} className={`uiselect-panel${alignEnd ? " align-end" : ""}`} role="listbox" ref={listRef}>
+        <ul id={id ? `${id}-listbox` : undefined} className={`uiselect-panel${alignEnd ? " align-end" : ""}${dropUp ? " drop-up" : ""}`} role="listbox" ref={listRef}>
           {options.length === 0 ? (
             <li className="uiselect-empty">{"No options"}</li>
           ) : (
@@ -355,7 +366,7 @@ export const Select = ({
                 key={opt.value ?? i}
                 id={id ? `${id}-opt-${i}` : undefined}
                 role="option"
-                aria-selected={opt.value === value}
+                aria-selected={sameValue(opt.value, value)}
                 className={`uiselect-option${i === activeIndex ? " active" : ""}`}
                 onMouseEnter={() => setActiveIndex(i)}
                 onMouseDown={(e) => e.preventDefault()}

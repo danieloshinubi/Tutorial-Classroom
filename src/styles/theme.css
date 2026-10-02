@@ -8289,6 +8289,7 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
 
 /* A dropdown near the right edge opens leftwards instead of off the screen. */
 .uiselect-panel.align-end { left: auto; right: 0; }
+.uiselect-panel.drop-up { top: auto; bottom: calc(100% + 6px); }
 .uiselect-panel { max-width: calc(100vw - 24px); }
 
 /* Bursary: editing a fee structure in place. */
