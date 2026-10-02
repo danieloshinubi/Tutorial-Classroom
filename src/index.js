@@ -2,6 +2,9 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
+import { installKeyboardViewport } from "./lib/keyboardViewport";
+
+installKeyboardViewport();
 
 // Google sign-in goes through Supabase's OAuth redirect flow, so the client id
 // and secret live in the Supabase dashboard rather than in this bundle. That

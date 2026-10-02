@@ -69,7 +69,7 @@ const PlatformLogin = () => {
 
           {inactive ? (
             <Notice tone="muted">
-              {"You were signed out after 10 minutes of inactivity. Sign in again to continue."}
+              {`You were signed out after ${Number(new URLSearchParams(window.location.search).get("mins")) || 10} minutes of inactivity. Sign in again to continue.`}
             </Notice>
           ) : null}
 

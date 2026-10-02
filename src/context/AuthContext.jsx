@@ -18,8 +18,14 @@ const AuthContext = createContext(null);
 // anywhere on the page signs them out and sends them back to /Login, the
 // same as the session simply having expired. (Was 7; raised to 10 because
 // it kept interrupting people mid-task — the 30-second warning below still
-// comes first.) Login.jsx and PlatformLogin.jsx quote this number.
-const INACTIVITY_LIMIT_MS = 10 * 60 * 1000;
+// comes first.)
+//
+// That is the default. A school sets its own (School admin → Security,
+// schools.idle_lockout_enabled / idle_lockout_minutes, supabase/207):
+// SchoolContext hands it over through setIdlePolicy once the school loads.
+// The sign-in page is told the minutes in the address, so it quotes the
+// number that actually applied.
+const DEFAULT_IDLE_POLICY = { enabled: true, minutes: 10 };
 // How long the "still there?" warning shows before the sign-out actually
 // happens. The limit above is unchanged — this only stops the sign-out being
 // a surprise. A bursar part-way through entering a term's fees was being
@@ -49,6 +55,12 @@ export const AuthProvider = ({ children }) => {
   const [sessionReady, setSessionReady] = useState(false);
   // Shown for the last 30 seconds before the inactivity sign-out fires.
   const [idleWarning, setIdleWarning] = useState(false);
+  const [idlePolicy, setIdlePolicyState] = useState(DEFAULT_IDLE_POLICY);
+  const setIdlePolicy = useCallback((next) => {
+    const enabled = next?.enabled !== false;
+    const minutes = Math.min(240, Math.max(2, Math.round(Number(next?.minutes) || DEFAULT_IDLE_POLICY.minutes)));
+    setIdlePolicyState((cur) => (cur.enabled === enabled && cur.minutes === minutes ? cur : { enabled, minutes }));
+  }, []);
   // Who the profile currently belongs to, so a token refresh can be told
   // apart from an actual change of person.
   const loadedForRef = useRef(null);
@@ -158,7 +170,11 @@ export const AuthProvider = ({ children }) => {
   // this effect and only matters once, so this calls the same Supabase API
   // directly rather than reordering the file around a hook dependency.
   useEffect(() => {
-    if (!session) return undefined;
+    if (!session || !idlePolicy.enabled) {
+      setIdleWarning(false);
+      return undefined;
+    }
+    const limitMs = idlePolicy.minutes * 60 * 1000;
 
     let timer;
     let warnTimer;
@@ -172,7 +188,7 @@ export const AuthProvider = ({ children }) => {
       // param gives Login.jsx the same "from" to redirect to either way.
       const from = encodeURIComponent(window.location.pathname + window.location.search);
       supabase.auth.signOut().finally(() => {
-        window.location.href = `/Login?reason=inactivity&from=${from}`;
+        window.location.href = `/Login?reason=inactivity&mins=${idlePolicy.minutes}&from=${from}`;
       });
     };
     const resetTimer = () => {
@@ -184,9 +200,9 @@ export const AuthProvider = ({ children }) => {
       setIdleWarning(false);
       warnTimer = setTimeout(
         () => setIdleWarning(true),
-        Math.max(0, INACTIVITY_LIMIT_MS - INACTIVITY_WARNING_MS)
+        Math.max(0, limitMs - INACTIVITY_WARNING_MS)
       );
-      timer = setTimeout(lock, INACTIVITY_LIMIT_MS);
+      timer = setTimeout(lock, limitMs);
     };
 
     resetTimer();
@@ -197,7 +213,7 @@ export const AuthProvider = ({ children }) => {
       clearTimeout(warnTimer);
       ACTIVITY_EVENTS.forEach((name) => window.removeEventListener(name, resetTimer));
     };
-  }, [session]);
+  }, [session, idlePolicy]);
 
   const signUp = useCallback(
     async ({ email, password, firstName, surname, username, role, pendingApplicantSchoolId }) => {
@@ -290,6 +306,7 @@ export const AuthProvider = ({ children }) => {
       signOut,
       sendPasswordReset,
       updatePassword,
+      setIdlePolicy,
       refreshProfile: () => {
         loadedForRef.current = user?.id ?? null;
         return loadProfile(user);
@@ -307,6 +324,7 @@ export const AuthProvider = ({ children }) => {
       signOut,
       sendPasswordReset,
       updatePassword,
+      setIdlePolicy,
       loadProfile,
     ]
   );

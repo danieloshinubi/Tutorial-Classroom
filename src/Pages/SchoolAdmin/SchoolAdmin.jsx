@@ -32,6 +32,7 @@ import ModulesPanel from "./ModulesPanel";
 import FeesSetupPanel from "./FeesSetupPanel";
 import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
 import OrganogramPanel from "./OrganogramPanel";
+import SecurityPanel from "./SecurityPanel";
 import { STAFF_ROLES } from "../../lib/orgChart";
 import { ROLES, ROLE_LABEL, toneFor, roleAccent } from "../../lib/roles";
 import {
@@ -1346,6 +1347,7 @@ const SECTIONS = [
     items: [
       { id: "mailboxes", label: "Mailboxes", icon: mailIcon, description: "Email accounts whose messages arrive as tickets." },
       { id: "modules", label: "Modules", icon: toggleRight, description: "Switch parts of Schoolivio on or off for this school." },
+      { id: "security", label: "Security", icon: lock, description: "Sign people out after a set time of inactivity, or not at all." },
       { id: "settings", label: "School settings", icon: settingsIcon, description: "Name, logo, colours, contact details and letters." },
     ],
   },
@@ -1366,6 +1368,7 @@ const PANELS = {
   payments: PaymentGatewaySettingsPanel,
   fees: FeesSetupPanel,
   modules: ModulesPanel,
+  security: SecurityPanel,
   settings: SettingsPanel,
 };
 

@@ -1602,7 +1602,7 @@ export const updateSchool = async (id, changes) => {
     .eq("id", id)
     .select(
       `id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency,
-       disabled_modules,
+       disabled_modules, idle_lockout_enabled, idle_lockout_minutes,
        signature_url, signatory_name, signatory_title,
        admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
     )

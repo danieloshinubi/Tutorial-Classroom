@@ -1240,6 +1240,16 @@ const ChatPage = () => {
     threadEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
+  // The keyboard opening shortens the thread (lib/keyboardViewport.js); keep
+  // the latest message just above the composer, as a messenger does.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    const keepLatest = () => threadEndRef.current?.scrollIntoView({ block: "end" });
+    vv.addEventListener("resize", keepLatest);
+    return () => vv.removeEventListener("resize", keepLatest);
+  }, []);
+
   // Choosing Reply means typing next, on any device.
   useEffect(() => {
     if (replyingTo) composerRef.current?.focus();

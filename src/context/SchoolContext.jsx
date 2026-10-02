@@ -29,7 +29,7 @@ export const useSchoolIfAny = () => useContext(SchoolContext) || null;
 // of it. Everything downstream scopes its queries with `school.id`; row level
 // security is what actually enforces the boundary.
 export const SchoolProvider = ({ children }) => {
-  const { user, loading: authLoading, sessionReady } = useAuth();
+  const { user, loading: authLoading, sessionReady, setIdlePolicy } = useAuth();
   // The id is stable across token refreshes; the user object is not.
   const userId = user?.id ?? null;
   const slug = useMemo(() => resolveSlug(), []);
@@ -95,7 +95,7 @@ export const SchoolProvider = ({ children }) => {
             // loads without it, disabledModules reads as empty, and every
             // module stays visible however the admin sets them.
             `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active,
-             disabled_modules,
+             disabled_modules, idle_lockout_enabled, idle_lockout_minutes,
              signature_url, signatory_name, signatory_title,
              admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
           )
@@ -216,6 +216,13 @@ export const SchoolProvider = ({ children }) => {
     }
     return [...held];
   }, [role, memberships, school]);
+
+  // The school decides how long an idle screen stays signed in
+  // (AuthContext runs the timer; School admin → Security sets it).
+  useEffect(() => {
+    if (!school) return;
+    setIdlePolicy({ enabled: school.idle_lockout_enabled !== false, minutes: school.idle_lockout_minutes ?? 10 });
+  }, [school, setIdlePolicy]);
 
   const value = useMemo(
     () => ({

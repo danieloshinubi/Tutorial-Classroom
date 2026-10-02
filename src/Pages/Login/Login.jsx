@@ -116,7 +116,7 @@ const Login = () => {
         ) : null}
         {params.get("reason") === "inactivity" ? (
           <Notice tone="muted">
-            {"You were signed out after 10 minutes of inactivity. Sign in again to continue."}
+            {`You were signed out after ${Number(params.get("mins")) || 10} minutes of inactivity. Sign in again to continue.`}
           </Notice>
         ) : null}
         <Field label="Email">
