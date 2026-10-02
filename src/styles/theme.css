@@ -8299,18 +8299,21 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
 .bz-edit-lines li { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 10px; align-items: center; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; }
 @media (max-width: 560px) { .bz-edit-lines li { grid-template-columns: 1fr 1fr; } .bz-edit-lines li .bz-line-name { grid-column: 1 / -1; } }
 
-/* Chat while a phone keyboard is open (lib/keyboardViewport.js): the frame
-   is pinned to the visible area so the conversation header stays at the top
-   and the composer sits on the keyboard, the way a messenger app behaves.
-   On a phone the app's top bar steps aside too, as WhatsApp's does. */
-html.kb-open .shell:has(.page-chat) {
-  position: fixed;
-  left: 0;
-  right: 0;
-  top: var(--vv-top, 0px);
-  height: var(--vv-h, 100dvh);
-}
-html.kb-open .shell:has(.page-chat) > .side { height: var(--vv-h, 100dvh); }
+/* Chat on a phone (lib/keyboardViewport.js). The frame is always exactly
+   the visible area, so when the keyboard opens the conversation header stays
+   at the top and the composer sits on the keys, the way a messenger app
+   behaves, instead of iOS panning the whole page up. While typing, the
+   app's top bar steps aside, as WhatsApp's screen has none. */
 @media (max-width: 900px) {
+  html:has(.page-chat),
+  html:has(.page-chat) body { overflow: hidden; overscroll-behavior: none; }
+  .shell:has(.page-chat) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--vv-top, 0px);
+    height: var(--vv-h, 100dvh);
+  }
+  .shell:has(.page-chat) > .side { height: var(--vv-h, 100dvh); }
   html.kb-open .shell:has(.page-chat) > .topbar { display: none; }
 }
