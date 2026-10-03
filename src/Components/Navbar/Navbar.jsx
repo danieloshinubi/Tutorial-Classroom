@@ -20,7 +20,6 @@ import { chevronsLeft } from "react-icons-kit/feather/chevronsLeft";
 import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
 import { menu as menuIcon } from "react-icons-kit/feather/menu";
 import { x as xIcon } from "react-icons-kit/feather/x";
-import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import Notifications from "../Notifications";
 import AccountMenu from "./AccountMenu";
@@ -29,7 +28,7 @@ import Logo from "../Logo";
 import PushPrompt from "../PushPrompt";
 import Assistant from "../Assistant/Assistant";
 import { modulesFor, groupModules } from "../../lib/modules";
-import { fetchChatOverview, fetchModuleAttention, markModuleSeen, subscribeToMyChannels, subscribeToSchoolChatActivity } from "../../lib/api";
+import { useNavData } from "../../context/NavDataContext";
 
 // The application shell: a sidebar of modules on the left, a slim bar across
 // the top for search and the account.
@@ -62,76 +61,13 @@ const ICONS = {
   school: settingsIcon,
 };
 
-// Modules whose dot means "new since you last opened it" (supabase/213).
-const SEEN_MODULES = [
-  { id: "news", path: "/News" },
-  { id: "reports", path: "/Reports" },
-  { id: "attendance", path: "/Attendance" },
-  { id: "courses", path: "/Courses" },
-];
-
 const Navbar = () => {
-  const { user } = useAuth();
-  const { school, roles, schoolId, disabledModules, moduleGrants } = useSchool();
+  const { school, roles, disabledModules, moduleGrants } = useSchool();
   const location = useLocation();
 
-  // Every chat's own unread_count, summed — the same "how many are waiting
-  // on me" a phone's app-icon badge shows, surfaced next to the sidebar
-  // link since Chat has no other permanently-visible spot for it.
-  const [chatUnread, setChatUnread] = useState(0);
-  useEffect(() => {
-    if (!user?.id || !schoolId) { setChatUnread(0); return undefined; }
-    const load = () =>
-      fetchChatOverview(schoolId)
-        .then((rows) => setChatUnread(rows.reduce((sum, r) => sum + (r.unread_count || 0), 0)))
-        .catch(() => {});
-    load();
-    // Own topic suffix — ChatPage's own thread view watches the same rows
-    // under the default topic, and two callers on one topic would collide
-    // (see subscribeToMyChannels in api.js).
-    //
-    // Both subscriptions are needed, not either/or: subscribeToMyChannels
-    // catches membership changes (added to a group, my own last_read_at
-    // moving after I read something); subscribeToSchoolChatActivity catches
-    // the actual "someone sent me a message" signal, which never touches my
-    // own chat_channel_members row and so this badge never updated for it
-    // before — the exact bug of "the count doesn't show unless I'm already
-    // on Chat".
-    const membershipChannel = subscribeToMyChannels(user.id, load, "chat_channels_nav");
-    const activityChannel = subscribeToSchoolChatActivity(schoolId, load, "chat_activity_nav");
-    return () => {
-      membershipChannel.unsubscribe();
-      activityChannel.unsubscribe();
-    };
-  }, [user?.id, schoolId]);
-
-  // The same dot for every other module with something waiting on this
-  // person: payments to approve, payroll to approve or fix, new applicants,
-  // low stock, result sheets, requests (supabase/212 decides what counts).
-  // Checked on each page change, when the window comes back into focus, and
-  // every minute while it is open.
-  const [attention, setAttention] = useState({});
-  useEffect(() => {
-    if (!user?.id || !schoolId) { setAttention({}); return undefined; }
-    let alive = true;
-    const load = () =>
-      fetchModuleAttention(schoolId)
-        .then((counts) => { if (alive) setAttention(counts || {}); })
-        .catch(() => {});
-    // Opening one of these modules is how its "new since you last looked"
-    // dot goes away; the visit is recorded first so the dot clears now.
-    const here = SEEN_MODULES.find((m) => location.pathname.toLowerCase().startsWith(m.path.toLowerCase()));
-    if (here) markModuleSeen(schoolId, here.id).catch(() => {}).finally(load);
-    else load();
-    const timer = setInterval(load, 60000);
-    const onFocus = () => load();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [user?.id, schoolId, location.pathname]);
+  // Unread chats and the "waiting for you" dots live in NavDataProvider, so
+  // they survive page changes instead of reloading with every Navbar.
+  const { chatUnread, attention } = useNavData();
 
   // Remembered between visits: someone on a laptop who collapses it once
   // should not have to do it again every time they open the app.

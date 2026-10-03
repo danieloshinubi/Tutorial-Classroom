@@ -7,6 +7,7 @@ import { resolveSlug } from "../lib/tenant";
 import { fetchMyApplicantAccount, createApplicantAccount } from "../lib/api";
 import { useActionFeedback } from "./Toast";
 import { AppLoading } from "./UI";
+import { fetchPublicSchool } from "../lib/publicSchool";
 
 // Reachable with no school_members row at this tenant — an applicant's own
 // portal, and basic account management every signed-in person needs
@@ -83,7 +84,7 @@ const ProtectedRoute = () => {
     }
     let cancelled = false;
     (async () => {
-      const { data } = await supabase.rpc("public_school", { target_slug: resolveSlug() });
+      const { data } = await fetchPublicSchool(resolveSlug());
       const schoolId = data?.length ? data[0].id : null;
       if (!schoolId) {
         if (!cancelled) setApplicantStatus("none");

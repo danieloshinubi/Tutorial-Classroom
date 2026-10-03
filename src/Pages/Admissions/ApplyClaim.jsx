@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
 import { claimApplication } from "../../lib/api";
 import { applyTenantBranding } from "../../lib/branding";
 import { Field, Button } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 // The bridge for an application that was submitted without an account (the
 // public /Apply form) — arrived at from "Check an application"'s new "Sign
@@ -47,8 +47,7 @@ const ApplyClaim = () => {
   const justAuthenticatedRef = useRef(false);
 
   useEffect(() => {
-    supabase
-      .rpc("public_school", { target_slug: slug })
+    fetchPublicSchool(slug)
       .then(({ data }) => {
         if (data?.length) setSchool(data[0]);
       })

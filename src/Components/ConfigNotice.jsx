@@ -23,13 +23,16 @@ const ConfigNotice = () => {
   const [schemaProblem, setSchemaProblem] = useState(null);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    // A setup aid for whoever is running the code, so development only: in
+    // production the schema is known to be there, and probing it for every
+    // visitor only added a failed request to each signed-out page load.
+    // public_school is open to signed-out visitors, so the probe itself is
+    // never refused; only a missing or unexposed schema makes it fail.
+    if (!isSupabaseConfigured || process.env.NODE_ENV === "production") return undefined;
     let active = true;
 
     supabase
-      .from("levels")
-      .select("year")
-      .limit(1)
+      .rpc("public_school", { target_slug: "" })
       .then(({ error }) => {
         if (!active || !error) return;
         if (error.code === "PGRST106") {

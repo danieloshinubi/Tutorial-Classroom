@@ -273,7 +273,7 @@ const ClassesPanel = () => {
               {openClass === row.id ? (
                 <div style={{ marginTop: 16, borderTop: "1px solid var(--line)", paddingTop: 16 }}>
                   <Field label="Form teacher">
-                    <Select
+                    <Select searchable
                       className="select"
                       value={row.form_teacher_id || ""}
                       onChange={async (v) => {
@@ -322,7 +322,7 @@ const ClassesPanel = () => {
                   )}
 
                   <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
-                    <Select
+                    <Select searchable
                       className="select"
                       value={addStudentId}
                       onChange={setAddStudentId}
@@ -355,7 +355,7 @@ const ClassesPanel = () => {
                           }}
                         >
                           <span style={{ flex: 1, minWidth: 120 }}>{t.subjects?.name}</span>
-                          <Select
+                          <Select searchable
                             className="select"
                             style={{ width: "auto", padding: "5px 8px" }}
                             value={t.teacher_id || ""}
@@ -397,7 +397,7 @@ const ClassesPanel = () => {
                         ...subjects.map((s) => ({ value: s.id, label: s.name })),
                       ]}
                     />
-                    <Select
+                    <Select searchable
                       className="select"
                       style={{ flex: 1, minWidth: 140 }}
                       value={addSubject.teacherId}
@@ -451,7 +451,7 @@ const ClassesPanel = () => {
                 </Field>
               ) : null}
               <Field label="Form teacher">
-                <Select
+                <Select searchable
                   className="select"
                   value={form.formTeacherId}
                   onChange={(v) => setForm((c) => ({ ...c, formTeacherId: v }))}

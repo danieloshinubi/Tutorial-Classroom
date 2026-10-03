@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ApplicantShell } from "../../Components/ApplicantShell";
 import { useAuth } from "../../context/AuthContext";
-import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import {
   fetchPublicAdmissionSessions,
@@ -22,6 +21,7 @@ import {
   Select,
   DatePicker,
 } from "../../Components/UI";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 // The accounted flow's entry point. Signed-in applicant chooses a session
 // and a programme; the server generates the application (and the fee
@@ -61,8 +61,7 @@ const ApplyStart = () => {
   const { setError } = useActionFeedback();
 
   useEffect(() => {
-    supabase
-      .rpc("public_school", { target_slug: slug })
+    fetchPublicSchool(slug)
       .then(({ data }) => {
         if (data?.length) setSchool(data[0]);
       })

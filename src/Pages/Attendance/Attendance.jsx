@@ -624,7 +624,7 @@ const LogResumption = ({ schoolId }) => {
       </p>
       <form onSubmit={handleSubmit}>
         <Field label="Who resumed">
-          <Select
+          <Select searchable
             className="select"
             value={personId}
             onChange={setPersonId}

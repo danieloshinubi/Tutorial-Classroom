@@ -33,7 +33,7 @@ import {
   markChannelRead,
   subscribeToChatChannel,
   subscribeToMyChannels,
-  subscribeToSchoolChatActivity,
+  subscribeToChatActivity,
   subscribeToChannelMembers,
   fetchChannelMembers,
   subscribeToMessageReactions,
@@ -1118,12 +1118,12 @@ const ChatPage = () => {
   // Two subscriptions, not one: subscribeToMyChannels only ever fires on a
   // change to MY OWN chat_channel_members row (a membership add/remove, my
   // own last_read_at), which someone else's new message never touches —
-  // subscribeToSchoolChatActivity is what actually reacts to a new message
+  // subscribeToChatActivity is what actually reacts to a new message
   // arriving in a channel I'm not currently looking at.
   useEffect(() => {
     if (!user?.id || !schoolId) return undefined;
     const membershipChannel = subscribeToMyChannels(user.id, () => loadOverview());
-    const activityChannel = subscribeToSchoolChatActivity(schoolId, () => loadOverview());
+    const activityChannel = subscribeToChatActivity(user.id, () => loadOverview());
     return () => {
       membershipChannel.unsubscribe();
       activityChannel.unsubscribe();
@@ -1194,7 +1194,8 @@ const ChatPage = () => {
   // every change reaches every open ChatPage and this drops whatever isn't
   // for a message actually on screen.
   useEffect(() => {
-    const channel = subscribeToMessageReactions((payload) => {
+    if (!channelId) return undefined;
+    const channel = subscribeToMessageReactions(channelId, (payload) => {
       const row = payload.new || payload.old;
       if (!row || !messagesRef.current.some((m) => m.id === row.message_id)) return;
       setMessages((current) =>
@@ -1208,7 +1209,7 @@ const ChatPage = () => {
       );
     });
     return () => channel.unsubscribe();
-  }, []);
+  }, [channelId]);
 
   // Typing — a pure ephemeral broadcast (see sendTyping/subscribeToTyping in
   // api.js), never written to the database. Each incoming ping refreshes a

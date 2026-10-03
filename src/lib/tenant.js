@@ -26,6 +26,17 @@ export const resolveSlug = (hostname = window.location.hostname) => {
   return candidate;
 };
 
+// The school named by the address itself ("charismartin-intl" in
+// charismartin-intl.schoolivio.com), or null when the address names none and
+// resolveSlug falls back to the default (plain localhost, an IP address).
+// Only a named school can be wrong, so only this is checked for "no such
+// school" (TenantGate).
+export const slugFromHost = (hostname = window.location.hostname) => {
+  const slug = resolveSlug(hostname);
+  const first = hostname.toLowerCase().split(":")[0].split(".")[0];
+  return slug === first ? slug : null;
+};
+
 // Where a given school lives, used when switching between them.
 export const schoolUrl = (slug) => {
   const { protocol, hostname, port } = window.location;

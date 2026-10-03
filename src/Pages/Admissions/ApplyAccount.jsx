@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
 import { applyTenantBranding } from "../../lib/branding";
 import { createApplicantAccount } from "../../lib/api";
 import { Field, Button } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 // The accounted flow's real front door. /Apply/Start (where you pick a
 // session and begin the form itself) sits behind ProtectedRoute — it needs
@@ -34,8 +34,7 @@ const ApplyAccount = () => {
   const [awaitingConfirmation, setAwaitingConfirmation] = useState(false);
 
   useEffect(() => {
-    supabase
-      .rpc("public_school", { target_slug: slug })
+    fetchPublicSchool(slug)
       .then(({ data }) => {
         if (data?.length) setSchool(data[0]);
       })

@@ -10,6 +10,7 @@ import { fetchMySchoolMembership, fetchMyApplicantAccount, createApplicantAccoun
 import { useAuth } from "../../context/AuthContext";
 import { Field, Button } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 // A separate URL from the staff/student/parent /Login, not the same form
 // wearing a different badge depending on how you arrived — that's what
@@ -49,7 +50,7 @@ const ApplicantLogin = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const rejectUnlessApplicant = async (user) => {
-    const { data } = await supabase.rpc("public_school", { target_slug: slug });
+    const { data } = await fetchPublicSchool(slug);
     const schoolId = data?.length ? data[0].id : null;
     if (!schoolId) return; // Unknown slug is a different problem — not this page's to solve.
 

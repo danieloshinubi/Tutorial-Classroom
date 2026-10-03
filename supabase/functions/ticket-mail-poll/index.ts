@@ -58,6 +58,15 @@ const asList = (value: string | string[] | undefined): string[] =>
 // skipped, only ever deferred to a later poll if MAX_PER_POLL is hit.
 const MAX_PER_POLL = 25;
 
+// Mailboxes are checked a few at a time, each with its own time limit, and
+// the run stops starting new ones before the function's own limit, so one
+// slow or stuck mail server cannot hold up every other school's requests.
+// Whichever was checked longest ago goes first; any not reached this run
+// are first in line next time (every 5 minutes).
+const CONCURRENCY = 5;
+const PER_MAILBOX_MS = 45_000;
+const RUN_BUDGET_MS = 110_000;
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return new Response("Method not allowed", { status: 405 });
@@ -83,8 +92,9 @@ Deno.serve(async (req) => {
   });
   if (listError) return json({ error: listError.message }, 500);
 
-  const results = [];
-  for (const mailbox of mailboxes || []) {
+
+  // deno-lint-ignore no-explicit-any
+  const pollMailbox = async (mailbox: any, clients: Set<ImapFlow>) => {
     let ingested = 0;
     try {
       const { data: password, error: secretError } = await admin.rpc("get_mailbox_secret", {
@@ -101,6 +111,7 @@ Deno.serve(async (req) => {
         logger: false,
       });
 
+      clients.add(client);
       await client.connect();
       try {
         const lock = await client.getMailboxLock("INBOX");
@@ -120,7 +131,7 @@ Deno.serve(async (req) => {
             }
 
             const message = await client.fetchOne(uid, { source: true, envelope: true }, { uid: true });
-            if (!message?.source) continue;
+            if (!message || !message.source) continue;
             processed += 1;
 
             // The exact-time filter IMAP itself can't do: a message from
@@ -166,6 +177,7 @@ Deno.serve(async (req) => {
           lock.release();
         }
       } finally {
+        clients.delete(client);
         await client.logout().catch(() => client.close());
       }
 
@@ -174,7 +186,7 @@ Deno.serve(async (req) => {
         status_in: "ok",
         error_in: null,
       });
-      results.push({ mailboxId: mailbox.id, ingested });
+      return { mailboxId: mailbox.id, ingested };
     } catch (err) {
       const message = (err as Error).message || "Could not check this mailbox.";
       console.error(`Poll failed for mailbox ${mailbox.id}:`, message);
@@ -183,9 +195,39 @@ Deno.serve(async (req) => {
         status_in: "error",
         error_in: message,
       });
-      results.push({ mailboxId: mailbox.id, error: message });
+      return { mailboxId: mailbox.id, error: message };
     }
-  }
+  };
 
-  return json({ polled: results.length, results });
+  const queue = [...(mailboxes || [])].sort(
+    (a, b) => new Date(a.last_poll_at || 0).getTime() - new Date(b.last_poll_at || 0).getTime(),
+  );
+  const startedAt = Date.now();
+  const results: unknown[] = [];
+  let skipped = 0;
+
+  const worker = async () => {
+    while (queue.length) {
+      if (Date.now() - startedAt > RUN_BUDGET_MS) {
+        skipped += queue.length;
+        queue.length = 0;
+        return;
+      }
+      const mailbox = queue.shift();
+      const clients = new Set<ImapFlow>();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise((resolve) => {
+        timer = setTimeout(() => {
+          clients.forEach((c) => c.close());
+          resolve({ mailboxId: mailbox.id, error: "Timed out; will try again next run." });
+        }, PER_MAILBOX_MS);
+      });
+      const outcome = await Promise.race([pollMailbox(mailbox, clients), timeout]);
+      clearTimeout(timer);
+      results.push(outcome);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
+
+  return json({ polled: results.length, skipped, results });
 });

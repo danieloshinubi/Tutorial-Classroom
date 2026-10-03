@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApplicantShell } from "../../Components/ApplicantShell";
-import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { useAuth } from "../../context/AuthContext";
 import { useActionFeedback } from "../../Components/Toast";
@@ -19,6 +18,7 @@ import {
   formatDate,
   SkeletonCards,
 } from "../../Components/UI";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 // One row per application the signed-in applicant holds against this
 // school. The list is deliberately separate from the tenant's normal
@@ -57,8 +57,7 @@ const Applications = () => {
   }, [load]);
 
   useEffect(() => {
-    supabase
-      .rpc("public_school", { target_slug: resolveSlug() })
+    fetchPublicSchool(resolveSlug())
       .then(({ data }) => {
         if (data?.length) setSchool(data[0]);
       })

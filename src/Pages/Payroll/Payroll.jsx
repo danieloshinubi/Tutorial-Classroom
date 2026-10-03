@@ -510,7 +510,7 @@ const StaffForm = ({ schoolId, initial, members, types, deductions, money, onSav
         <div className="pr-grid">
           <Field label="Full name"><input className="input" value={f.full_name} onChange={(e) => set({ full_name: e.target.value })} /></Field>
           <Field label="Job title"><input className="input" value={f.job_title || ""} onChange={(e) => set({ job_title: e.target.value })} placeholder="e.g. Mathematics teacher" /></Field>
-          <Field label="Schoolivio login" hint="Linked staff see their own payslips."><Select value={f.user_id || ""} onChange={(v) => set({ user_id: v })} options={memberOptions} /></Field>
+          <Field label="Schoolivio login" hint="Linked staff see their own payslips."><Select searchable value={f.user_id || ""} onChange={(v) => set({ user_id: v })} options={memberOptions} /></Field>
           <Field label="Started"><DatePicker value={f.start_date || ""} onChange={(v) => set({ start_date: v })} /></Field>
           <Field label="Left (if they have)"><DatePicker value={f.end_date || ""} onChange={(v) => set({ end_date: v })} /></Field>
         </div>

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { allCountries } from "country-region-data";
 import { ApplicantShell } from "../../Components/ApplicantShell";
-import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import {
   fetchMyApplications,
@@ -44,6 +43,7 @@ import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/Li
 import { useActionFeedback } from "../../Components/Toast";
 import AdmissionLetter from "./AdmissionLetter";
 import { todayISO } from "../../lib/dates";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 // country-region-data ships each country as a [name, isoCode, regions] tuple
 // (regions themselves [name, isoCode] pairs) rather than the {countryName,
@@ -492,8 +492,7 @@ const ApplicationDashboard = () => {
   // same non-member-safe lookup the anonymous /Apply form already uses.
   const [school, setSchool] = useState(null);
   useEffect(() => {
-    supabase
-      .rpc("public_school", { target_slug: resolveSlug() })
+    fetchPublicSchool(resolveSlug())
       .then(({ data }) => {
         if (data?.length) setSchool(data[0]);
       })

@@ -614,7 +614,7 @@ const TicketDetail = () => {
                 </div>
                 <div className="tk-field">
                   <span className="tk-field-label">{"Agent"}</span>
-                  <Select
+                  <Select searchable
                     className="select"
                     value={pending.assignedTo ?? ticket.assigned_to ?? ""}
                     onChange={(v) => setField("assignedTo", v)}

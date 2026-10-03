@@ -171,7 +171,7 @@ const GuardiansPanel = () => {
             <form className="gd-link" onSubmit={handleLink}>
               <span className="gd-link-title">{"Link a child"}</span>
               <div className="gd-link-field gd-link-parent">
-                <Select
+                <Select searchable
                   className="select"
                   value={selected}
                   onChange={setSelected}
@@ -185,7 +185,7 @@ const GuardiansPanel = () => {
                 />
               </div>
               <div className="gd-link-field gd-link-child" ref={childSelectRef}>
-                <Select
+                <Select searchable
                   className="select"
                   value={childId}
                   onChange={setChildId}

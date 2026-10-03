@@ -426,7 +426,7 @@ const Sell = ({ schoolId, products, students, money, onSold, onRefresh, onError,
               </div>
               {buyerKind === "pupil" ? (
                 students.length ? (
-                  <Select
+                  <Select searchable
                     className="select"
                     value={studentId}
                     placeholder="Choose the pupil"

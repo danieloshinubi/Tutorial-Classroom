@@ -720,7 +720,7 @@ const PeoplePanel = () => {
                             either (see STAFF_ROLES, shared with the org
                             chart panel so both agree on who counts). */}
                         {STAFF_ROLES.includes(row.role) ? (
-                          <Select
+                          <Select searchable
                             className="select"
                             style={{ width: "auto", minWidth: 160, padding: "6px 8px" }}
                             value={row.manager_id || ""}

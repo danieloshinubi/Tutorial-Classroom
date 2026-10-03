@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { supabase } from "../lib/supabaseClient";
 import { resolveSlug } from "../lib/tenant";
 import { applyTenantBranding, cachedPublicSchool, rememberPublicSchool, revealPage } from "../lib/branding";
 import { Mark } from "./Logo";
+import { fetchPublicSchool } from "../lib/publicSchool";
 
 // What the platform ties together, drawn as an orbit around the school.
 //
@@ -110,8 +110,7 @@ const AuthLayout = ({ title, subtitle, badge, children, footer }) => {
 
   useEffect(() => {
     let active = true;
-    supabase
-      .rpc("public_school", { target_slug: slug })
+    fetchPublicSchool(slug)
       .then(({ data }) => {
         if (!active) return;
         if (data?.length) {

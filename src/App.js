@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -12,57 +12,15 @@ import { ToastProvider } from "./Components/Toast";
 import { ConfirmProvider } from "./Components/Confirm";
 import { startTableWrapFit } from "./lib/tableWrapFit";
 import ConfigNotice from "./Components/ConfigNotice";
+import { AppLoading } from "./Components/UI";
+import { lazyPage } from "./lib/lazyPage";
 import ProtectedRoute from "./Components/ProtectedRoute";
 import SchoolRoute from "./Components/SchoolRoute";
 import Login from "./Pages/Login/Login";
-import ApplicantLogin from "./Pages/Login/ApplicantLogin";
-import Signup from "./Pages/Signup/Signup";
-import SignupTutor from "./Pages/Signup/SignupTutor";
-import ForgotPassword from "./Pages/ForgotPassword/ForgotPassword";
-import ResetPassword from "./Pages/ForgotPassword/ResetPassword";
-import SetPassword from "./Pages/ForgotPassword/SetPassword";
-import Dashboard from "./Pages/Dashboard/Dashboard";
-import Courses from "./Pages/Courses/Courses";
-import Apply from "./Pages/Admissions/Apply";
-import ApplyAccount from "./Pages/Admissions/ApplyAccount";
-import ApplyClaim from "./Pages/Admissions/ApplyClaim";
-import ApplicationStatus from "./Pages/Admissions/ApplicationStatus";
-import Applications from "./Pages/Admissions/Applications";
-import ApplyStart from "./Pages/Admissions/ApplyStart";
-import ApplicationDashboard from "./Pages/Admissions/ApplicationDashboard";
-import AdmissionsQueues from "./Pages/Admissions/AdmissionsQueues";
-import AdmissionsWorkspace from "./Pages/Admissions/AdmissionsWorkspace";
-import CourseDashboard from "./Components/Sections/CourseDashboard";
-import AssignmentDetail from "./Pages/Assignments/AssignmentDetail";
-import ExamBuilder from "./Pages/Exams/ExamBuilder";
-import TakeExam from "./Pages/Exams/TakeExam";
-import ExamResults from "./Pages/Exams/ExamResults";
-import Tutors from "./Pages/Tutors/Tutors";
-import Profile from "./Pages/Profile/Profile";
-import Teach from "./Pages/Teach/Teach";
-import CourseForm from "./Pages/Teach/CourseForm";
-import SchoolAdmin from "./Pages/SchoolAdmin/SchoolAdmin";
-import AuditLog from "./Pages/AuditLog/AuditLog";
-import TicketsList from "./Pages/Tickets/TicketsList";
-import TicketDetail from "./Pages/Tickets/TicketDetail";
-import MyTickets from "./Pages/Support/MyTickets";
-import MyTicketDetail from "./Pages/Support/MyTicketDetail";
-import ChatPage from "./Pages/Chat/ChatPage";
-import PlatformApp from "./platform/PlatformApp";
-import MarketingApp from "./marketing/MarketingApp";
+import TenantGate from "./Components/TenantGate";
+import { NavDataProvider } from "./context/NavDataContext";
 import TrialGate from "./Components/TrialGate";
 import { isPlatformHost, isMarketingHost } from "./lib/tenant";
-import News from "./Pages/News/News";
-import Bursary from "./Pages/Bursary/Bursary";
-import Store from "./Pages/Store/Store";
-import Accounts from "./Pages/Accounts/Accounts";
-import Payroll from "./Pages/Payroll/Payroll";
-import MyPayslips from "./Pages/Payroll/MyPayslips";
-import Attendance from "./Pages/Attendance/Attendance";
-import Fees from "./Pages/Fees/Fees";
-import PaymentReturn from "./Pages/Fees/PaymentReturn";
-import Reports from "./Pages/Reports/Reports";
-import StudentReport from "./Pages/Reports/StudentReport";
 import "typeface-poppins";
 import "./styles/theme.css";
 // Loaded after theme.css on purpose — Tailwind utilities and theme.css's
@@ -71,6 +29,54 @@ import "./styles/theme.css";
 // theme.css rule during the incremental migration (see the Chat module's
 // own migration plan).
 import "./styles/tailwind.css";
+
+// Screens load on demand (lazyPage); see the Suspense around <Routes>.
+const ApplicantLogin = lazyPage(() => import("./Pages/Login/ApplicantLogin"));
+const Signup = lazyPage(() => import("./Pages/Signup/Signup"));
+const SignupTutor = lazyPage(() => import("./Pages/Signup/SignupTutor"));
+const ForgotPassword = lazyPage(() => import("./Pages/ForgotPassword/ForgotPassword"));
+const ResetPassword = lazyPage(() => import("./Pages/ForgotPassword/ResetPassword"));
+const SetPassword = lazyPage(() => import("./Pages/ForgotPassword/SetPassword"));
+const Dashboard = lazyPage(() => import("./Pages/Dashboard/Dashboard"));
+const Courses = lazyPage(() => import("./Pages/Courses/Courses"));
+const Apply = lazyPage(() => import("./Pages/Admissions/Apply"));
+const ApplyAccount = lazyPage(() => import("./Pages/Admissions/ApplyAccount"));
+const ApplyClaim = lazyPage(() => import("./Pages/Admissions/ApplyClaim"));
+const ApplicationStatus = lazyPage(() => import("./Pages/Admissions/ApplicationStatus"));
+const Applications = lazyPage(() => import("./Pages/Admissions/Applications"));
+const ApplyStart = lazyPage(() => import("./Pages/Admissions/ApplyStart"));
+const ApplicationDashboard = lazyPage(() => import("./Pages/Admissions/ApplicationDashboard"));
+const AdmissionsQueues = lazyPage(() => import("./Pages/Admissions/AdmissionsQueues"));
+const AdmissionsWorkspace = lazyPage(() => import("./Pages/Admissions/AdmissionsWorkspace"));
+const CourseDashboard = lazyPage(() => import("./Components/Sections/CourseDashboard"));
+const AssignmentDetail = lazyPage(() => import("./Pages/Assignments/AssignmentDetail"));
+const ExamBuilder = lazyPage(() => import("./Pages/Exams/ExamBuilder"));
+const TakeExam = lazyPage(() => import("./Pages/Exams/TakeExam"));
+const ExamResults = lazyPage(() => import("./Pages/Exams/ExamResults"));
+const Tutors = lazyPage(() => import("./Pages/Tutors/Tutors"));
+const Profile = lazyPage(() => import("./Pages/Profile/Profile"));
+const Teach = lazyPage(() => import("./Pages/Teach/Teach"));
+const CourseForm = lazyPage(() => import("./Pages/Teach/CourseForm"));
+const SchoolAdmin = lazyPage(() => import("./Pages/SchoolAdmin/SchoolAdmin"));
+const AuditLog = lazyPage(() => import("./Pages/AuditLog/AuditLog"));
+const TicketsList = lazyPage(() => import("./Pages/Tickets/TicketsList"));
+const TicketDetail = lazyPage(() => import("./Pages/Tickets/TicketDetail"));
+const MyTickets = lazyPage(() => import("./Pages/Support/MyTickets"));
+const MyTicketDetail = lazyPage(() => import("./Pages/Support/MyTicketDetail"));
+const ChatPage = lazyPage(() => import("./Pages/Chat/ChatPage"));
+const PlatformApp = lazyPage(() => import("./platform/PlatformApp"));
+const MarketingApp = lazyPage(() => import("./marketing/MarketingApp"));
+const News = lazyPage(() => import("./Pages/News/News"));
+const Bursary = lazyPage(() => import("./Pages/Bursary/Bursary"));
+const Store = lazyPage(() => import("./Pages/Store/Store"));
+const Accounts = lazyPage(() => import("./Pages/Accounts/Accounts"));
+const Payroll = lazyPage(() => import("./Pages/Payroll/Payroll"));
+const MyPayslips = lazyPage(() => import("./Pages/Payroll/MyPayslips"));
+const Attendance = lazyPage(() => import("./Pages/Attendance/Attendance"));
+const Fees = lazyPage(() => import("./Pages/Fees/Fees"));
+const PaymentReturn = lazyPage(() => import("./Pages/Fees/PaymentReturn"));
+const Reports = lazyPage(() => import("./Pages/Reports/Reports"));
+const StudentReport = lazyPage(() => import("./Pages/Reports/StudentReport"));
 
 // Module-scope, not inside the App component: it has to run no matter which
 // of App/PlatformApp/MarketingApp ends up mounted below, and it watches
@@ -99,7 +105,7 @@ function App() {
   // admin.schoolivio.com is not a school. It gets its own application, with no
   // SchoolProvider and no tenant to resolve, rather than a page inside
   // whichever tenant the subdomain happened to name.
-  if (isPlatformHost()) return <PlatformApp />;
+  if (isPlatformHost()) return <Suspense fallback={<AppLoading />}><PlatformApp /></Suspense>;
 
   // schoolivio.com itself (the bare apex, or www) is the public marketing
   // site and self-serve trial signup — also its own application, for the
@@ -107,10 +113,12 @@ function App() {
   // on any host too, so this is reachable in local dev without needing a
   // real apex domain.
   if (isMarketingHost() || window.location.pathname.startsWith("/Welcome")) {
-    return <MarketingApp />;
+    return <Suspense fallback={<AppLoading />}><MarketingApp /></Suspense>;
   }
 
   return (
+    // A school address that names no school is a 404, before any sign-in.
+    <TenantGate>
     <ToastProvider>
     {/* Inside ToastProvider so a confirmation can be followed by a toast, and
         outside the router so any page can ask without mounting its own modal. */}
@@ -118,8 +126,12 @@ function App() {
     <Router>
       <AuthProvider>
         <SchoolProvider>
+        <NavDataProvider>
           <ConfigNotice />
         <TrialGate>
+        {/* Each module's code downloads the first time it is opened, so the
+            first load carries the sign-in and shell, not every screen. */}
+        <Suspense fallback={<AppLoading />}>
         <Routes>
           <Route path="/" element={<Navigate to="/Dashboard" replace />} />
           <Route path="/Login" element={<Login />} />
@@ -268,12 +280,15 @@ function App() {
 
           <Route path="*" element={<Navigate to="/Dashboard" replace />} />
         </Routes>
+        </Suspense>
         </TrialGate>
+        </NavDataProvider>
         </SchoolProvider>
       </AuthProvider>
     </Router>
     </ConfirmProvider>
     </ToastProvider>
+    </TenantGate>
   );
 }
 

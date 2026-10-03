@@ -1065,7 +1065,7 @@ const AssignReviewForm = ({ applicationId, schoolId, members, disabled, onDone, 
   return (
     <form onSubmit={submit}>
       <Field label="Reviewer">
-        <Select className="select" value={reviewerId}
+        <Select searchable className="select" value={reviewerId}
           onChange={setReviewerId}
           options={[
             { value: "", label: "Choose an admissions member" },

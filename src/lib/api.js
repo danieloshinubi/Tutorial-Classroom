@@ -549,20 +549,56 @@ export const fetchMessageById = async ({ schoolId, id }) => {
   return data;
 };
 
+// Live updates arrive on private broadcast topics (supabase/215): the
+// database sends each change to the one topic that needs it, and Realtime
+// lets someone join a topic only if they may read what it is about. One
+// connection per topic is shared by every screen listening to it, so the
+// menu, the bell and Chat all hearing "user:<me>" cost one channel, not
+// three. Every listener gets { eventType, table, new, old }.
+const liveTopics = new Map();
+const listen = (topic, onEvent) => {
+  let entry = liveTopics.get(topic);
+  if (!entry) {
+    const listeners = new Set();
+    const channel = supabase
+      .channel(topic, { config: { private: true } })
+      .on("broadcast", { event: "change" }, ({ payload }) => {
+        listeners.forEach((fn) => {
+          try {
+            fn(payload || {});
+          } catch (err) {
+            console.error("Live update handler failed:", err);
+          }
+        });
+      })
+      .subscribe();
+    entry = { channel, listeners };
+    liveTopics.set(topic, entry);
+  }
+  clearTimeout(entry.closeTimer);
+  entry.listeners.add(onEvent);
+  return {
+    unsubscribe: () => {
+      entry.listeners.delete(onEvent);
+      if (entry.listeners.size > 0) return;
+      // Closed a moment later, not at once: moving between pages unmounts one
+      // screen's listener just before the next screen adds its own, and the
+      // same channel should carry straight on rather than close and reopen.
+      clearTimeout(entry.closeTimer);
+      entry.closeTimer = setTimeout(() => {
+        if (entry.listeners.size === 0 && liveTopics.get(topic) === entry) {
+          liveTopics.delete(topic);
+          supabase.removeChannel(entry.channel);
+        }
+      }, 5000);
+    },
+  };
+};
+
 export const subscribeToMessages = (courseId, onInsert) =>
-  supabase
-    .channel(`messages:${courseId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "classroom",
-        table: "messages",
-        filter: `course_id=eq.${courseId}`,
-      },
-      (payload) => onInsert(payload.new)
-    )
-    .subscribe();
+  listen(`course:${courseId}`, (event) => {
+    if (event.eventType === "INSERT" && event.new?.id) onInsert(event.new);
+  });
 
 /* -------------------------------------------------------------------------- */
 /* exams                                                                      */
@@ -943,68 +979,24 @@ export const markAllNotificationsRead = async (userId, schoolId) => {
 // A live "something changed here" signal for one application's timeline —
 // screening, review, a decision, a payment settling — so whoever has the
 // page open (staff or the applicant themselves) sees a "reload" prompt
-// instead of having to guess when to refresh. Same channel-per-entity,
-// INSERT-only pattern subscribeToNotifications already uses.
+// instead of having to guess when to refresh.
 export const subscribeToApplicationEvents = (applicationId, onInsert) =>
-  supabase
-    .channel(`application_events:${applicationId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "classroom",
-        table: "application_events",
-        filter: `application_id=eq.${applicationId}`,
-      },
-      (payload) => onInsert(payload.new)
-    )
-    .subscribe();
+  listen(`application:${applicationId}`, (event) => onInsert(event.new));
 
 // Same "something changed here" signal as subscribeToApplicationEvents,
 // but for the three surfaces staff watch for OTHER people's changes
 // rather than one entity's own timeline: the Tickets list, the Admissions
-// queue, and one ticket's own message thread. All three need
-// classroom.tickets / classroom.ticket_messages / classroom.applications
-// added to the supabase_realtime publication (see
-// 122_tickets_and_applications_realtime.sql) — without that, Realtime
-// never delivers these events no matter how correct the subscription is.
-export const subscribeToTicketsList = (schoolId, onChange) =>
-  supabase
-    .channel(`tickets_list:${schoolId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "classroom", table: "tickets", filter: `school_id=eq.${schoolId}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+// queue, and one ticket's own message thread. These topics carry ids only
+// (supabase/215); the screen reloads to see what changed.
+export const subscribeToTicketsList = (schoolId, onChange) => listen(`tickets:${schoolId}`, onChange);
 
 export const subscribeToApplicationsList = (schoolId, onChange) =>
-  supabase
-    .channel(`applications_list:${schoolId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "classroom", table: "applications", filter: `school_id=eq.${schoolId}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+  listen(`applications:${schoolId}`, onChange);
 
 // One channel, two listeners: a new message on this ticket's thread, or a
 // status/priority/assignment change on the ticket row itself — either one
 // is "reload me" from the viewer's point of view.
-export const subscribeToTicketThread = (ticketId, onChange) =>
-  supabase
-    .channel(`ticket_thread:${ticketId}`)
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "classroom", table: "ticket_messages", filter: `ticket_id=eq.${ticketId}` },
-      (payload) => onChange(payload)
-    )
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "classroom", table: "tickets", filter: `id=eq.${ticketId}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+export const subscribeToTicketThread = (ticketId, onChange) => listen(`ticket:${ticketId}`, onChange);
 
 /* ---------------------------------------------------------------------------
    Schoolivio Chat — tenant-scoped DMs and group channels.
@@ -1203,76 +1195,32 @@ export const markChannelRead = async ({ channelId, userId }) => {
   if (error) throw error;
 };
 
-// event: "*" (not INSERT-only) is deliberate — an edit or a soft-delete has
-// to reach every open thread, not just the author's own screen. Deletes are
-// soft (an UPDATE setting deleted_at), so payload.new always arrives
-// complete without needing replica identity full on the table.
+// Every change to the open chat's messages: new, edited or deleted (deletes
+// are soft, so each arrives with the full row).
 export const subscribeToChatChannel = (channelId, onChange) =>
-  supabase
-    .channel(`chat_channel:${channelId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "classroom", table: "chat_messages", filter: `channel_id=eq.${channelId}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+  listen(`chat:${channelId}`, (event) => {
+    if (event.table === "chat_messages") onChange(event);
+  });
 
-// Sidebar-level: which of my channels just got a new message, anywhere.
-// Filtered on user_id via the membership table (postgres_changes only
-// supports one filter column), same shape subscribeToNotifications uses.
-//
-// `topic` lets two callers watch the exact same rows without colliding —
-// supabase-js keys a channel by its topic string and returns the SAME
-// underlying channel object for a repeated one, so ChatPage and Navbar
-// both calling this with the default topic would have the second .on()
-// land on an already-.subscribe()'d channel and throw. Each caller that
-// isn't ChatPage's own thread view should pass its own topic suffix.
-export const subscribeToMyChannels = (userId, onChange, topic = "chat_channels") =>
-  supabase
-    .channel(`${topic}:${userId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "classroom", table: "chat_channel_members", filter: `user_id=eq.${userId}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+// My own memberships changing: added to a group, removed, my read marker.
+export const subscribeToMyChannels = (userId, onChange) =>
+  listen(`user:${userId}`, (event) => {
+    if (event.table === "chat_channel_members") onChange(event);
+  });
 
-// The other half of "which of my channels just got a new message,
-// anywhere" — subscribeToMyChannels above only fires on a change to MY OWN
-// chat_channel_members row (joining/leaving a channel, my own last_read_at
-// moving), which a message someone else sends never touches. The signal
-// that actually fires on every new message is chat_channels.last_message_at
-// (bumped by chat_messages_bump_channel_trg, 158_chat.sql) — this listens
-// for that instead. postgres_changes can only filter on one column, and
-// chat_channels has no user_id of its own, so this fires for every channel
-// change in the school and leaves "is this one of mine" to the caller's own
-// onChange (which just re-runs chat_overview(), already scoped to the
-// caller) — same "filter broadly, narrow client-side" shape
-// subscribeToNotifications uses for school_id.
-export const subscribeToSchoolChatActivity = (schoolId, onChange, topic = "chat_channels_activity") =>
-  supabase
-    .channel(`${topic}:${schoolId}`)
-    .on(
-      "postgres_changes",
-      { event: "UPDATE", schema: "classroom", table: "chat_channels", filter: `school_id=eq.${schoolId}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+// A new message (or a rename) in any chat I am in. The database sends it to
+// each member's own topic, so nobody hears about chats they are not in.
+export const subscribeToChatActivity = (userId, onChange) =>
+  listen(`user:${userId}`, (event) => {
+    if (event.table === "chat_channels") onChange(event);
+  });
 
-// Thread-level: every membership row for the OPEN channel, not just mine —
-// this is what tells the sender "seen" once the other member's own
-// last_read_at moves past a message's created_at. Same "*, single filter
-// column" shape as subscribeToMyChannels above, just filtered by channel
-// instead of by user.
+// Every membership of the open chat, so the sender sees "seen" when the
+// other members' read markers move.
 export const subscribeToChannelMembers = (channelId, onChange) =>
-  supabase
-    .channel(`chat_channel_members:${channelId}`)
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "classroom", table: "chat_channel_members", filter: `channel_id=eq.${channelId}` },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+  listen(`chat:${channelId}`, (event) => {
+    if (event.table === "chat_channel_members") onChange(event);
+  });
 
 export const fetchChannelMembers = async (channelId) => {
   const { data, error } = await supabase
@@ -1307,21 +1255,11 @@ export const removeReaction = async ({ messageId, userId, emoji }) => {
   if (error) throw error;
 };
 
-// Reactions have no channel_id of their own to filter postgres_changes on,
-// so this listens unfiltered and the caller checks payload.message_id
-// against the messages it actually has loaded — the same tradeoff
-// subscribeToNotifications' client-side school_id check makes, just for a
-// column postgres_changes can't filter on at all rather than one it won't
-// combine with another.
-export const subscribeToMessageReactions = (onChange) =>
-  supabase
-    .channel("chat_message_reactions")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "classroom", table: "chat_message_reactions" },
-      (payload) => onChange(payload)
-    )
-    .subscribe();
+// Reactions on the open chat's messages.
+export const subscribeToMessageReactions = (channelId, onChange) =>
+  listen(`chat:${channelId}`, (event) => {
+    if (event.table === "chat_message_reactions") onChange(event);
+  });
 
 // Typing presence is deliberately never written to Postgres — it is stale
 // the instant it lands, so it travels as an ephemeral broadcast on its own
@@ -1329,7 +1267,7 @@ export const subscribeToMessageReactions = (onChange) =>
 // the sender never has to filter its own echo back out.
 export const subscribeToTyping = (channelId, onTyping) =>
   supabase
-    .channel(`chat_typing:${channelId}`, { config: { broadcast: { self: false } } })
+    .channel(`typing:${channelId}`, { config: { private: true, broadcast: { self: false } } })
     .on("broadcast", { event: "typing" }, ({ payload }) => onTyping(payload))
     .subscribe();
 
@@ -1337,26 +1275,11 @@ export const sendTyping = (channel, userId) => {
   channel?.send({ type: "broadcast", event: "typing", payload: { userId } });
 };
 
-// Realtime's postgres_changes filter only reliably supports one column, so
-// the school check happens client-side — same reason fetchNotifications
-// above needs its own .eq("school_id", ...): RLS/the channel filter only
-// scope to this user, not to the tenant currently being viewed.
+// My new notifications, for the school being viewed.
 export const subscribeToNotifications = (userId, schoolId, onInsert) =>
-  supabase
-    .channel(`notifications:${userId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "classroom",
-        table: "notifications",
-        filter: `user_id=eq.${userId}`,
-      },
-      (payload) => {
-        if (payload.new.school_id === schoolId) onInsert(payload.new);
-      }
-    )
-    .subscribe();
+  listen(`user:${userId}`, (event) => {
+    if (event.table === "notifications" && event.new?.school_id === schoolId) onInsert(event.new);
+  });
 
 /* -------------------------------------------------------------------------- */
 /* material files                                                             */

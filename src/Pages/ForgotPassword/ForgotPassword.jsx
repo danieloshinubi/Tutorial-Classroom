@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { supabase } from "../../lib/supabaseClient";
 import { resolveSlug } from "../../lib/tenant";
 import { sendBrandedAuthEmail } from "../../lib/api";
 import AuthLayout from "../../Components/AuthLayout";
 import { Field, Button } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 const ForgotPassword = () => {
   const [email, setEmail] = useState("");
@@ -21,8 +21,7 @@ const ForgotPassword = () => {
 
   useEffect(() => {
     let active = true;
-    supabase
-      .rpc("public_school", { target_slug: resolveSlug() })
+    fetchPublicSchool(resolveSlug())
       .then(({ data }) => {
         if (active && data?.length) setSchoolId(data[0].id);
       })

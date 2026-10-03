@@ -10,6 +10,7 @@ import {
 import { Field, Button, Select, DatePicker } from "../../Components/UI";
 import { applyTenantBranding } from "../../lib/branding";
 import { useActionFeedback } from "../../Components/Toast";
+import { fetchPublicSchool } from "../../lib/publicSchool";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
 const ACCEPTED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -83,8 +84,7 @@ const Apply = () => {
   const [relationIsOther, setRelationIsOther] = useState(false);
 
   useEffect(() => {
-    supabase
-      .rpc("public_school", { target_slug: slug })
+    fetchPublicSchool(slug)
       .then(({ data }) => {
         if (data?.length) setSchool(data[0]);
       })
