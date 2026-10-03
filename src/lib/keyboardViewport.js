@@ -12,8 +12,8 @@
 // measures its own box (Page's --page-avail-h), so the message list gets
 // shorter and the composer lands right above the keys.
 //
-// html.kb-open marks "typing on a touch screen": an editable field has focus
-// on a touch device, or the visible area is clearly shorter than it was.
+// html.kb-open marks "typing on a touch screen in Chat": an editable field has
+// focus on a touch device, or the visible area is clearly shorter than it was.
 // Focus is the main signal because iOS versions disagree about which heights
 // change when the keyboard opens; the height check covers Android.
 const isEditable = (el) =>
@@ -47,8 +47,12 @@ export function installKeyboardViewport() {
     root.style.setProperty("--vv-h", `${height}px`);
     root.style.setProperty("--vv-top", `${vv ? vv.offsetTop : 0}px`);
 
-    const typing = touch && isEditable(document.activeElement);
-    const open = !zoomed && (typing || baseline - height > 120);
+    // Only where the frame exists (Chat on a phone, theme.css). Elsewhere the
+    // browser's own scroll is what brings a focused field above the keys,
+    // and undoing it would hide the field behind the keyboard.
+    const framed = !!document.querySelector(".page-chat") && (!window.matchMedia || window.matchMedia("(max-width: 900px)").matches);
+    const typing = isEditable(document.activeElement);
+    const open = touch && framed && !zoomed && (typing || baseline - height > 120);
     root.classList.toggle("kb-open", open);
     // Undo the page scroll Safari made to reveal the field: the frame is
     // already the visible area, so there is nothing to reveal.

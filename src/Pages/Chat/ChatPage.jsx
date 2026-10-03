@@ -1245,7 +1245,11 @@ const ChatPage = () => {
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return undefined;
-    const keepLatest = () => threadEndRef.current?.scrollIntoView({ block: "end" });
+    // Only for the keyboard, not a desktop window being resized or zoomed,
+    // which would lose the place of someone reading back.
+    const keepLatest = () => {
+      if (document.documentElement.classList.contains("kb-open")) threadEndRef.current?.scrollIntoView({ block: "end" });
+    };
     vv.addEventListener("resize", keepLatest);
     return () => vv.removeEventListener("resize", keepLatest);
   }, []);

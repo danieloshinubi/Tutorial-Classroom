@@ -224,10 +224,12 @@ export const Select = ({
   // there is more room above. On a phone, a class list near the foot of a
   // form opened below the fold, so its last options (SS3) were out of sight.
   const [dropUp, setDropUp] = useState(false);
+  const [upRoom, setUpRoom] = useState(null);
   useLayoutEffect(() => {
     if (!open) {
       setAlignEnd(false);
       setDropUp(false);
+      setUpRoom(null);
       return;
     }
     const panel = listRef.current;
@@ -236,7 +238,11 @@ export const Select = ({
     if (r.right > (window.innerWidth || document.documentElement.clientWidth) - 8) setAlignEnd(true);
     const viewH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
     const t = triggerRef.current?.getBoundingClientRect();
-    if (t && r.bottom > viewH - 8 && t.top > viewH - t.bottom) setDropUp(true);
+    if (t && r.bottom > viewH - 8 && t.top > viewH - t.bottom) {
+      setDropUp(true);
+      // Never taller than the room above, or its first options sit off screen.
+      setUpRoom(Math.max(120, Math.floor(t.top - 12)));
+    }
   }, [open]);
   const typeAhead = useRef({ text: "", timer: null });
   // Picking an option removes the <li> that was actually clicked, mid
@@ -357,7 +363,8 @@ export const Select = ({
       </button>
 
       {open ? (
-        <ul id={id ? `${id}-listbox` : undefined} className={`uiselect-panel${alignEnd ? " align-end" : ""}${dropUp ? " drop-up" : ""}`} role="listbox" ref={listRef}>
+        <ul id={id ? `${id}-listbox` : undefined} className={`uiselect-panel${alignEnd ? " align-end" : ""}${dropUp ? " drop-up" : ""}`}
+          style={dropUp && upRoom ? { maxHeight: `min(var(--dd-max-height), ${upRoom}px)` } : undefined} role="listbox" ref={listRef}>
           {options.length === 0 ? (
             <li className="uiselect-empty">{"No options"}</li>
           ) : (

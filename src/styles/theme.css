@@ -8356,3 +8356,16 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
 
 /* Payroll for someone with view-only access: shown, not editable. */
 .pr-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+
+/* The phone menu button: a dot when any module inside has something waiting. */
+.topbar-burger { position: relative; }
+.topbar-burger-dot {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 0 0 2px var(--surface);
+}

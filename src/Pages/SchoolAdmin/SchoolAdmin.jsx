@@ -280,8 +280,11 @@ const PeoplePanel = () => {
     });
   };
 
-  // Every role this person holds here; one person can hold more than one.
-  const rolesOf = (userId) => members.filter((m) => m.user_id === userId && m.is_active).map((m) => m.role);
+  // Every role this person holds here (one person can hold more than one),
+  // suspended rows included, so a suspended bursar still reads as a bursar.
+  const rolesOf = (userId) => members.filter((m) => m.user_id === userId).map((m) => m.role);
+  // Extra access is for staff; a parent or student is never given a module.
+  const isStaffMember = (userId) => rolesOf(userId).some((r) => STAFF_ROLES.includes(r));
 
   const saveEdit = async (event) => {
     event.preventDefault();
@@ -289,12 +292,26 @@ const PeoplePanel = () => {
     setError("");
     try {
       const { job_title: jobTitle, access, ...profileFields } = editForm;
-      await updateProfile(editing.profiles.id, profileFields);
+      // Only what actually changed, and a blank username as none at all:
+      // usernames are unique, so saving "" collided with anyone else who had
+      // none ("duplicate key ... profiles_username_key").
+      const profileChanges = Object.fromEntries(
+        Object.entries({ ...profileFields, username: profileFields.username.trim() || null })
+          .filter(([key, value]) => (value || null) !== (editing.profiles[key] || null))
+      );
+      if (Object.keys(profileChanges).length) await updateProfile(editing.profiles.id, profileChanges);
       if ((jobTitle || "").trim() !== (editing.job_title || "")) {
-        await updateMemberJobTitle({ schoolId, memberId: editing.id, jobTitle });
+        await updateMemberJobTitle({ schoolId, userId: editing.user_id, jobTitle });
       }
       const before = grants[editing.user_id] || {};
-      const changedAccess = Object.fromEntries(Object.entries(access).filter(([m, level]) => (before[m] || "") !== level));
+      const roles = rolesOf(editing.user_id);
+      const staff = isStaffMember(editing.user_id);
+      // A module their role already includes needs no grant; one left over
+      // from an earlier role is cleared rather than kept out of sight.
+      const wanted = Object.fromEntries(
+        Object.entries(access).map(([m, level]) => [m, !staff || roleCovers(m, roles) ? "" : level])
+      );
+      const changedAccess = Object.fromEntries(Object.entries(wanted).filter(([m, level]) => (before[m] || "") !== level));
       if (Object.keys(changedAccess).length) {
         await saveModuleAccess({ schoolId, userId: editing.user_id, access: changedAccess });
       }
@@ -488,6 +505,7 @@ const PeoplePanel = () => {
                 onChange={(e) => setEditForm((c) => ({ ...c, job_title: e.target.value }))}
               />
             </Field>
+            {isStaffMember(editing.user_id) ? (
             <div className="people-access">
               <span className="label">{"Extra access"}</span>
               <span className="hint">
@@ -515,6 +533,7 @@ const PeoplePanel = () => {
                 );
               })}
             </div>
+            ) : null}
             <div className="btn-row">
               <Button type="submit" disabled={savingEdit}>
                 {savingEdit ? "Saving..." : "Save changes"}

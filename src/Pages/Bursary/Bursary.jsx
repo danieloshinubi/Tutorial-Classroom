@@ -209,7 +209,7 @@ const Overview = ({ summary, debtors, money, termName, draftCount, queueCount, q
           {debtors.length ? (
             <span className="bz-muted">{`${debtors.length} ${debtors.length === 1 ? "student" : "students"}`}</span>
           ) : null}
-          <ExportButton roles={["bursar"]} filename={`debtors${termName ? `-${termName}` : ""}`} sheetName="Who owes" columns={DEBTOR_COLUMNS} rows={debtors} />
+          <ExportButton module="bursary" roles={["bursar"]} filename={`debtors${termName ? `-${termName}` : ""}`} sheetName="Who owes" columns={DEBTOR_COLUMNS} rows={debtors} />
         </div>
         {debtors.length === 0 ? (
           <div className="bz-empty">
@@ -1040,6 +1040,7 @@ const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilte
             </Button>
           ) : null}
           <ExportButton
+            module="bursary"
             roles={["bursar"]}
             filename={`invoices${term ? `-${term.name}` : ""}`}
             sheetName="Invoices"
@@ -1475,6 +1476,7 @@ const Queue = ({ queue, queueContext, money, onChange, onError }) => {
       </div>
       <div className="bz-queue-summary">
         <ExportButton
+          module="bursary"
           roles={["bursar"]}
           filename="payments-waiting"
           sheetName="Payments waiting"

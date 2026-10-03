@@ -29,7 +29,7 @@ import Logo from "../Logo";
 import PushPrompt from "../PushPrompt";
 import Assistant from "../Assistant/Assistant";
 import { modulesFor, groupModules } from "../../lib/modules";
-import { fetchChatOverview, subscribeToMyChannels, subscribeToSchoolChatActivity } from "../../lib/api";
+import { fetchChatOverview, fetchModuleAttention, markModuleSeen, subscribeToMyChannels, subscribeToSchoolChatActivity } from "../../lib/api";
 
 // The application shell: a sidebar of modules on the left, a slim bar across
 // the top for search and the account.
@@ -61,6 +61,14 @@ const ICONS = {
   tutors: usersIcon,
   school: settingsIcon,
 };
+
+// Modules whose dot means "new since you last opened it" (supabase/213).
+const SEEN_MODULES = [
+  { id: "news", path: "/News" },
+  { id: "reports", path: "/Reports" },
+  { id: "attendance", path: "/Attendance" },
+  { id: "courses", path: "/Courses" },
+];
 
 const Navbar = () => {
   const { user } = useAuth();
@@ -96,6 +104,34 @@ const Navbar = () => {
       activityChannel.unsubscribe();
     };
   }, [user?.id, schoolId]);
+
+  // The same dot for every other module with something waiting on this
+  // person: payments to approve, payroll to approve or fix, new applicants,
+  // low stock, result sheets, requests (supabase/212 decides what counts).
+  // Checked on each page change, when the window comes back into focus, and
+  // every minute while it is open.
+  const [attention, setAttention] = useState({});
+  useEffect(() => {
+    if (!user?.id || !schoolId) { setAttention({}); return undefined; }
+    let alive = true;
+    const load = () =>
+      fetchModuleAttention(schoolId)
+        .then((counts) => { if (alive) setAttention(counts || {}); })
+        .catch(() => {});
+    // Opening one of these modules is how its "new since you last looked"
+    // dot goes away; the visit is recorded first so the dot clears now.
+    const here = SEEN_MODULES.find((m) => location.pathname.toLowerCase().startsWith(m.path.toLowerCase()));
+    if (here) markModuleSeen(schoolId, here.id).catch(() => {}).finally(load);
+    else load();
+    const timer = setInterval(load, 60000);
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [user?.id, schoolId, location.pathname]);
 
   // Remembered between visits: someone on a laptop who collapses it once
   // should not have to do it again every time they open the app.
@@ -146,6 +182,11 @@ const Navbar = () => {
   useEffect(() => setOpen(false), [location.pathname]);
 
   const groups = groupModules(modulesFor(roles, disabledModules, moduleGrants));
+  // On a phone the menu is closed behind its button, so the button carries
+  // the dot whenever any module in it has one.
+  const anyWaiting = groups.some((g) =>
+    g.modules.some((m) => (m.id === "chat" ? chatUnread > 0 : Number(attention[m.id]) > 0))
+  );
 
   return (
     <>
@@ -189,11 +230,18 @@ const Navbar = () => {
               )}
               {group.modules.map((module) => {
                 const unread = module.id === "chat" ? chatUnread : 0;
+                const waiting = module.id === "chat" ? 0 : Number(attention[module.id]) || 0;
                 return (
                   <NavLink
                     key={module.path}
                     to={module.path}
-                    title={unread > 0 ? `${module.label} (${unread} unread)` : module.label}
+                    title={
+                      unread > 0
+                        ? `${module.label} (${unread} unread)`
+                        : waiting > 0
+                        ? `${module.label} (${waiting} waiting for you)`
+                        : module.label
+                    }
                     className={({ isActive }) => `side-link${isActive ? " active" : ""}`}
                   >
                     <Icon icon={ICONS[module.id] || grid} size={17} />
@@ -203,7 +251,7 @@ const Navbar = () => {
                         still there for anyone who needs it, in the title
                         tooltip above ("Chat (3 unread)"), just not
                         competing with the icon and label for space. */}
-                    {unread > 0 ? <span className="side-link-dot" aria-hidden="true" /> : null}
+                    {unread > 0 || waiting > 0 ? <span className="side-link-dot" aria-hidden="true" /> : null}
                   </NavLink>
                 );
               })}
@@ -248,6 +296,7 @@ const Navbar = () => {
           onClick={() => setOpen((v) => !v)}
         >
           <Icon icon={menuIcon} size={18} />
+          {anyWaiting ? <span className="topbar-burger-dot" aria-hidden="true" /> : null}
         </button>
 
         <GlobalSearch />

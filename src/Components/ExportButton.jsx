@@ -88,9 +88,11 @@ export const ExportMenu = ({
   );
 };
 
-export const ExportButton = ({ roles = [], ...props }) => {
-  const { isAdmin, roles: mine = [] } = useSchool();
-  const allowed = isAdmin || roles.some((r) => mine.includes(r));
+// module: the page's module; someone given edit access to it (School admin →
+// People) exports like its own staff. View-only access does not export.
+export const ExportButton = ({ roles = [], module, ...props }) => {
+  const { isAdmin, roles: mine = [], moduleGrants = {} } = useSchool();
+  const allowed = isAdmin || roles.some((r) => mine.includes(r)) || (!!module && moduleGrants[module] === "edit");
   if (!allowed) return null;
   return <ExportMenu {...props} />;
 };

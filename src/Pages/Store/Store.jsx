@@ -714,7 +714,7 @@ const Items = ({ schoolId, products, money, onChange, onError }) => {
         </div>
         <div className="st-toolbar-end">
           <input className="input st-search" placeholder="Find an item" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <ExportButton roles={["bursar"]} filename="store-items" sheetName="Store items" columns={ITEM_COLUMNS} rows={shown} />
+          <ExportButton module="store" roles={["bursar"]} filename="store-items" sheetName="Store items" columns={ITEM_COLUMNS} rows={shown} />
           {canEdit ? (
             <Button onClick={() => setForm(form && !form.id ? null : { ...blankForm })}>
               {form && !form.id ? "Cancel" : "Add item"}
@@ -1040,6 +1040,7 @@ const Sales = ({ schoolId, money, refreshKey, onChange, onError }) => {
       <div className="st-range-row">
         <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} />
         <ExportButton
+          module="store"
           roles={["bursar"]}
           filename={`store-sales-${from}-to-${to}`}
           sheetName="Store sales"
@@ -1207,6 +1208,7 @@ const Profit = ({ schoolId, products, money, refreshKey, onError }) => {
       <div className="st-range-row">
         <RangeBar from={from} to={to} setFrom={setFrom} setTo={setTo} />
         <ExportButton
+          module="store"
           roles={["bursar"]}
           filename={`store-profit-${from}-to-${to}`}
           sheets={[

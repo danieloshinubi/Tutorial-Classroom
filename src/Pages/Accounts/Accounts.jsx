@@ -487,6 +487,7 @@ const JournalTab = ({ schoolId, settings, journal, hasMore, loadingMore, onLoadM
           <h2 className="ac-card-title">{"Journal"}</h2>
           <div className="btn-row">
             <ExportButton
+              module="accounts"
               roles={["bursar"]}
               filename="journal"
               sheetName="Journal"
@@ -856,6 +857,7 @@ const ReportsTab = ({ schoolId, settings, chart, accountOptions, money, schoolNa
           <DatePicker value={to} onChange={setTo} />
         </Field>
         <ExportButton
+          module="accounts"
           roles={["bursar"]}
           size={undefined}
           filename={`${String(reportLabel).toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${periodic ? `${from}-to-${to}` : to}`}

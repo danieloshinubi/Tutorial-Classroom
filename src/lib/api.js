@@ -1619,7 +1619,7 @@ export const fetchSchoolMembers = async (schoolId) => {
     // user_id is what invoices and payments and every other table joins on;
     // without it the Bursary invoice table falls back to "Student" instead
     // of the child's name.
-    .select(`id, user_id, role, is_active, created_at, manager_id, job_title, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`id, user_id, role, is_active, created_at, manager_id, job_title, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS}, bio )`)
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -1651,12 +1651,14 @@ export const updateMemberManager = async ({ schoolId, memberId, managerId }) => 
 
 // A member's job title ("Vice Principal", "Head of Science"), set by the
 // school's owner or admin (supabase/208). Blank clears it.
-export const updateMemberJobTitle = async ({ schoolId, memberId, jobTitle }) => {
+// Written to every membership row the person holds at the school, so a
+// proprietor who also teaches shows the same title whichever row is read.
+export const updateMemberJobTitle = async ({ schoolId, userId, jobTitle }) => {
   const title = (jobTitle || "").trim();
   const { error } = await supabase
     .from("school_members")
     .update({ job_title: title || null })
-    .eq("id", memberId)
+    .eq("user_id", userId)
     .eq("school_id", schoolId);
   if (error) throw error;
 };
@@ -5412,6 +5414,21 @@ export const saveNotificationPrefs = async ({ chatEmail }) => {
    are edited directly (owner/admin/bursar only, by row level security); runs
    and payslips change only through the functions, which do the arithmetic and
    post to the books. */
+
+// What is waiting on the signed-in person in each module, { module: count }
+// (supabase/212): the dot beside a module in the menu.
+// Opening News, Reports, Attendance or Courses clears what was new there
+// (supabase/213).
+export const markModuleSeen = async (schoolId, moduleId) => {
+  const { error } = await supabase.rpc("mark_module_seen", { target_school: schoolId, target_module: moduleId });
+  if (error) throw error;
+};
+
+export const fetchModuleAttention = async (schoolId) => {
+  const { data, error } = await supabase.rpc("module_attention", { target_school: schoolId });
+  if (error) throw error;
+  return data || {};
+};
 
 const rpc = async (name, args) => {
   const { data, error } = await supabase.rpc(name, args);

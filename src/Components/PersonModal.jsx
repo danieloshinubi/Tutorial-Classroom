@@ -33,7 +33,7 @@ const PersonCard = ({ person, onClick }) => (
     <span className="tw-text-[12.5px] tw-font-semibold tw-text-ink tw-line-clamp-2 group-hover:tw-text-brand-dark">
       {displayName(person.profiles)}
     </span>
-    <span className="tw-text-[11px] tw-text-ink-3 tw-capitalize tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-max-w-full">
+    <span className={`tw-text-[11px] tw-text-ink-3 ${person.job_title ? "" : "tw-capitalize "}tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-max-w-full`}>
       {person.job_title || person.role}
     </span>
   </button>

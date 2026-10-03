@@ -501,6 +501,7 @@ const AdmissionsQueues = () => {
                     </span>
                     {view === "all" ? (
                       <ExportButton
+                        module="admissions"
                         roles={["admissions"]}
                         filename="applications"
                         sheetName="All applications"
@@ -509,6 +510,7 @@ const AdmissionsQueues = () => {
                       />
                     ) : (
                       <ExportButton
+                        module="admissions"
                         roles={["admissions"]}
                         filename={`admissions-${view}`}
                         sheetName={QUEUES[view].label}

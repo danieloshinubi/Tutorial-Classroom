@@ -327,7 +327,7 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
                 <div>
                   <h3>{`Payroll for ${monthLabel(run.period)}`}</h3>
                   <p className="pr-hint">
-                    {run.status === "draft" ? (canApprove ? "Draft — check it, then approve." : `Draft — check it, then send it to ${approverName} for approval.`) : null}
+                    {run.status === "draft" ? (!canEdit ? "Draft — still being prepared." : canApprove ? "Draft — check it, then approve." : `Draft — check it, then send it to ${approverName} for approval.`) : null}
                     {run.status === "submitted" ? `Sent for approval ${formatDate(run.submitted_at)}. Waiting for ${approverName}.` : null}
                     {run.status === "approved" ? `Approved ${formatDate(run.approved_at)}. Not yet marked as paid.` : null}
                     {run.status === "paid" ? `Paid ${dayLabel(run.paid_on)}.` : null}
@@ -957,6 +957,9 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
               onChange={(v) => set({ approver_roles: v ? [...(f.approver_roles || []), a.value] : (f.approver_roles || []).filter((r) => r !== a.value) })} />
           ))}
         </div>
+        {(f.approver_roles || []).some((r) => !["owner", "admin", "bursar"].includes(r)) ? (
+          <p className="pr-hint">{"A principal who approves also needs Payroll opened to them under School admin → People (View only is enough), or the approval notice will not open for them."}</p>
+        ) : null}
       </Card>
       {canEdit ? <div><Button disabled={busy} onClick={save}>{busy ? "Saving..." : "Save settings"}</Button></div> : null}
     </fieldset>
