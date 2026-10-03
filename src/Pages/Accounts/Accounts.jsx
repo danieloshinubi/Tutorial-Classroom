@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
-import { useSchool } from "../../context/SchoolContext";
+import { useSchool, useModuleAccess } from "../../context/SchoolContext";
 import { useMoney } from "../../lib/money";
 import { todayISO, monthStartISO } from "../../lib/dates";
 import { canUseModule } from "../../lib/modules";
@@ -170,7 +170,7 @@ const Setup = ({ schoolId, onDone }) => {
 
 // --------------------------------------------------------------- overview --
 
-const Overview = ({ settings, balances, month, journal, hasOpening, stockOnShelf, money, onGo }) => {
+const Overview = ({ settings, balances, month, journal, hasOpening, stockOnShelf, money, onGo, canEdit }) => {
   const byKey = (key) => balances.find((b) => b.system_key === key);
   const tile = (key, label, hint) => {
     const b = byKey(key);
@@ -196,7 +196,7 @@ const Overview = ({ settings, balances, month, journal, hasOpening, stockOnShelf
             <strong>{"Opening balances are not entered yet."}</strong>
             <p>{`Until the bank, cash and what the school owes on ${formatDate(settings.start_date, { withTime: false })} are entered, the balance sheet shows only what has happened since.`}</p>
           </div>
-          <Button size="sm" onClick={() => onGo("opening")}>{"Enter opening balances"}</Button>
+          {canEdit ? <Button size="sm" onClick={() => onGo("opening")}>{"Enter opening balances"}</Button> : null}
         </div>
       ) : null}
 
@@ -386,7 +386,7 @@ const NewJournal = ({ schoolId, settings, accountOptions, money, onPosted, onCan
   );
 };
 
-const JournalEntry = ({ entry, chartById, money, onReversed }) => {
+const JournalEntry = ({ entry, chartById, money, onReversed, canEdit }) => {
   const [reversing, setReversing] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -436,7 +436,7 @@ const JournalEntry = ({ entry, chartById, money, onReversed }) => {
           })}
         </tbody>
       </table>
-      {entry.source_type === "manual" && !entry.reversed_by ? (
+      {canEdit && entry.source_type === "manual" && !entry.reversed_by ? (
         reversing ? (
           <div className="ac-reverse">
             <input className="input" value={reason} placeholder="Why it is being reversed" onChange={(e) => setReason(e.target.value)} autoFocus />
@@ -454,7 +454,7 @@ const JournalEntry = ({ entry, chartById, money, onReversed }) => {
   );
 };
 
-const JournalTab = ({ schoolId, settings, journal, hasMore, loadingMore, onLoadMore, chartById, accountOptions, money, onChanged }) => {
+const JournalTab = ({ schoolId, settings, journal, hasMore, loadingMore, onLoadMore, chartById, accountOptions, money, onChanged, canEdit }) => {
   const [composing, setComposing] = useState(false);
   const [accountFilter, setAccountFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
@@ -472,7 +472,7 @@ const JournalTab = ({ schoolId, settings, journal, hasMore, loadingMore, onLoadM
 
   return (
     <div className="ac-stack">
-      {composing ? (
+      {canEdit && composing ? (
         <NewJournal
           schoolId={schoolId}
           settings={settings}
@@ -500,7 +500,7 @@ const JournalTab = ({ schoolId, settings, journal, hasMore, loadingMore, onLoadM
                 { key: (r) => (Number(r.line.credit) ? Number(r.line.credit) : ""), label: "Credit", type: "money" },
               ]}
             />
-            {!composing ? <Button size="sm" onClick={() => setComposing(true)}>{"New journal"}</Button> : null}
+            {canEdit && !composing ? <Button size="sm" onClick={() => setComposing(true)}>{"New journal"}</Button> : null}
           </div>
         </div>
         <div className="ac-filters">
@@ -530,7 +530,7 @@ const JournalTab = ({ schoolId, settings, journal, hasMore, loadingMore, onLoadM
         ) : (
           <div className="ac-entries">
             {shown.map((e) => (
-              <JournalEntry key={e.id} entry={e} chartById={chartById} money={money} onReversed={onChanged} />
+              <JournalEntry key={e.id} entry={e} chartById={chartById} money={money} onReversed={onChanged} canEdit={canEdit} />
             ))}
           </div>
         )}
@@ -879,9 +879,15 @@ const ReportsTab = ({ schoolId, settings, chart, accountOptions, money, schoolNa
 
 // ------------------------------------------------------ chart of accounts --
 
+const RESTOCK_OPTIONS = [
+  { value: "bank", label: "The bank" },
+  { value: "cash", label: "Cash in hand" },
+  { value: "payables", label: "Owed to the supplier (paid later)" },
+];
+
 const blankAccount = { id: null, code: "", name: "", type: "expense", description: "", isActive: true };
 
-const ChartTab = ({ schoolId, settings, chart, balances, money, onChanged }) => {
+const ChartTab = ({ schoolId, settings, chart, balances, money, onChanged, canEdit }) => {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const { setError, setNotice } = useActionFeedback();
@@ -987,28 +993,23 @@ const ChartTab = ({ schoolId, settings, chart, balances, money, onChanged }) => 
 
   return (
     <div className="ac-stack">
-      {formCard}
+      {canEdit ? formCard : null}
       <section className="ac-card">
         <h2 className="ac-card-title">{"How the store posts"}</h2>
         <div className="ac-field ac-restock">
           <span className="ac-field-label">{"New stock is paid from"}</span>
-          <Select
-            className="select"
-            value={restockFrom}
-            onChange={saveRestock}
-            options={[
-              { value: "bank", label: "The bank" },
-              { value: "cash", label: "Cash in hand" },
-              { value: "payables", label: "Owed to the supplier (paid later)" },
-            ]}
-          />
+          {canEdit ? (
+            <Select className="select" value={restockFrom} onChange={saveRestock} options={RESTOCK_OPTIONS} />
+          ) : (
+            <span className="ac-readonly">{RESTOCK_OPTIONS.find((o) => o.value === restockFrom)?.label || restockFrom}</span>
+          )}
           <span className="ac-hint">{"Where the cost of stock received in the Store is taken from. Stock bought another way can be corrected with a journal."}</span>
         </div>
       </section>
       <section className="ac-card">
         <div className="ac-card-head">
           <h2 className="ac-card-title">{"Chart of accounts"}</h2>
-          {!form ? <Button size="sm" onClick={() => setForm({ ...blankAccount })}>{"Add an account"}</Button> : null}
+          {canEdit && !form ? <Button size="sm" onClick={() => setForm({ ...blankAccount })}>{"Add an account"}</Button> : null}
         </div>
         <p className="ac-note">
           {"Rename or renumber any account to match what your accountant uses. Accounts marked Automatic are where bills, payments and store sales post, so they keep their type and cannot be switched off."}
@@ -1034,7 +1035,7 @@ const ChartTab = ({ schoolId, settings, chart, balances, money, onChanged }) => 
                         {!a.is_active ? <Badge>{"Off"}</Badge> : null}
                       </span>
                       <span className="ac-num ac-chart-balance">{b && toCents(b.closing) !== 0 ? money(natural(a.type, b.closing)) : ""}</span>
-                      <button type="button" className="ac-link" onClick={() => edit(a)}>{"Edit"}</button>
+                      {canEdit ? <button type="button" className="ac-link" onClick={() => edit(a)}>{"Edit"}</button> : null}
                     </li>
                   );
                 })}
@@ -1188,12 +1189,15 @@ const OpeningTab = ({ schoolId, settings, chart, balances, journal, opening, mon
 // ------------------------------------------------------------------- page --
 
 const Accounts = () => {
-  const { school, schoolId, roles, disabledModules } = useSchool();
+  const { school, schoolId, roles, disabledModules, moduleGrants } = useSchool();
   const money = useMoney(school?.currency);
   const { setError } = useActionFeedback();
   const [searchParams, setSearchParams] = useSearchParams();
+  // View-only access: everything readable, nothing that changes the books.
+  const { canEdit } = useModuleAccess("accounts");
+  const tabs = canEdit ? TABS : TABS.filter((t) => t.id !== "opening");
   const requested = searchParams.get("tab");
-  const tab = TABS.some((t) => t.id === requested) ? requested : "overview";
+  const tab = tabs.some((t) => t.id === requested) ? requested : "overview";
   const setTab = (id) =>
     setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set("tab", id); return next; }, { replace: true });
 
@@ -1207,7 +1211,7 @@ const Accounts = () => {
   const [opening, setOpening] = useState(null);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const storeOn = canUseModule("store", roles, disabledModules);
+  const storeOn = canUseModule("store", roles, disabledModules, moduleGrants);
 
   // quiet: refresh underneath without swapping the page for a skeleton, so an
   // open form or report is not thrown away.
@@ -1272,11 +1276,13 @@ const Accounts = () => {
       <Page
         title="Accounts"
         subtitle={school ? `The books of ${school.name}` : "The school's books"}
-        toolbar={settings ? <Tabs tabs={TABS} active={tab} onChange={setTab} /> : null}
+        toolbar={settings ? <Tabs tabs={tabs} active={tab} onChange={setTab} /> : null}
       >
         <div className="ac-page">
           {loading ? <SkeletonCards count={3} lines={3} /> : null}
-          {!loading && !settings ? <Setup schoolId={schoolId} onDone={() => load()} /> : null}
+          {!loading && !settings ? (
+            canEdit ? <Setup schoolId={schoolId} onDone={() => load()} /> : <Empty>{"The books have not been set up yet."}</Empty>
+          ) : null}
           {!loading && settings && tab === "overview" ? (
             <Overview
               settings={settings}
@@ -1287,6 +1293,7 @@ const Accounts = () => {
               stockOnShelf={stockOnShelf}
               money={money}
               onGo={setTab}
+              canEdit={canEdit}
             />
           ) : null}
           {!loading && settings && tab === "journal" ? (
@@ -1301,6 +1308,7 @@ const Accounts = () => {
               accountOptions={accountOptions}
               money={money}
               onChanged={refresh}
+              canEdit={canEdit}
             />
           ) : null}
           {!loading && settings && tab === "reports" ? (
@@ -1314,7 +1322,7 @@ const Accounts = () => {
             />
           ) : null}
           {!loading && settings && tab === "chart" ? (
-            <ChartTab schoolId={schoolId} settings={settings} chart={chart} balances={balances} money={money} onChanged={refresh} />
+            <ChartTab schoolId={schoolId} settings={settings} chart={chart} balances={balances} money={money} onChanged={refresh} canEdit={canEdit} />
           ) : null}
           {!loading && settings && tab === "opening" ? (
             <OpeningTab schoolId={schoolId} settings={settings} chart={chart} balances={balances} journal={journal} opening={opening} money={money} onChanged={refresh} />

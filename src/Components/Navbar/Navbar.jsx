@@ -64,7 +64,7 @@ const ICONS = {
 
 const Navbar = () => {
   const { user } = useAuth();
-  const { school, roles, schoolId, disabledModules } = useSchool();
+  const { school, roles, schoolId, disabledModules, moduleGrants } = useSchool();
   const location = useLocation();
 
   // Every chat's own unread_count, summed — the same "how many are waiting
@@ -145,7 +145,7 @@ const Navbar = () => {
   // the page you just navigated to.
   useEffect(() => setOpen(false), [location.pathname]);
 
-  const groups = groupModules(modulesFor(roles, disabledModules));
+  const groups = groupModules(modulesFor(roles, disabledModules, moduleGrants));
 
   return (
     <>

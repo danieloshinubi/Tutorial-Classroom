@@ -35,6 +35,7 @@ import OrganogramPanel from "./OrganogramPanel";
 import SecurityPanel from "./SecurityPanel";
 import { STAFF_ROLES } from "../../lib/orgChart";
 import { ROLES, ROLE_LABEL, toneFor, roleAccent } from "../../lib/roles";
+import { GRANTABLE_MODULES, ACCESS_LABEL, roleCovers, moduleById } from "../../lib/modules";
 import {
   fetchSchoolMembers,
   updateMemberRole,
@@ -44,6 +45,9 @@ import {
   addSchoolUser,
   updateSchool,
   updateProfile,
+  updateMemberJobTitle,
+  fetchModuleAccess,
+  saveModuleAccess,
   resetMemberPassword,
   uploadSchoolLogo,
   removeSchoolLogo,
@@ -86,6 +90,7 @@ const PEOPLE_EXPORT_COLUMNS = [
   { key: "profiles.email", label: "Email" },
   { key: "profiles.username", label: "Username" },
   { key: "role", label: "Role" },
+  { key: "job_title", label: "Job title" },
   { key: "is_active", label: "Active" },
   { key: "created_at", label: "Joined" },
 ];
@@ -96,6 +101,8 @@ const PeoplePanel = () => {
   const { schoolId } = useSchool();
 
   const [members, setMembers] = useState([]);
+  // Extra module access beyond each person's role: { user_id: { module: level } }.
+  const [grants, setGrants] = useState({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -112,7 +119,7 @@ const PeoplePanel = () => {
   const [inviting, setInviting] = useState(false);
 
   const [editing, setEditing] = useState(null);
-  const [editForm, setEditForm] = useState({ first_name: "", surname: "", username: "", bio: "", avatar_url: "" });
+  const [editForm, setEditForm] = useState({ first_name: "", surname: "", username: "", bio: "", avatar_url: "", job_title: "", access: {} });
   const [savingEdit, setSavingEdit] = useState(false);
   // Shown once, right after creation — this is the only time the password exists
   // anywhere the administrator can see it.
@@ -121,8 +128,13 @@ const PeoplePanel = () => {
   const load = useCallback(() => {
     if (!schoolId) return;
     setLoading(true);
-    fetchSchoolMembers(schoolId)
-      .then(setMembers)
+    Promise.all([fetchSchoolMembers(schoolId), fetchModuleAccess(schoolId)])
+      .then(([rows, access]) => {
+        setMembers(rows);
+        const byUser = {};
+        access.forEach((g) => { (byUser[g.user_id] = byUser[g.user_id] || {})[g.module] = g.level; });
+        setGrants(byUser);
+      })
       .catch((err) => setError(err.message || "Could not load the school's people."))
       .finally(() => setLoading(false));
   }, [schoolId, setError]);
@@ -263,15 +275,29 @@ const PeoplePanel = () => {
       username: row.profiles.username || "",
       bio: row.profiles.bio || "",
       avatar_url: row.profiles.avatar_url || "",
+      job_title: row.job_title || "",
+      access: Object.fromEntries(GRANTABLE_MODULES.map((m) => [m.id, grants[row.user_id]?.[m.id] || ""])),
     });
   };
+
+  // Every role this person holds here; one person can hold more than one.
+  const rolesOf = (userId) => members.filter((m) => m.user_id === userId && m.is_active).map((m) => m.role);
 
   const saveEdit = async (event) => {
     event.preventDefault();
     setSavingEdit(true);
     setError("");
     try {
-      await updateProfile(editing.profiles.id, editForm);
+      const { job_title: jobTitle, access, ...profileFields } = editForm;
+      await updateProfile(editing.profiles.id, profileFields);
+      if ((jobTitle || "").trim() !== (editing.job_title || "")) {
+        await updateMemberJobTitle({ schoolId, memberId: editing.id, jobTitle });
+      }
+      const before = grants[editing.user_id] || {};
+      const changedAccess = Object.fromEntries(Object.entries(access).filter(([m, level]) => (before[m] || "") !== level));
+      if (Object.keys(changedAccess).length) {
+        await saveModuleAccess({ schoolId, userId: editing.user_id, access: changedAccess });
+      }
       setNotice(`${displayName(editForm)}'s details have been updated.`);
       setEditing(null);
       load();
@@ -453,6 +479,42 @@ const PeoplePanel = () => {
                 onChange={(e) => setEditForm((c) => ({ ...c, bio: e.target.value }))}
               />
             </Field>
+            <Field label="Job title" hint="What they do here, e.g. Vice Principal, Head of Science. Shown beside their name.">
+              <input
+                className="input"
+                maxLength={80}
+                value={editForm.job_title}
+                placeholder="Vice Principal"
+                onChange={(e) => setEditForm((c) => ({ ...c, job_title: e.target.value }))}
+              />
+            </Field>
+            <div className="people-access">
+              <span className="label">{"Extra access"}</span>
+              <span className="hint">
+                {"Open a module their role does not include. View only lets them look; Can edit lets them make changes too."}
+              </span>
+              {GRANTABLE_MODULES.map((m) => {
+                const covered = roleCovers(m.id, rolesOf(editing.user_id));
+                return (
+                  <div key={m.id} className="people-access-row">
+                    <span>{moduleById(m.id)?.label || m.id}</span>
+                    {covered ? (
+                      <span className="people-access-covered">{"Included with their role"}</span>
+                    ) : (
+                      <Select
+                        className="select"
+                        value={editForm.access[m.id] || ""}
+                        onChange={(v) => setEditForm((c) => ({ ...c, access: { ...c.access, [m.id]: v } }))}
+                        options={[
+                          { value: "", label: "No access" },
+                          ...m.levels.map((level) => ({ value: level, label: ACCESS_LABEL[level] })),
+                        ]}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
             <div className="btn-row">
               <Button type="submit" disabled={savingEdit}>
                 {savingEdit ? "Saving..." : "Save changes"}
@@ -571,7 +633,16 @@ const PeoplePanel = () => {
                               {isSelf ? <Badge tone="success">{"you"}</Badge> : null}
                               {!row.is_active ? <Badge>{"suspended"}</Badge> : null}
                             </span>
+                            {row.job_title ? <span className="people-job">{row.job_title}</span> : null}
                             <span className="people-email">{row.profiles.email || "—"}</span>
+                            {grants[row.user_id] && Object.keys(grants[row.user_id]).length ? (
+                              <span className="people-extra">
+                                {"Extra: " +
+                                  Object.entries(grants[row.user_id])
+                                    .map(([m, level]) => `${moduleById(m)?.label || m} (${level === "edit" ? "edit" : "view"})`)
+                                    .join(", ")}
+                              </span>
+                            ) : null}
                           </span>
                         </span>
                       </td>

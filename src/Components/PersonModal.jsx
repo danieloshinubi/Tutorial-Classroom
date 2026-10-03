@@ -34,7 +34,7 @@ const PersonCard = ({ person, onClick }) => (
       {displayName(person.profiles)}
     </span>
     <span className="tw-text-[11px] tw-text-ink-3 tw-capitalize tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-max-w-full">
-      {person.role}
+      {person.job_title || person.role}
     </span>
   </button>
 );
@@ -71,6 +71,7 @@ const PersonModal = ({ person, schoolMembers, onClose }) => {
         )}
         <div>
           <div className="tw-text-[17px] tw-font-bold">{displayName(viewing.profiles)}</div>
+          {viewing.job_title ? <div className="tw-text-[14px] tw-font-semibold tw-text-ink-2">{viewing.job_title}</div> : null}
           <div className="tw-text-[13px] tw-text-ink-3 tw-capitalize">{viewing.role}</div>
         </div>
       </div>

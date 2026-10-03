@@ -1,7 +1,7 @@
 import React from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useSchool } from "../context/SchoolContext";
-import { canUseModule, homeFor, moduleById } from "../lib/modules";
+import { accessFor, canUseModule, homeFor, moduleById } from "../lib/modules";
 import { Page, Card, Notice, AppLoading } from "./UI";
 import Navbar from "./Navbar/Navbar";
 
@@ -23,7 +23,7 @@ import Navbar from "./Navbar/Navbar";
 // is sent instead of their home page. /Fees is the family side of money, and
 // staff who land on it (an old link, a typed address) belong in Bursary.
 const SchoolRoute = ({ module: moduleId, instead }) => {
-  const { school, roles, loading, error, slug, disabledModules } = useSchool();
+  const { school, roles, loading, error, slug, disabledModules, moduleGrants } = useSchool();
 
   if (loading) {
     return <AppLoading label="Loading your school..." />;
@@ -51,13 +51,26 @@ const SchoolRoute = ({ module: moduleId, instead }) => {
 
   // Also covers a module the school itself has switched off, so typing the
   // address reaches no further than following a link that is no longer there.
-  const allowed = canUseModule(moduleId, roles, disabledModules);
+  const allowed = canUseModule(moduleId, roles, disabledModules, moduleGrants);
 
   // Somewhere they can actually use, rather than a Dashboard their role may
   // not even have — or that this school has turned off.
   if (!allowed) {
-    const alternative = instead && canUseModule(instead, roles, disabledModules) ? moduleById(instead)?.path : null;
-    return <Navigate to={alternative || homeFor(roles, disabledModules)} replace />;
+    const alternative = instead && canUseModule(instead, roles, disabledModules, moduleGrants) ? moduleById(instead)?.path : null;
+    return <Navigate to={alternative || homeFor(roles, disabledModules, moduleGrants)} replace />;
+  }
+
+  // Someone given view-only access (School admin → People) sees the module as
+  // it is, with a standing reminder; the database refuses their changes.
+  if (moduleId !== "auditlog" && accessFor(moduleId, roles, moduleGrants) === "read") {
+    return (
+      <>
+        <Outlet />
+        <div className="view-only-pill" role="status">
+          {`View only — you can look around ${moduleById(moduleId)?.label || "here"}, but not change anything.`}
+        </div>
+      </>
+    );
   }
 
   return <Outlet />;

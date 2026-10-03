@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
-import { useSchool } from "../../context/SchoolContext";
+import { useSchool, useModuleAccess } from "../../context/SchoolContext";
 import { useMoney } from "../../lib/money";
 import { todayISO, daysAgoISO, monthStartISO } from "../../lib/dates";
 import {
@@ -529,8 +529,10 @@ const Items = ({ schoolId, products, money, onChange, onError }) => {
   const [openRow, setOpenRow] = useState(null); // { id, kind: 'restock' | 'adjust' }
   const [rowForm, setRowForm] = useState({});
   const [rowBusy, setRowBusy] = useState(false);
+  // View-only access: the list and its figures, without the buttons that change them.
+  const { canEdit } = useModuleAccess("store");
 
-  const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }));
+  const set =(key) => (value) => setForm((f) => ({ ...f, [key]: value }));
 
   const cost = Number(form?.costPrice || 0);
   const disc = Number(form?.tradeDiscount || 0);
@@ -713,9 +715,11 @@ const Items = ({ schoolId, products, money, onChange, onError }) => {
         <div className="st-toolbar-end">
           <input className="input st-search" placeholder="Find an item" value={query} onChange={(e) => setQuery(e.target.value)} />
           <ExportButton roles={["bursar"]} filename="store-items" sheetName="Store items" columns={ITEM_COLUMNS} rows={shown} />
-          <Button onClick={() => setForm(form && !form.id ? null : { ...blankForm })}>
-            {form && !form.id ? "Cancel" : "Add item"}
-          </Button>
+          {canEdit ? (
+            <Button onClick={() => setForm(form && !form.id ? null : { ...blankForm })}>
+              {form && !form.id ? "Cancel" : "Add item"}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -826,7 +830,7 @@ const Items = ({ schoolId, products, money, onChange, onError }) => {
                 <col style={{ width: 104 }} />
                 <col style={{ width: 112 }} />
                 <col style={{ width: 118 }} />
-                <col style={{ width: 222 }} />
+                {canEdit ? <col style={{ width: 222 }} /> : null}
               </colgroup>
               <thead>
                 <tr>
@@ -836,7 +840,7 @@ const Items = ({ schoolId, products, money, onChange, onError }) => {
                   <th className="num">{"Sells for"}</th>
                   <th className="num">{"Profit each"}</th>
                   <th>{"Stock"}</th>
-                  <th aria-label="Actions" />
+                  {canEdit ? <th aria-label="Actions" /> : null}
                 </tr>
               </thead>
               <tbody>
@@ -862,22 +866,24 @@ const Items = ({ schoolId, products, money, onChange, onError }) => {
                           {margin !== null ? <div className="st-sub">{`${margin}%`}</div> : null}
                         </td>
                         <td data-label="Stock"><StockBadge product={p} /></td>
-                        <td className="st-actions">
-                          {p.is_active ? (
-                            <>
-                              <Button size="sm" variant="secondary" onClick={() => (open && openRow.kind === "restock" ? setOpenRow(null) : openFor(p, "restock"))}>
-                                {"Restock"}
-                              </Button>
-                              <Button size="sm" variant="ghost" onClick={() => (open && openRow.kind === "adjust" ? setOpenRow(null) : openFor(p, "adjust"))}>
-                                {"Count"}
-                              </Button>
-                            </>
-                          ) : (
-                            // Not faded with its row, so it does not look disabled.
-                            <Button size="sm" variant="secondary" onClick={() => toggleActive(p)}>{"Switch on"}</Button>
-                          )}
-                          <Button size="sm" variant="ghost" onClick={() => edit(p)}>{"Edit"}</Button>
-                        </td>
+                        {canEdit ? (
+                          <td className="st-actions">
+                            {p.is_active ? (
+                              <>
+                                <Button size="sm" variant="secondary" onClick={() => (open && openRow.kind === "restock" ? setOpenRow(null) : openFor(p, "restock"))}>
+                                  {"Restock"}
+                                </Button>
+                                <Button size="sm" variant="ghost" onClick={() => (open && openRow.kind === "adjust" ? setOpenRow(null) : openFor(p, "adjust"))}>
+                                  {"Count"}
+                                </Button>
+                              </>
+                            ) : (
+                              // Not faded with its row, so it does not look disabled.
+                              <Button size="sm" variant="secondary" onClick={() => toggleActive(p)}>{"Switch on"}</Button>
+                            )}
+                            <Button size="sm" variant="ghost" onClick={() => edit(p)}>{"Edit"}</Button>
+                          </td>
+                        ) : null}
                       </tr>
                       {open ? (
                         <tr className="st-inline-row">
@@ -977,6 +983,8 @@ const Sales = ({ schoolId, money, refreshKey, onChange, onError }) => {
   const [voiding, setVoiding] = useState(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  // View-only access reads every sale but cannot void one.
+  const { canEdit } = useModuleAccess("store");
 
   const load = useCallback(async ({ quiet = false } = {}) => {
     if (!schoolId) return;
@@ -1102,13 +1110,13 @@ const Sales = ({ schoolId, money, refreshKey, onChange, onError }) => {
                       )}
                       {/* Only "Void" lives here. Cancel is in the row that
                           opens, so a double-click cannot open and shut it. */}
-                      {!s.voided_at && voiding !== s.id ? (
+                      {canEdit && !s.voided_at && voiding !== s.id ? (
                         <button type="button" className="st-link" onClick={() => { setVoiding(s.id); setReason(""); }}>
                           {"Void"}
                         </button>
                       ) : null}
                     </div>
-                    {voiding === s.id ? (
+                    {canEdit && voiding === s.id ? (
                       <div className="st-void">
                         {s.invoice?.status === "issued" ? (
                           <p className="st-void-warn">
@@ -1342,7 +1350,10 @@ const Store = () => {
   // the browser's Back button returns to it.
   const [searchParams, setSearchParams] = useSearchParams();
   const requested = searchParams.get("tab");
-  const tab = TABS.some((t) => t.id === requested) ? requested : "sell";
+  // View-only access has no counter to sell from, so it opens on Items.
+  const { canEdit } = useModuleAccess("store");
+  const tabs = canEdit ? TABS : TABS.filter((t) => t.id !== "sell");
+  const tab = tabs.some((t) => t.id === requested) ? requested : tabs[0].id;
   const setTab = (id) =>
     setSearchParams(
       (prev) => {
@@ -1405,7 +1416,7 @@ const Store = () => {
         subtitle={school ? `Uniforms, books and stationery at ${school.name}` : "Uniforms, books and stationery"}
         toolbar={
           <Tabs
-            tabs={TABS.map((t) => (t.id === "items" && lowCount ? { ...t, label: `Items (${lowCount} low)` } : t))}
+            tabs={tabs.map((t) => (t.id === "items" && lowCount ? { ...t, label: `Items (${lowCount} low)` } : t))}
             active={tab}
             onChange={setTab}
           />

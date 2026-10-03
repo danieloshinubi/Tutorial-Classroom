@@ -1619,7 +1619,7 @@ export const fetchSchoolMembers = async (schoolId) => {
     // user_id is what invoices and payments and every other table joins on;
     // without it the Bursary invoice table falls back to "Student" instead
     // of the child's name.
-    .select(`id, user_id, role, is_active, created_at, manager_id, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
+    .select(`id, user_id, role, is_active, created_at, manager_id, job_title, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS} )`)
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -1647,6 +1647,63 @@ export const updateMemberManager = async ({ schoolId, memberId, managerId }) => 
     .eq("id", memberId)
     .eq("school_id", schoolId);
   if (error) throw error;
+};
+
+// A member's job title ("Vice Principal", "Head of Science"), set by the
+// school's owner or admin (supabase/208). Blank clears it.
+export const updateMemberJobTitle = async ({ schoolId, memberId, jobTitle }) => {
+  const title = (jobTitle || "").trim();
+  const { error } = await supabase
+    .from("school_members")
+    .update({ job_title: title || null })
+    .eq("id", memberId)
+    .eq("school_id", schoolId);
+  if (error) throw error;
+};
+
+// Extra module access beyond a person's role (supabase/208): rows of
+// { user_id, module, level } where level is "read" (view only) or "edit".
+export const fetchModuleAccess = async (schoolId) => {
+  const { data, error } = await supabase
+    .from("member_module_access")
+    .select("user_id, module, level")
+    .eq("school_id", schoolId);
+  if (error) throw error;
+  return data || [];
+};
+
+// The signed-in person's own extra access at this school, as { module: level }.
+export const fetchMyModuleAccess = async (schoolId, userId) => {
+  const { data, error } = await supabase
+    .from("member_module_access")
+    .select("module, level")
+    .eq("school_id", schoolId)
+    .eq("user_id", userId);
+  if (error) throw error;
+  return Object.fromEntries((data || []).map((r) => [r.module, r.level]));
+};
+
+// Sets one person's extra access to exactly `access` ({ module: "read" |
+// "edit" | "" }). Modules left blank are removed. Owners and admins only.
+export const saveModuleAccess = async ({ schoolId, userId, access }) => {
+  const keep = Object.entries(access).filter(([, level]) => level === "read" || level === "edit");
+  const drop = Object.entries(access).filter(([, level]) => !level).map(([module]) => module);
+  if (keep.length) {
+    const { error } = await supabase.from("member_module_access").upsert(
+      keep.map(([module, level]) => ({ school_id: schoolId, user_id: userId, module, level, updated_at: new Date().toISOString() })),
+      { onConflict: "school_id,user_id,module" }
+    );
+    if (error) throw error;
+  }
+  if (drop.length) {
+    const { error } = await supabase
+      .from("member_module_access")
+      .delete()
+      .eq("school_id", schoolId)
+      .eq("user_id", userId)
+      .in("module", drop);
+    if (error) throw error;
+  }
 };
 
 export const setMemberActive = async ({ schoolId, memberId, isActive }) => {
@@ -5458,6 +5515,9 @@ export const preparePayroll = (schoolId, period) => rpc("payroll_prepare", { tar
 export const refreshPayroll = (runId) => rpc("payroll_refresh_run", { target_run: runId });
 export const deletePayrollDraft = (runId) => rpc("payroll_delete_draft", { target_run: runId });
 export const approvePayroll = (runId) => rpc("payroll_approve", { target_run: runId });
+export const submitPayroll = (runId) => rpc("payroll_submit", { target_run: runId });
+export const recallPayroll = (runId) => rpc("payroll_recall", { target_run: runId });
+export const returnPayroll = (runId, reason) => rpc("payroll_return", { target_run: runId, reason });
 export const markPayrollPaid = (runId, paidOn) => rpc("payroll_mark_paid", { target_run: runId, paid_on_in: paidOn });
 
 export const fetchPayees = async (schoolId) => {

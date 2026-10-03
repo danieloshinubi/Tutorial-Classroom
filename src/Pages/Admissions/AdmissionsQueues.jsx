@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
-import { useSchool } from "../../context/SchoolContext";
+import { useSchool, useModuleAccess } from "../../context/SchoolContext";
 import {
   fetchAdmissionsQueues,
   fetchApplications,
@@ -240,6 +240,8 @@ const QueueRow = ({ row }) => {
 
 const AdmissionsQueues = () => {
   const { schoolId, school, isAdmin } = useSchool();
+  // View-only access: everything readable, nothing that changes data.
+  const { canEdit } = useModuleAccess("admissions");
   const [groups, setGroups] = useState({});
   const [applications, setApplications] = useState([]);
   const [counts, setCounts] = useState({});
@@ -408,7 +410,7 @@ const AdmissionsQueues = () => {
               </div>
             ) : null}
 
-            {isAdmin && sessions.length ? (
+            {isAdmin && canEdit && sessions.length ? (
               <div className="btn-row">
                 {acceptingSession ? (
                   <Button

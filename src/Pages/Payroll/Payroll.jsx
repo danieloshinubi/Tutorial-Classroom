@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
-import { useSchool } from "../../context/SchoolContext";
+import { useSchool, useModuleAccess } from "../../context/SchoolContext";
 import { useMoney } from "../../lib/money";
 import { todayISO, localISODate } from "../../lib/dates";
 import { ExportMenu } from "../../Components/ExportButton";
@@ -23,6 +23,9 @@ import {
   refreshPayroll,
   deletePayrollDraft,
   approvePayroll,
+  submitPayroll,
+  recallPayroll,
+  returnPayroll,
   markPayrollPaid,
   fetchPayees,
   savePayee,
@@ -49,7 +52,7 @@ import {
   formatDate,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
-import { useConfirm } from "../../Components/Confirm";
+import { useConfirm, usePrompt } from "../../Components/Confirm";
 
 // Monthly payroll: staff pay, PAYE, pension, NHF, the school's own
 // deductions, and payments to consultants and vendors with withholding tax.
@@ -72,7 +75,7 @@ const monthLabel = (iso) =>
 const dayLabel = (iso) =>
   iso ? new Date(`${String(iso).slice(0, 10)}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 
-const STATUS = { draft: ["Draft", undefined], approved: ["Approved", "warn"], paid: ["Paid", "success"] };
+const STATUS = { draft: ["Draft", undefined], submitted: ["Awaiting approval", "warn"], approved: ["Approved", "warn"], paid: ["Paid", "success"] };
 
 const num = (v) => Number(v || 0);
 const sum = (rows, f) => rows.reduce((t, r) => t + num(f(r)), 0);
@@ -155,6 +158,10 @@ const PayslipDetail = ({ slip, money }) => (
 const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove }) => {
   const { setError, setNotice } = useActionFeedback();
   const confirmAction = useConfirm();
+  const promptFor = usePrompt();
+  // View-only people (School admin → People) see payroll but change nothing.
+  const { canEdit } = useModuleAccess("payroll");
+  const approverName = (settings.approver_roles || ["owner"]).map((r) => (r === "owner" ? "the proprietor" : r)).join(" or ");
   const [period, setPeriod] = useState(() => localISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1)));
   const [selected, setSelected] = useState(runs[0]?.id || null);
   const [slips, setSlips] = useState([]);
@@ -202,6 +209,30 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
       confirmLabel: "Approve",
     });
     if (ok) act(() => approvePayroll(run.id), "Payroll approved. Staff can now see their payslips.");
+  };
+
+  // The bursary prepares payroll and sends it to the proprietor, who is
+  // notified; they approve it or send it back with a note (supabase/209).
+  const submit = async () => {
+    const ok = await confirmAction({
+      title: `Send payroll for ${monthLabel(run.period)} for approval?`,
+      body: `${slips.length} payslip${slips.length === 1 ? "" : "s"}, ${money(sum(slips, (s) => s.net))} net pay. ${approverName.charAt(0).toUpperCase() + approverName.slice(1)} is notified to approve it. You can take it back until then.`,
+      confirmLabel: "Send for approval",
+    });
+    if (ok) act(() => submitPayroll(run.id), `Sent to ${approverName} for approval.`);
+  };
+
+  const sendBack = async () => {
+    const reason = await promptFor({
+      title: `Send payroll for ${monthLabel(run.period)} back?`,
+      body: "It goes back to the bursary as a draft. Say what needs changing; they are notified.",
+      label: "What needs changing",
+      placeholder: "e.g. Mr Ade's transport allowance is missing",
+      confirmLabel: "Send back",
+    });
+    if (reason == null) return;
+    if (!reason.trim()) return setError("Say what needs changing.");
+    act(() => returnPayroll(run.id, reason.trim()), "Sent back to the bursary.");
   };
 
   const remove = async () => {
@@ -267,6 +298,7 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
         </Notice>
       ) : null}
 
+      {canEdit ? (
       <Card className="pr-prepare">
         <Field label="Month">
           <Select value={period} onChange={setPeriod} options={monthOptions()} />
@@ -274,6 +306,7 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
         <Button disabled={busy} onClick={prepare}>{busy ? "Working..." : "Prepare payroll"}</Button>
         <p className="pr-hint">{"Prepares a draft from each active staff member's pay and deductions. Preparing a month again recalculates its draft."}</p>
       </Card>
+      ) : null}
 
       {runs.length === 0 ? (
         <Empty>{"No payroll yet. Add your staff under Staff, then prepare the first month."}</Empty>
@@ -294,20 +327,34 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
                 <div>
                   <h3>{`Payroll for ${monthLabel(run.period)}`}</h3>
                   <p className="pr-hint">
-                    {run.status === "draft" ? "Draft — check it, then approve." : null}
+                    {run.status === "draft" ? (canApprove ? "Draft — check it, then approve." : `Draft — check it, then send it to ${approverName} for approval.`) : null}
+                    {run.status === "submitted" ? `Sent for approval ${formatDate(run.submitted_at)}. Waiting for ${approverName}.` : null}
                     {run.status === "approved" ? `Approved ${formatDate(run.approved_at)}. Not yet marked as paid.` : null}
                     {run.status === "paid" ? `Paid ${dayLabel(run.paid_on)}.` : null}
                   </p>
                 </div>
                 <div className="btn-row">
-                  {run.status === "draft" ? (
+                  {run.status === "draft" && canEdit ? (
                     <>
                       <Button size="sm" variant="secondary" disabled={busy} onClick={() => act(() => refreshPayroll(run.id), "Recalculated.")}>{"Recalculate"}</Button>
                       <Button size="sm" variant="secondary" disabled={busy} onClick={remove}>{"Delete draft"}</Button>
-                      <Button size="sm" disabled={busy || !canApprove || !slips.length} onClick={approve} title={canApprove ? undefined : "Only the approver set under Settings can approve"}>{"Approve"}</Button>
+                      {canApprove ? (
+                        <Button size="sm" disabled={busy || !slips.length} onClick={approve}>{"Approve"}</Button>
+                      ) : (
+                        <Button size="sm" disabled={busy || !slips.length} onClick={submit}>{"Send for approval"}</Button>
+                      )}
                     </>
                   ) : null}
-                  {run.status === "approved" ? (
+                  {run.status === "submitted" && canApprove ? (
+                    <>
+                      <Button size="sm" variant="secondary" disabled={busy} onClick={sendBack}>{"Send back"}</Button>
+                      <Button size="sm" disabled={busy || !slips.length} onClick={approve}>{"Approve"}</Button>
+                    </>
+                  ) : null}
+                  {run.status === "submitted" && !canApprove && canEdit ? (
+                    <Button size="sm" variant="secondary" disabled={busy} onClick={() => act(() => recallPayroll(run.id), "Taken back as a draft.")}>{"Take back"}</Button>
+                  ) : null}
+                  {run.status === "approved" && canEdit ? (
                     <>
                       <DatePicker value={paidOn} onChange={setPaidOn} />
                       <Button size="sm" disabled={busy} onClick={() => act(() => markPayrollPaid(run.id, paidOn), "Marked as paid.")}>{"Mark as paid"}</Button>
@@ -316,8 +363,8 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
                 </div>
               </div>
 
-              {run.status === "draft" && !canApprove ? (
-                <Notice tone="muted">{`Only ${(settings.approver_roles || ["owner"]).map((r) => (r === "owner" ? "the proprietor" : r)).join(" or ")} can approve payroll.`}</Notice>
+              {run.status === "draft" && run.returned_note ? (
+                <Notice tone="warn">{`Sent back ${formatDate(run.returned_at)}: ${run.returned_note}`}</Notice>
               ) : null}
 
               <div className="pr-totals">
@@ -548,6 +595,7 @@ const StaffForm = ({ schoolId, initial, members, types, deductions, money, onSav
 };
 
 const StaffTab = ({ schoolId, staff, types, deductions, members, money, onChanged }) => {
+  const { canEdit } = useModuleAccess("payroll");
   const [editing, setEditing] = useState(null);
   const [query, setQuery] = useState("");
   const shown = staff.filter((s) => !query.trim() || s.full_name.toLowerCase().includes(query.trim().toLowerCase()));
@@ -570,7 +618,7 @@ const StaffTab = ({ schoolId, staff, types, deductions, members, money, onChange
       ) : null}
       <div className="pr-toolbar">
         <input className="input" placeholder="Search staff" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <Button onClick={() => setEditing({ ...blankStaff })}>{"Add staff"}</Button>
+        {canEdit ? <Button onClick={() => setEditing({ ...blankStaff })}>{"Add staff"}</Button> : null}
       </div>
       {staff.length === 0 ? (
         <Empty>{"No staff on payroll yet. Add each person with their monthly pay and bank details."}</Empty>
@@ -585,7 +633,7 @@ const StaffTab = ({ schoolId, staff, types, deductions, members, money, onChange
                   <td>{money(num(s.basic) + num(s.housing) + num(s.transport) + sum(s.other_allowances || [], (a) => a.amount))}</td>
                   <td>{s.bank_name ? `${s.bank_name} ${s.account_number ? `· ${String(s.account_number).slice(-4).padStart(8, "•")}` : ""}` : <span className="pr-sub">{"Not set"}</span>}</td>
                   <td>{s.user_id ? "Linked" : "—"}</td>
-                  <td><Button size="sm" variant="secondary" onClick={() => setEditing(s)}>{"Edit"}</Button></td>
+                  <td>{canEdit ? <Button size="sm" variant="secondary" onClick={() => setEditing(s)}>{"Edit"}</Button> : null}</td>
                 </tr>
               ))}
             </tbody>
@@ -600,6 +648,7 @@ const StaffTab = ({ schoolId, staff, types, deductions, members, money, onChange
 
 const DeductionsTab = ({ schoolId, types, onChanged }) => {
   const { setError } = useActionFeedback();
+  const { canEdit } = useModuleAccess("payroll");
   const [label, setLabel] = useState("");
   const [beforeTax, setBeforeTax] = useState(false);
   const add = async (e) => {
@@ -618,11 +667,14 @@ const DeductionsTab = ({ schoolId, types, onChanged }) => {
   return (
     <Card>
       <p className="pr-hint">{"The kinds of deduction your school takes from pay. Each staff member's own amounts are set on their record under Staff. Mark a deduction \"before tax\" only if the law lets it reduce PAYE, such as health insurance or life assurance."}</p>
+      {canEdit ? (
       <form className="pr-inline" onSubmit={add}>
         <input className="input" placeholder="e.g. Union dues" value={label} onChange={(e) => setLabel(e.target.value)} />
         <Switch compact label="Before tax" checked={beforeTax} onChange={setBeforeTax} />
         <Button type="submit" size="sm" disabled={!label.trim()}>{"Add"}</Button>
       </form>
+      ) : null}
+      <fieldset className="pr-fieldset" disabled={!canEdit}>
       <div className="pr-type-list">
         {types.map((t) => (
           <div key={t.id} className={`pr-type${t.is_active ? "" : " pr-dim"}`}>
@@ -632,6 +684,7 @@ const DeductionsTab = ({ schoolId, types, onChanged }) => {
           </div>
         ))}
       </div>
+      </fieldset>
     </Card>
   );
 };
@@ -647,6 +700,7 @@ const KINDS = [
 
 const PayeesTab = ({ schoolId, payees, payments, money, onChanged }) => {
   const { setError, setNotice } = useActionFeedback();
+  const { canEdit } = useModuleAccess("payroll");
   const blank = { id: null, name: "", kind: "consultant", service: "", wht_rate: "5", bank_name: "", account_number: "", account_name: "", tin: "", is_active: true };
   const [p, setP] = useState(blank);
   const [pay, setPay] = useState({ payeeId: "", description: "", gross: "", whtRate: "", paidOn: todayISO(), paidFrom: "bank", reference: "" });
@@ -698,6 +752,7 @@ const PayeesTab = ({ schoolId, payees, payments, money, onChanged }) => {
 
   return (
     <div className="pr-stack">
+      {canEdit ? (
       <Card>
         <h3>{"Record a payment"}</h3>
         <form onSubmit={record}>
@@ -715,9 +770,11 @@ const PayeesTab = ({ schoolId, payees, payments, money, onChanged }) => {
           </div>
         </form>
       </Card>
+      ) : null}
 
       <Card>
         <h3>{p.id ? `Edit ${p.name}` : "Consultants, vendors and honoraria"}</h3>
+        {canEdit ? (
         <form onSubmit={savePe}>
           <div className="pr-grid">
             <Field label="Name"><input className="input" value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} /></Field>
@@ -734,6 +791,7 @@ const PayeesTab = ({ schoolId, payees, payments, money, onChanged }) => {
             {p.id ? <Button size="sm" variant="secondary" onClick={() => setP(blank)}>{"Cancel"}</Button> : null}
           </div>
         </form>
+        ) : null}
         {payees.length ? (
           <div className="table-wrap table-wrap-plain">
             <table className="data pr-table">
@@ -744,13 +802,13 @@ const PayeesTab = ({ schoolId, payees, payments, money, onChanged }) => {
                     <td><strong>{x.name}</strong>{x.service ? <span className="pr-sub">{x.service}</span> : null}</td>
                     <td>{KINDS.find((k) => k.value === x.kind)?.label}</td>
                     <td>{`${num(x.wht_rate)}%`}</td>
-                    <td><div className="btn-row">
+                    <td>{canEdit ? <div className="btn-row">
                       <Button size="sm" variant="secondary" onClick={() => setP({ ...blank, ...x, wht_rate: String(num(x.wht_rate)) })}>{"Edit"}</Button>
                       <Button size="sm" variant="secondary" onClick={() => savePayee({ id: x.id, is_active: !x.is_active }).then(onChanged)}>{x.is_active ? "Switch off" : "Switch on"}</Button>
                       {payments.some((pm) => pm.payee_id === x.id) ? null : (
                         <Button size="sm" variant="secondary" onClick={() => removePayee(x)}>{"Delete"}</Button>
                       )}
-                    </div></td>
+                    </div> : null}</td>
                   </tr>
                 ))}
               </tbody>
@@ -802,6 +860,7 @@ const APPROVERS = [
 
 const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
   const { setError, setNotice } = useActionFeedback();
+  const { canEdit } = useModuleAccess("payroll");
   const [f, setF] = useState(() => ({
     ...settings,
     paye_bands: (settings.paye_bands || []).map((b) => ({ upto: b.upto == null ? "" : String(b.upto), rate: String(b.rate) })),
@@ -846,7 +905,7 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
 
   let from = 0;
   return (
-    <div className="pr-stack">
+    <fieldset className="pr-fieldset pr-stack" disabled={!canEdit}>
       <Card>
         <h3>{"PAYE bands (a year)"}</h3>
         <p className="pr-hint">{"Loaded with the Nigeria Tax Act 2025 rates, in force from 1 January 2026. Change them only if the law changes."}</p>
@@ -899,8 +958,8 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
           ))}
         </div>
       </Card>
-      <div><Button disabled={busy} onClick={save}>{busy ? "Saving..." : "Save settings"}</Button></div>
-    </div>
+      {canEdit ? <div><Button disabled={busy} onClick={save}>{busy ? "Saving..." : "Save settings"}</Button></div> : null}
+    </fieldset>
   );
 };
 
@@ -908,6 +967,7 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
 
 const Payroll = () => {
   const { school, schoolId, roles } = useSchool();
+  const { canEdit } = useModuleAccess("payroll");
   const money = useMoney(school?.currency);
   const { setError } = useActionFeedback();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -969,7 +1029,8 @@ const Payroll = () => {
       >
         <div className="pr-page">
           {loading ? <SkeletonCards count={3} lines={3} /> : null}
-          {!loading && !settings ? <Setup schoolId={schoolId} onDone={() => load()} /> : null}
+          {!loading && !settings && canEdit ? <Setup schoolId={schoolId} onDone={() => load()} /> : null}
+          {!loading && !settings && !canEdit ? <Empty>{"Payroll has not been set up yet."}</Empty> : null}
           {!loading && settings && tab === "runs" ? <RunsTab schoolId={schoolId} settings={settings} runs={runs} money={money} onChanged={refresh} onGo={setTab} canApprove={canApprove} /> : null}
           {!loading && settings && tab === "staff" ? <StaffTab schoolId={schoolId} staff={staff} types={types} deductions={deductions} members={members} money={money} onChanged={refresh} /> : null}
           {!loading && settings && tab === "deductions" ? <DeductionsTab schoolId={schoolId} types={types} onChanged={refresh} /> : null}

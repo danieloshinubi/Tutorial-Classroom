@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
-import { useSchool } from "../../context/SchoolContext";
+import { useSchool, useModuleAccess } from "../../context/SchoolContext";
 import { useAuth } from "../../context/AuthContext";
 import {
   fetchApplicationWorkspace,
@@ -109,6 +109,8 @@ const AdmissionsWorkspace = () => {
   const { applicationId } = useParams();
   const { schoolId, role, isAdmin, isPrincipal, labelFor } = useSchool();
   const { user } = useAuth();
+  // View-only access: every panel stays readable; controls that change data are hidden.
+  const { canEdit } = useModuleAccess("admissions");
 
   const { notify } = useToast();
   const [workspace, setWorkspace] = useState(null);
@@ -280,9 +282,11 @@ const AdmissionsWorkspace = () => {
         subtitle="Admissions workspace"
         action={
           <div className="btn-row">
-            <Button variant="secondary" onClick={() => setMessaging(true)}>
-              {"Message applicant"}
-            </Button>
+            {canEdit ? (
+              <Button variant="secondary" onClick={() => setMessaging(true)}>
+                {"Message applicant"}
+              </Button>
+            ) : null}
             {["offered", "accepted", "enrolled"].includes(app.status) ? (
               <Button variant="secondary" disabled={letterLoading} onClick={openLetter}>
                 {letterLoading ? "Opening..." : "Admission letter"}
@@ -378,13 +382,15 @@ const AdmissionsWorkspace = () => {
         <Card style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>{"Documents"}</h3>
-            <Button size="sm" variant="secondary" disabled={busy}
-              onClick={() => run(async () => {
-                const items = await prepareDocumentItems(app.id, schoolId);
-                setDocumentConfigMissing(items.length === 0);
-              }, "prepare documents")}>
-              {"Prepare items from config"}
-            </Button>
+            {canEdit ? (
+              <Button size="sm" variant="secondary" disabled={busy}
+                onClick={() => run(async () => {
+                  const items = await prepareDocumentItems(app.id, schoolId);
+                  setDocumentConfigMissing(items.length === 0);
+                }, "prepare documents")}>
+                {"Prepare items from config"}
+              </Button>
+            ) : null}
           </div>
           {preview.error ? <Notice tone="error">{preview.error}</Notice> : null}
           {documents.length === 0 ? (
@@ -397,7 +403,7 @@ const AdmissionsWorkspace = () => {
                 {", then press the button again."}
               </Empty>
             ) : (
-              <Empty>{"No documents yet. Press “Prepare items from config” to pull in this school's document requirements."}</Empty>
+              <Empty>{canEdit ? "No documents yet. Press “Prepare items from config” to pull in this school's document requirements." : "No documents yet."}</Empty>
             )
           ) : (
             <ul className="doc-list">
@@ -429,7 +435,7 @@ const AdmissionsWorkspace = () => {
                       d.status === "uploaded" ? "brand" : "warn"
                     }>{d.status}</Badge>
                     {d.file?.file_path ? (
-                      <span className="doc-actions">
+                      canEdit ? <span className="doc-actions">
                         <Button size="sm" variant="secondary"
                           disabled={busy || d.status === "verified"}
                           onClick={() => run(() => verifyDocument({ docId: d.id, schoolId }), "verify")}>
@@ -453,7 +459,7 @@ const AdmissionsWorkspace = () => {
                             {"Waive"}
                           </Button>
                         ) : null}
-                      </span>
+                      </span> : null
                     ) : <span style={{ color: "var(--ink-3)" }}>{"Nothing uploaded"}</span>}
                   </div>
                 </li>
@@ -466,13 +472,15 @@ const AdmissionsWorkspace = () => {
         <Card style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ margin: 0 }}>{"Screening"}</h3>
-            <Button size="sm" variant="secondary" disabled={busy}
-              onClick={() => run(async () => {
-                const items = await prepareScreeningItems(app.id, schoolId);
-                setScreeningConfigMissing(items.length === 0);
-              }, "prepare screening")}>
-              {"Prepare items from config"}
-            </Button>
+            {canEdit ? (
+              <Button size="sm" variant="secondary" disabled={busy}
+                onClick={() => run(async () => {
+                  const items = await prepareScreeningItems(app.id, schoolId);
+                  setScreeningConfigMissing(items.length === 0);
+                }, "prepare screening")}>
+                {"Prepare items from config"}
+              </Button>
+            ) : null}
           </div>
           {screening.length === 0 ? (
             screeningConfigMissing ? (
@@ -484,7 +492,7 @@ const AdmissionsWorkspace = () => {
                 {", then press the button again."}
               </Empty>
             ) : (
-              <Empty>{"No screening items yet. Press “Prepare items from config” to pull in this school's screening steps."}</Empty>
+              <Empty>{canEdit ? "No screening items yet. Press “Prepare items from config” to pull in this school's screening steps." : "No screening items yet."}</Empty>
             )
           ) : (
             <ul className="screen-list">
@@ -502,6 +510,7 @@ const AdmissionsWorkspace = () => {
                       item.status === "waived" ? "muted" :
                       item.status === "correction_required" ? "warn" : "muted"
                     }>{item.status}</Badge>
+                    {canEdit ? (<>
                     <Button size="sm" variant="secondary" disabled={busy}
                       onClick={() => run(() => setScreeningItemStatus({ itemId: item.id, schoolId, status: "passed" }), "pass")}>
                       {"Pass"}
@@ -520,6 +529,7 @@ const AdmissionsWorkspace = () => {
                       }}>
                       {"Waive"}
                     </Button>
+                    </>) : null}
                   </div>
                 </li>
               ))}
@@ -528,6 +538,7 @@ const AdmissionsWorkspace = () => {
         </Card>
 
         {/* Correction request */}
+        {canEdit ? (
         <Card style={{ marginBottom: 16 }}>
           <h3 style={{ marginTop: 0 }}>{"Request correction"}</h3>
           <p style={{ color: "var(--ink-3)", fontSize: 13.5, marginTop: 0 }}>
@@ -536,6 +547,7 @@ const AdmissionsWorkspace = () => {
           <CorrectionForm applicationId={app.id} schoolId={schoolId} disabled={busy}
             onDone={reloadWithToast("Correction requested.")} onError={setError} />
         </Card>
+        ) : null}
 
         {/* Review */}
         <Card style={{ marginBottom: 16 }}>
@@ -546,16 +558,18 @@ const AdmissionsWorkspace = () => {
                 members.find((m) => m.user_id === activeReview.reviewer_id)?.profiles?.email
                 || activeReview.reviewer_id
               }</strong> on {formatDate(activeReview.assigned_at)}</p>
-              {isAssignedReviewer ? (
+              {isAssignedReviewer && canEdit ? (
                 <ReviewForm applicationId={app.id} disabled={busy}
                   onDone={reloadWithToast("Review recorded.")} onError={setError} />
               ) : (
                 <Notice tone="muted">{"Only the assigned reviewer can record this recommendation."}</Notice>
               )}
             </div>
-          ) : (
+          ) : canEdit ? (
             <AssignReviewForm applicationId={app.id} schoolId={schoolId} members={members}
               disabled={busy} onDone={reloadWithToast("Reviewer assigned.")} onError={setError} />
+          ) : (
+            <Empty>{"No reviewer assigned yet."}</Empty>
           )}
           {reviews.filter((r) => r.completed_at).map((r) => (
             <div key={r.id} className="past-review">
@@ -572,8 +586,10 @@ const AdmissionsWorkspace = () => {
         {config?.require_interview ? (
           <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Interview"}</h3>
-            <InterviewForm applicationId={app.id} schoolId={schoolId} members={members} disabled={busy}
-              onDone={reloadWithToast("Interview scheduled.")} onError={setError} />
+            {canEdit ? (
+              <InterviewForm applicationId={app.id} schoolId={schoolId} members={members} disabled={busy}
+                onDone={reloadWithToast("Interview scheduled.")} onError={setError} />
+            ) : interviews.length === 0 ? <Empty>{"No interview scheduled yet."}</Empty> : null}
             {interviews.map((iv) => (
               <div key={iv.id} className="past-review">
                 <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>
@@ -584,7 +600,7 @@ const AdmissionsWorkspace = () => {
                   iv.status === "cancelled" ? "danger" : "brand"
                 }>{iv.status}</Badge>
                 {iv.outcome ? <span> · {iv.outcome}</span> : null}
-                {iv.status === "scheduled" ? (
+                {iv.status === "scheduled" && canEdit ? (
                   <div style={{ marginTop: 8 }}>
                     <Button size="sm" variant="secondary" disabled={busy}
                       onClick={async () => {
@@ -611,7 +627,9 @@ const AdmissionsWorkspace = () => {
               {`Decided by ${workspace?.decided_by_name || "a staff member"} · ${formatDate(app.decided_at, { withTime: true })}`}
             </Notice>
           ) : null}
-          {canFinalise ? (
+          {!canEdit ? (
+            app.decided_by ? null : <Empty>{"No decision yet."}</Empty>
+          ) : canFinalise ? (
             <DecisionForm application={app} schoolId={schoolId} disabled={busy}
               onDone={async (message) => { await load(); notify(message, { tone: "success" }); }}
               onError={setError} />
@@ -642,6 +660,8 @@ const AdmissionsWorkspace = () => {
             {offer.status === "issued" ? (
               app.applicant_id ? (
                 <Notice tone="muted">{"Waiting on the applicant to accept or decline from their own dashboard."}</Notice>
+              ) : !canEdit ? (
+                <Notice tone="muted">{"Waiting on the family to accept or decline."}</Notice>
               ) : (
                 <div>
                   <Notice tone="muted">
@@ -729,18 +749,22 @@ const AdmissionsWorkspace = () => {
                 <Notice tone="muted">
                   {"No clearance departments are configured for this school — this will pass automatically. Add departments under School administration → Clearance departments first if you want a real checklist here."}
                 </Notice>
-                <Button size="sm" disabled={busy}
-                  onClick={() => run(() => prepareClearanceItems(app.id), "resolve clearance")}>
-                  {"Resolve clearance"}
-                </Button>
+                {canEdit ? (
+                  <Button size="sm" disabled={busy}
+                    onClick={() => run(() => prepareClearanceItems(app.id), "resolve clearance")}>
+                    {"Resolve clearance"}
+                  </Button>
+                ) : null}
               </>
             ) : clearance.length === 0 ? (
               <>
                 <Empty>{"Clearance has not been opened for this application yet."}</Empty>
-                <Button size="sm" disabled={busy}
-                  onClick={() => run(() => prepareClearanceItems(app.id), "open clearance")}>
-                  {"Open clearance checklist"}
-                </Button>
+                {canEdit ? (
+                  <Button size="sm" disabled={busy}
+                    onClick={() => run(() => prepareClearanceItems(app.id), "open clearance")}>
+                    {"Open clearance checklist"}
+                  </Button>
+                ) : null}
               </>
             ) : (
               <ul className="screen-list">
@@ -757,6 +781,7 @@ const AdmissionsWorkspace = () => {
                         item.status === "waived" ? "muted" :
                         item.status === "in_progress" ? "brand" : "warn"
                       }>{item.status}</Badge>
+                      {canEdit ? (<>
                       <Button size="sm" variant="secondary" disabled={busy}
                         onClick={() => run(() => setClearanceStatus({ checklistId: item.id, schoolId, status: "in_progress" }), "start")}>
                         {"In progress"}
@@ -781,6 +806,7 @@ const AdmissionsWorkspace = () => {
                           {"Waive"}
                         </Button>
                       ) : null}
+                      </>) : null}
                     </div>
                   </li>
                 ))}
@@ -789,8 +815,10 @@ const AdmissionsWorkspace = () => {
 
             <div style={{ borderTop: "1px solid var(--line)", marginTop: 14, paddingTop: 14 }}>
               <h4 style={{ marginTop: 0, marginBottom: 6 }}>{"Original documents seen in person"}</h4>
-              <OriginalVerificationForm applicationId={app.id} schoolId={schoolId} disabled={busy}
-                onDone={reloadWithToast("Verification recorded.")} onError={setError} />
+              {canEdit ? (
+                <OriginalVerificationForm applicationId={app.id} schoolId={schoolId} disabled={busy}
+                  onDone={reloadWithToast("Verification recorded.")} onError={setError} />
+              ) : null}
               {originalVerifications.length === 0 ? (
                 <p style={{ color: "var(--ink-3)", fontSize: 13, marginTop: 8 }}>
                   {"Nothing recorded yet."}
@@ -821,7 +849,7 @@ const AdmissionsWorkspace = () => {
             departments configured already resolved to 'cleared'
             automatically, so this never blocks a school that never set
             clearance up. */}
-        {app.status === "accepted" ? (
+        {app.status === "accepted" && canEdit ? (
           <Card style={{ marginBottom: 16 }}>
             <h3 style={{ marginTop: 0 }}>{"Register as a student"}</h3>
             {app.clearance_state !== "cleared" ? (

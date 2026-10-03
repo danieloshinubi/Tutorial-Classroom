@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useMoney } from "../../lib/money";
 import { useAuth } from "../../context/AuthContext";
-import { useSchool } from "../../context/SchoolContext";
+import { useSchool, useModuleAccess } from "../../context/SchoolContext";
 import {
   fetchTerms,
   fetchClasses,
@@ -300,6 +300,8 @@ const Structures = ({
   // SchoolContext — taken from there rather than threaded through as one more
   // prop, since this is the only place in Bursary that needs them.
   const { levels } = useSchool();
+  // View-only access sees the structures but none of the controls that change them.
+  const { canEdit } = useModuleAccess("bursary");
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [termId, setTermId] = useState("");
@@ -542,12 +544,14 @@ const Structures = ({
         <p>
           {"What a class is charged in a term. Raising invoices copies these lines onto each student's bill, so changing a structure later never rewrites a bill already issued."}
         </p>
-        <Button onClick={() => setAdding((v) => !v)}>
-          {adding ? "Cancel" : "New structure"}
-        </Button>
+        {canEdit ? (
+          <Button onClick={() => setAdding((v) => !v)}>
+            {adding ? "Cancel" : "New structure"}
+          </Button>
+        ) : null}
       </div>
 
-      {adding ? (
+      {adding && canEdit ? (
         <section className="bz-card" style={{ marginBottom: 20 }}>
           <h2 className="bz-card-title">{"New fee structure"}</h2>
           {/* One wrapping grid. These were three .split rows — the page's
@@ -631,7 +635,9 @@ const Structures = ({
       {structures.length === 0 ? (
         <div className="bz-empty">
           <strong>{"No fee structures yet"}</strong>
-          <span>{"Start with New structure: name it, choose the term and who it applies to, then add its lines."}</span>
+          {canEdit ? (
+            <span>{"Start with New structure: name it, choose the term and who it applies to, then add its lines."}</span>
+          ) : null}
         </div>
       ) : null}
 
@@ -668,7 +674,7 @@ const Structures = ({
               </div>
             </div>
 
-            {editing?.id === s.id ? (
+            {editing?.id === s.id && canEdit ? (
               <div className="bz-edit">
                 <div className="bz-edit-grid">
                   <Field label="Name">
@@ -708,6 +714,7 @@ const Structures = ({
                       {l.is_optional ? <Badge>{"Optional"}</Badge> : null}
                     </span>
                     <span className="bz-line-amount">{money(l.amount)}</span>
+                    {canEdit ? (
                     <button
                       type="button"
                       className="bz-line-remove"
@@ -736,14 +743,15 @@ const Structures = ({
                     >
                       {"Remove"}
                     </button>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="bz-muted bz-lines-none">{"No lines yet. Add what this structure is made of before raising invoices."}</p>
+              <p className="bz-muted bz-lines-none">{canEdit ? "No lines yet. Add what this structure is made of before raising invoices." : "No lines yet."}</p>
             )}
 
-            {itemFor === s.id ? (
+            {itemFor === s.id && canEdit ? (
               <>
               <div style={lineForm}>
                 {/* No hint inside this Field: its extra line made "Line" sit
@@ -856,6 +864,7 @@ const Structures = ({
               </>
             ) : null}
 
+            {canEdit ? (
             <div className="bz-structure-actions">
               {itemFor === s.id ? null : (
                 <Button size="sm" variant="secondary" onClick={() => setItemFor(s.id)}>
@@ -880,6 +889,7 @@ const Structures = ({
                 {"Raise invoices"}
               </Button>
             </div>
+            ) : null}
           </section>
         );
       })}
@@ -893,6 +903,7 @@ const Structures = ({
 // tab — two tab strips stacked read as two levels of navigation. The filter
 // lives in the page, so "Open drafts" on the Overview lands on the drafts.
 const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilter, discounts = [], term = null }) => {
+  const { canEdit } = useModuleAccess("bursary");
   const [query, setQuery] = useState("");
   const [carrying, setCarrying] = useState(false);
 
@@ -1023,7 +1034,7 @@ const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilte
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
-          {term && drafts.length ? (
+          {canEdit && term && drafts.length ? (
             <Button variant="secondary" disabled={carrying} onClick={carryForward}>
               {carrying ? "Bringing forward..." : "Bring forward unpaid"}
             </Button>
@@ -1047,7 +1058,7 @@ const Invoices = ({ invoices, people, money, onChange, onError, filter, setFilte
               { key: "issued_at", label: "Issued", type: "datetime" },
             ]}
           />
-          {drafts.length ? (
+          {canEdit && drafts.length ? (
             <Button onClick={issueAll}>{`Issue ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}</Button>
           ) : null}
         </div>
@@ -1106,6 +1117,8 @@ const standingLabel = (invoice) =>
       String(invoice.standing || "").replace(/^./, (c) => c.toUpperCase());
 
 const InvoiceRow = ({ invoice, who, money, discounts = [], onChange, onError }) => {
+  // View-only access keeps the row but loses Discount, Issue, Take payment and Void.
+  const { canEdit } = useModuleAccess("bursary");
   const [taking, setTaking] = useState(false);
   const [issuing, setIssuing] = useState(false);
   const [discounting, setDiscounting] = useState(false);
@@ -1265,6 +1278,8 @@ const InvoiceRow = ({ invoice, who, money, discounts = [], onChange, onError }) 
           ) : null}
         </td>
         <td className="bz-actions">
+          {canEdit ? (
+          <>
           {/* Discounts go on while an invoice is still a draft — the family
               has not seen a figure yet, so nothing they were told changes. */}
           {invoice.status === "draft" && discounts.length ? (
@@ -1302,6 +1317,8 @@ const InvoiceRow = ({ invoice, who, money, discounts = [], onChange, onError }) 
             <Button size="sm" variant="ghost" onClick={cancel}>
               {"Void"}
             </Button>
+          ) : null}
+          </>
           ) : null}
         </td>
       </tr>
@@ -1402,6 +1419,7 @@ const InvoiceRow = ({ invoice, who, money, discounts = [], onChange, onError }) 
 /* ------------------------------------------------------------------ queue */
 
 const Queue = ({ queue, queueContext, money, onChange, onError }) => {
+  const { canEdit } = useModuleAccess("bursary");
   const [note, setNote] = useState({});
   const [busy, setBusy] = useState(null);
   const preview = useDocumentPreview();
@@ -1531,6 +1549,7 @@ const Queue = ({ queue, queueContext, money, onChange, onError }) => {
 
             {p.note ? <p className="bz-pay-note">{`“${p.note}”`}</p> : null}
 
+            {canEdit ? (
             <div className="bz-pay-decide">
               <input
                 className="input"
@@ -1550,6 +1569,7 @@ const Queue = ({ queue, queueContext, money, onChange, onError }) => {
                 {busy === p.id ? "Saving..." : "Approve"}
               </Button>
             </div>
+            ) : null}
           </section>
         );
       })}

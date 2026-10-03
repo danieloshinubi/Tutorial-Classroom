@@ -12,6 +12,7 @@ import { joinSchool } from "../lib/api";
 import { resolveSlug } from "../lib/tenant";
 import { applyTenantBranding } from "../lib/branding";
 import { useAuth } from "./AuthContext";
+import { accessFor } from "../lib/modules";
 
 const SchoolContext = createContext(null);
 
@@ -24,6 +25,16 @@ export const useSchool = () => {
 // The same, or null outside a school (the platform console), for shared
 // components that only use the school when there is one.
 export const useSchoolIfAny = () => useContext(SchoolContext) || null;
+
+// What the signed-in person may do in a module: { access, canEdit, readOnly }.
+// access is "edit" (their role covers it, or an edit grant), "read" (a
+// view-only grant, School admin → People) or null. Pages use canEdit to hide
+// the controls that change things; the database refuses them regardless.
+export const useModuleAccess = (moduleId) => {
+  const ctx = useContext(SchoolContext);
+  const access = ctx ? accessFor(moduleId, ctx.roles || [], ctx.moduleGrants || {}) : null;
+  return { access, canEdit: access === "edit", readOnly: access === "read" };
+};
 
 // Resolves the tenant from the subdomain and the signed-in user's membership
 // of it. Everything downstream scopes its queries with `school.id`; row level
@@ -39,6 +50,10 @@ export const SchoolProvider = ({ children }) => {
   const [memberships, setMemberships] = useState([]);
   const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
   const [levels, setLevels] = useState([]);
+  // Extra module access beyond this person's role, { module: "read" | "edit" }
+  // (supabase/208). Loaded with everything else, before `loading` clears,
+  // so a route guard never turns someone away before it arrives.
+  const [moduleGrants, setModuleGrants] = useState({});
   const loadedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -66,6 +81,7 @@ export const SchoolProvider = ({ children }) => {
       setSchool(null);
       setMembership(null);
       setMemberships([]);
+      setModuleGrants({});
       setLoading(false);
       return;
     }
@@ -85,6 +101,7 @@ export const SchoolProvider = ({ children }) => {
         { data: all },
         { data: platform },
         { data: levelRows },
+        { data: grantRows },
       ] = await Promise.all([
         supabase
           .from("schools")
@@ -123,6 +140,11 @@ export const SchoolProvider = ({ children }) => {
           .select("year, label, schools!inner ( slug )")
           .eq("schools.slug", slug)
           .order("year"),
+        supabase
+          .from("member_module_access")
+          .select("module, level, schools!inner ( slug )")
+          .eq("schools.slug", slug)
+          .eq("user_id", userId),
       ]);
 
       if (schoolError) throw schoolError;
@@ -138,6 +160,7 @@ export const SchoolProvider = ({ children }) => {
       // The join columns are dropped so these keep exactly the shape the rest
       // of the app has always received.
       setLevels((levelRows || []).map(({ year, label }) => ({ year, label })));
+      setModuleGrants(Object.fromEntries((grantRows || []).map((r) => [r.module, r.level])));
       const mine = mineRow ? { id: mineRow.id, role: mineRow.role, is_active: mineRow.is_active } : null;
 
       // A person who signed themselves up has no membership yet. Ask the
@@ -239,6 +262,7 @@ export const SchoolProvider = ({ children }) => {
       // row so navigation and route guards cannot disagree about it, and
       // defaulted to [] for a school row loaded before this column existed.
       disabledModules: school?.disabled_modules || [],
+      moduleGrants,
       membership,
       memberships,
       role,
@@ -262,7 +286,7 @@ export const SchoolProvider = ({ children }) => {
       error,
       reload: load,
     }),
-    [slug, school, levels, membership, memberships, role, roles, isPlatformAdmin, trialExpired, loading, authLoading, error, load]
+    [slug, school, levels, moduleGrants, membership, memberships, role, roles, isPlatformAdmin, trialExpired, loading, authLoading, error, load]
   );
 
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>;

@@ -620,7 +620,7 @@ const ParticipantsModal = ({
     if (memberIds.has(s.user_id)) return false;
     const needle = query.trim().toLowerCase();
     if (!needle) return true;
-    return `${displayName(s.profiles)} ${s.role}`.toLowerCase().includes(needle);
+    return `${displayName(s.profiles)} ${s.role} ${s.job_title || ""}`.toLowerCase().includes(needle);
   });
 
   const run = async (id, fn) => {
@@ -772,7 +772,7 @@ const ParticipantsModal = ({
                           <Avatar profile={s.profiles} size={32} />
                           <span className={PICKER_ROW_LABEL}>
                             <span className="tw-block tw-truncate tw-text-ink tw-font-medium">{displayName(s.profiles)}</span>
-<span className="tw-block tw-text-xs tw-text-ink-3">{ROLE_LABEL[s.role] || s.role}</span>
+<span className="tw-block tw-text-xs tw-text-ink-3">{s.job_title || ROLE_LABEL[s.role] || s.role}</span>
                           </span>
                           {checked ? <Icon icon={check} size={16} /> : null}
                         </button>
@@ -886,7 +886,7 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
   const visibleMembers = members.filter((m) => {
     const needle = query.trim().toLowerCase();
     if (!needle) return true;
-    return `${displayName(m.profiles)} ${m.role}`.toLowerCase().includes(needle);
+    return `${displayName(m.profiles)} ${m.role} ${m.job_title || ""}`.toLowerCase().includes(needle);
   });
 
   // What is still missing, in the order someone fills the form in, so the hint
@@ -969,7 +969,7 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
                     <Avatar profile={m.profiles} size={32} />
                     <span className={PICKER_ROW_LABEL}>
                       <span className="tw-block tw-truncate tw-text-ink tw-font-medium">{displayName(m.profiles)}</span>
-<span className="tw-block tw-text-xs tw-text-ink-3">{ROLE_LABEL[m.role] || m.role}</span>
+<span className="tw-block tw-text-xs tw-text-ink-3">{m.job_title || ROLE_LABEL[m.role] || m.role}</span>
                     </span>
                     {otherUserId === m.user_id ? <Icon icon={check} size={16} /> : null}
                   </button>
@@ -1006,7 +1006,7 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
                         <Avatar profile={m.profiles} size={32} />
                         <span className={PICKER_ROW_LABEL}>
                           <span className="tw-block tw-truncate tw-text-ink tw-font-medium">{displayName(m.profiles)}</span>
-<span className="tw-block tw-text-xs tw-text-ink-3">{ROLE_LABEL[m.role] || m.role}</span>
+<span className="tw-block tw-text-xs tw-text-ink-3">{m.job_title || ROLE_LABEL[m.role] || m.role}</span>
                         </span>
                         {checked ? <Icon icon={check} size={16} /> : null}
                       </button>
@@ -1575,7 +1575,7 @@ const ChatPage = () => {
   const threadSubtitle = isGroup
     ? `${channelMembers.length} participants`
     : otherMember
-    ? ROLE_LABEL[otherMember.role] || otherMember.role
+    ? otherMember.job_title || ROLE_LABEL[otherMember.role] || otherMember.role
     : "";
   const headerProfile = otherMemberId ? membersById[otherMemberId] : { first_name: activeChannel?.name };
 

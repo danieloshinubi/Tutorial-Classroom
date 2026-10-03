@@ -222,6 +222,33 @@ const ACROSS_THE_TOP = 6;
 // from offering a toggle that would be rejected anyway.
 export const LOCKED_MODULES = ["school"];
 
+// Modules a school's owner or admin can open to someone whose role does not
+// cover them, as view only or edit (School admin → People; supabase/208,
+// which enforces it in the database too). Audit log is view only.
+export const GRANTABLE_MODULES = [
+  { id: "bursary", levels: ["read", "edit"] },
+  { id: "store", levels: ["read", "edit"] },
+  { id: "accounts", levels: ["read", "edit"] },
+  { id: "payroll", levels: ["read", "edit"] },
+  { id: "admissions", levels: ["read", "edit"] },
+  { id: "auditlog", levels: ["read"] },
+];
+export const ACCESS_LABEL = { read: "View only", edit: "Can edit" };
+
+// Does this person's role already cover the module?
+export const roleCovers = (moduleId, roles = []) => {
+  const module = BY_ID.get(moduleId);
+  return !!module && module.roles.some((r) => roles.filter(Boolean).includes(r));
+};
+
+// What this person can do in a module: "edit", "read" or null. The role
+// gives full use; a grant ({ module: "read" | "edit" }) adds to it.
+export const accessFor = (moduleId, roles = [], grants = {}) => {
+  if (roleCovers(moduleId, roles)) return "edit";
+  const level = (grants || {})[moduleId];
+  return level === "edit" || level === "read" ? level : null;
+};
+
 // The modules this person may use, at this school.
 //
 // `roles` is every active membership role they hold here — usually one, but a
@@ -233,11 +260,11 @@ export const LOCKED_MODULES = ["school"];
 // Both are filters, and they answer different questions — "is this person's
 // job any of this?" and "does this school do this at all?" — so a module has
 // to pass both.
-export const modulesFor = (roles = [], disabled = []) => {
+export const modulesFor = (roles = [], disabled = [], grants = {}) => {
   const held = roles.filter(Boolean);
   if (held.length === 0) return [];
   const off = new Set((disabled || []).filter((id) => !LOCKED_MODULES.includes(id)));
-  return MODULES.filter((m) => !off.has(m.id) && m.roles.some((r) => held.includes(r))).sort(
+  return MODULES.filter((m) => !off.has(m.id) && accessFor(m.id, held, grants)).sort(
     (a, b) => a.priority - b.priority
   );
 };
@@ -247,8 +274,8 @@ export const modulesFor = (roles = [], disabled = []) => {
 // The cut is by priority and it is per person: a bursar's six are not a
 // teacher's six. Anyone holding six or fewer sees no More at all, which is
 // most people — it only appears for those who really do run everything.
-export const navFor = (roles = [], disabled = []) => {
-  const mine = modulesFor(roles, disabled);
+export const navFor = (roles = [], disabled = [], grants = {}) => {
+  const mine = modulesFor(roles, disabled, grants);
   if (mine.length <= ACROSS_THE_TOP) return { primary: mine, more: [] };
   return { primary: mine.slice(0, ACROSS_THE_TOP), more: mine.slice(ACROSS_THE_TOP) };
 };
@@ -267,18 +294,18 @@ export const groupModules = (modules) => {
     .map((name) => ({ name, modules: groups.get(name) }));
 };
 
-export const canUseModule = (moduleId, roles = [], disabled = []) => {
+export const canUseModule = (moduleId, roles = [], disabled = [], grants = {}) => {
   const module = BY_ID.get(moduleId);
   if (!module) return false;
   if (!LOCKED_MODULES.includes(moduleId) && (disabled || []).includes(moduleId)) return false;
-  return module.roles.some((r) => roles.filter(Boolean).includes(r));
+  return !!accessFor(moduleId, roles, grants);
 };
 
 export const moduleById = (moduleId) => BY_ID.get(moduleId) || null;
 
 // Where to send someone who lands somewhere they may not be. Their first
 // module beats a hard-coded /Dashboard, which a role might not even have.
-export const homeFor = (roles = [], disabled = []) => {
-  const mine = modulesFor(roles, disabled);
+export const homeFor = (roles = [], disabled = [], grants = {}) => {
+  const mine = modulesFor(roles, disabled, grants);
   return mine.length ? mine[0].path : "/Profile";
 };
