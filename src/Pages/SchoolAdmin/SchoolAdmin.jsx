@@ -49,6 +49,7 @@ import {
   fetchModuleAccess,
   saveModuleAccess,
   resetMemberPassword,
+  changeMemberEmail,
   uploadSchoolLogo,
   removeSchoolLogo,
   uploadSchoolSignature,
@@ -119,7 +120,7 @@ const PeoplePanel = () => {
   const [inviting, setInviting] = useState(false);
 
   const [editing, setEditing] = useState(null);
-  const [editForm, setEditForm] = useState({ first_name: "", surname: "", username: "", bio: "", avatar_url: "", job_title: "", access: {} });
+  const [editForm, setEditForm] = useState({ first_name: "", surname: "", username: "", bio: "", avatar_url: "", email: "", job_title: "", access: {} });
   const [savingEdit, setSavingEdit] = useState(false);
   // Shown once, right after creation — this is the only time the password exists
   // anywhere the administrator can see it.
@@ -275,6 +276,7 @@ const PeoplePanel = () => {
       username: row.profiles.username || "",
       bio: row.profiles.bio || "",
       avatar_url: row.profiles.avatar_url || "",
+      email: row.profiles.email || "",
       job_title: row.job_title || "",
       access: Object.fromEntries(GRANTABLE_MODULES.map((m) => [m.id, grants[row.user_id]?.[m.id] || ""])),
     });
@@ -291,7 +293,14 @@ const PeoplePanel = () => {
     setSavingEdit(true);
     setError("");
     try {
-      const { job_title: jobTitle, access, ...profileFields } = editForm;
+      const { job_title: jobTitle, access, email, ...profileFields } = editForm;
+      // The sign-in address first: it is the step most likely to be refused
+      // (taken, or a person this school may not change), and nothing else is
+      // saved until it goes through.
+      const newEmail = email.trim().toLowerCase();
+      if (newEmail && newEmail !== (editing.profiles.email || "").toLowerCase()) {
+        await changeMemberEmail({ schoolId, userId: editing.user_id, email: newEmail });
+      }
       // Only what actually changed, and a blank username as none at all:
       // usernames are unique, so saving "" collided with anyone else who had
       // none ("duplicate key ... profiles_username_key").
@@ -449,9 +458,13 @@ const PeoplePanel = () => {
       ) : null}
 
       {editing ? (
-        <Card style={{ marginBottom: 18, maxWidth: 640 }}>
+        <Card style={{ marginBottom: 18, maxWidth: isStaffMember(editing.user_id) ? 1120 : 640 }}>
           <h3 style={{ marginTop: 0 }}>{`Edit ${displayName(editing.profiles)}`}</h3>
           <form onSubmit={saveEdit}>
+            {/* Details on the left, access on the right, so one screenshot
+                shows the person together with what they can open. */}
+            <div className={`people-edit-grid${isStaffMember(editing.user_id) ? " two" : ""}`}>
+            <div className="people-edit-main">
             <Field label="Photo">
               <ImageUpload
                 value={editForm.avatar_url}
@@ -481,6 +494,17 @@ const PeoplePanel = () => {
                 />
               </Field>
             </div>
+            <Field
+              label="Email"
+              hint="The address they sign in with. Changing it takes effect at once; their old address stops working."
+            >
+              <input
+                type="email"
+                className="input"
+                value={editForm.email}
+                onChange={(e) => setEditForm((c) => ({ ...c, email: e.target.value }))}
+              />
+            </Field>
             <Field label="Username">
               <input
                 className="input"
@@ -505,7 +529,13 @@ const PeoplePanel = () => {
                 onChange={(e) => setEditForm((c) => ({ ...c, job_title: e.target.value }))}
               />
             </Field>
+            </div>
             {isStaffMember(editing.user_id) ? (
+            <aside className="people-edit-side">
+            <div className="people-access-who">
+              <strong>{displayName(editing.profiles)}</strong>
+              <span>{[editForm.job_title.trim(), ROLE_LABEL[editing.role]].filter(Boolean).join(" · ")}</span>
+            </div>
             <div className="people-access">
               <span className="label">{"Extra access"}</span>
               <span className="hint">
@@ -533,7 +563,9 @@ const PeoplePanel = () => {
                 );
               })}
             </div>
+            </aside>
             ) : null}
+            </div>
             <div className="btn-row">
               <Button type="submit" disabled={savingEdit}>
                 {savingEdit ? "Saving..." : "Save changes"}

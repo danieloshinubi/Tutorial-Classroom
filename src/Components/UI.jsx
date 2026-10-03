@@ -208,10 +208,17 @@ export const Select = ({
   placeholder = "Select…",
   id,
   style,
+  // A search box at the top of the list. On by default once a list is long
+  // enough to need it (a school's staff for "Reports to", a class roster).
+  searchable,
   ...rest
 }) => {
   const [open, setOpen] = useState(false);
+  // activeIndex is a position in `shown` (the options left after searching).
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [query, setQuery] = useState("");
+  const searchRef = useRef(null);
+  const canSearch = searchable ?? options.length > 8;
   const wrapRef = useRef(null);
   const triggerRef = useRef(null);
   const listRef = useRef(null);
@@ -260,6 +267,12 @@ export const Select = ({
   const sameValue = (a, b) => a === b || (a != null && b != null && String(a) === String(b));
   const selectedIndex = options.findIndex((o) => sameValue(o.value, value));
   const selected = selectedIndex >= 0 ? options[selectedIndex] : null;
+  const needle = canSearch ? query.trim().toLowerCase() : "";
+  const shown = options
+    .map((opt, index) => ({ opt, index }))
+    .filter(({ opt }) => !needle || String(opt.label ?? "").toLowerCase().includes(needle));
+  // The search box is the list's first child; options start after it.
+  const firstOption = canSearch ? 1 : 0;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -272,16 +285,25 @@ export const Select = ({
 
   useEffect(() => {
     if (!open) return;
-    listRef.current?.children[activeIndex]?.scrollIntoView({ block: "nearest" });
-  }, [open, activeIndex]);
+    listRef.current?.children[activeIndex + firstOption]?.scrollIntoView({ block: "nearest" });
+  }, [open, activeIndex, firstOption]);
+
+  // Typing goes straight into the search box with a mouse or keyboard; on a
+  // touch screen it waits for a tap, so the keyboard does not cover the list.
+  useEffect(() => {
+    if (!open || !canSearch) return;
+    const coarse = window.matchMedia ? window.matchMedia("(pointer: coarse)").matches : false;
+    if (!coarse) searchRef.current?.focus();
+  }, [open, canSearch]);
 
   const openMenu = () => {
+    setQuery("");
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0);
     setOpen(true);
   };
 
-  const commit = (index) => {
-    const opt = options[index];
+  const commit = (position) => {
+    const opt = shown[position]?.opt;
     setOpen(false);
     justClosedAtRef.current = performance.now();
     triggerRef.current?.focus();
@@ -304,7 +326,7 @@ export const Select = ({
         return;
       case "ArrowDown":
         e.preventDefault();
-        setActiveIndex((i) => Math.min(options.length - 1, i + 1));
+        setActiveIndex((i) => Math.min(shown.length - 1, i + 1));
         return;
       case "ArrowUp":
         e.preventDefault();
@@ -316,10 +338,15 @@ export const Select = ({
         return;
       case "End":
         e.preventDefault();
-        setActiveIndex(options.length - 1);
+        setActiveIndex(shown.length - 1);
         return;
       case "Enter":
+        e.preventDefault();
+        commit(activeIndex);
+        return;
       case " ":
+        // A space is part of a search ("Mary Ann"); otherwise it picks.
+        if (canSearch && e.target === searchRef.current) return;
         e.preventDefault();
         commit(activeIndex);
         return;
@@ -327,6 +354,8 @@ export const Select = ({
         setOpen(false);
         return;
       default: {
+        // With a search box, letters are typed into it instead.
+        if (canSearch) return;
         if (e.key.length !== 1 || !/[a-z0-9]/i.test(e.key)) return;
         const ref = typeAhead.current;
         clearTimeout(ref.timer);
@@ -365,12 +394,26 @@ export const Select = ({
       {open ? (
         <ul id={id ? `${id}-listbox` : undefined} className={`uiselect-panel${alignEnd ? " align-end" : ""}${dropUp ? " drop-up" : ""}`}
           style={dropUp && upRoom ? { maxHeight: `min(var(--dd-max-height), ${upRoom}px)` } : undefined} role="listbox" ref={listRef}>
-          {options.length === 0 ? (
-            <li className="uiselect-empty">{"No options"}</li>
+          {canSearch ? (
+            <li className="uiselect-search" role="presentation" onMouseDown={(e) => e.stopPropagation()}>
+              <input
+                ref={searchRef}
+                className="uiselect-search-input"
+                type="search"
+                placeholder="Search…"
+                aria-label="Search the list"
+                value={query}
+                onChange={(e) => { setQuery(e.target.value); setActiveIndex(0); }}
+                onKeyDown={onKeyDown}
+              />
+            </li>
+          ) : null}
+          {shown.length === 0 ? (
+            <li className="uiselect-empty">{options.length === 0 ? "No options" : "No matches"}</li>
           ) : (
-            options.map((opt, i) => (
+            shown.map(({ opt, index }, i) => (
               <li
-                key={opt.value ?? i}
+                key={opt.value ?? index}
                 id={id ? `${id}-opt-${i}` : undefined}
                 role="option"
                 aria-selected={sameValue(opt.value, value)}

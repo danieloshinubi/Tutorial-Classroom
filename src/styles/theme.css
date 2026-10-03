@@ -8369,3 +8369,45 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
   background: var(--brand);
   box-shadow: 0 0 0 2px var(--surface);
 }
+
+/* Search box at the top of a long dropdown (Select, UI.jsx). */
+.uiselect-search {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  margin-top: -4px;
+  padding: 8px 8px 6px;
+  background: var(--dd-surface);
+  border-bottom: 1px solid var(--dd-border);
+  list-style: none;
+}
+.uiselect-search-input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+}
+.uiselect-search-input:focus { outline: 2px solid var(--brand-soft, var(--brand)); outline-offset: 0; border-color: var(--brand); }
+
+/* People edit: details left, access right (stacked on narrow screens). */
+.people-edit-grid { display: grid; gap: 28px; }
+.people-edit-grid.two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.people-edit-main { min-width: 0; }
+.people-edit-side {
+  min-width: 0;
+  padding: 16px 18px 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+}
+.people-access-who { display: grid; gap: 2px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.people-access-who strong { font-size: 16px; color: var(--ink); }
+.people-access-who span { font-size: 13px; color: var(--ink-3); }
+.people-edit-side .people-access { margin-top: 0; }
+@media (max-width: 980px) { .people-edit-grid.two { grid-template-columns: minmax(0, 1fr); } }

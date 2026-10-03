@@ -215,6 +215,23 @@ export const unenroll = async ({ userId, courseId, schoolId }) => {
   if (error) throw error;
 };
 
+// Every list of people comes back A-Z by name, whatever screen shows it.
+// pick(row) returns the person in the row (a profile, or a row with
+// first_name/surname, teacher_name or full_name).
+const personName = (person) => {
+  if (!person) return "";
+  const full =
+    person.full_name ||
+    person.teacher_name ||
+    `${person.first_name || ""} ${person.surname || ""}`.trim() ||
+    person.username ||
+    person.email ||
+    "";
+  return String(full).trim();
+};
+export const byName = (pick = (row) => row) => (a, b) =>
+  personName(pick(a)).localeCompare(personName(pick(b)), undefined, { sensitivity: "base", numeric: true });
+
 export const fetchRoster = async (courseId, schoolId) => {
   const { data, error } = await supabase
     .from("enrollments")
@@ -222,7 +239,7 @@ export const fetchRoster = async (courseId, schoolId) => {
     .eq("course_id", courseId)
     .eq("courses.school_id", schoolId);
   if (error) throw error;
-  return data.map((row) => row.profiles).filter(Boolean);
+  return data.map((row) => row.profiles).filter(Boolean).sort(byName());
 };
 
 /* -------------------------------------------------------------------------- */
@@ -462,7 +479,7 @@ export const fetchTutors = async (schoolId) => {
   return data
     .map((row) => row.profiles)
     .filter(Boolean)
-    .sort((a, b) => a.first_name.localeCompare(b.first_name));
+    .sort(byName());
 };
 
 export const fetchAllProfiles = async (schoolId) => {
@@ -472,7 +489,7 @@ export const fetchAllProfiles = async (schoolId) => {
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false, referencedTable: "profiles" });
   if (error) throw error;
-  return data.map((row) => row.profiles).filter(Boolean);
+  return data.map((row) => row.profiles).filter(Boolean).sort(byName());
 };
 
 export const updateProfile = async (id, changes) => {
@@ -1623,7 +1640,7 @@ export const fetchSchoolMembers = async (schoolId) => {
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data.filter((row) => row.profiles);
+  return data.filter((row) => row.profiles).sort(byName((row) => row.profiles));
 };
 
 export const updateMemberRole = async ({ schoolId, memberId, role }) => {
@@ -1750,6 +1767,33 @@ export const resetMemberPassword = async ({ schoolId, userId }) => {
       detail = "";
     }
     throw new Error(detail || error.message || "Could not reset that password.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+};
+
+// Changes the email address someone signs in with (School admin → People).
+// Owners and admins only, through the admin-change-email Edge Function
+// (supabase/214 holds the rules). Takes effect at once.
+export const changeMemberEmail = async ({ schoolId, userId, email }) => {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("admin-change-email", {
+    body: { schoolId, targetUserId: userId, email },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+
+  if (error) {
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || error.message || "Could not change that email address.");
   }
   if (data?.error) throw new Error(data.error);
   return data;
@@ -1944,7 +1988,7 @@ export const fetchReportableStudents = async (schoolId) => {
     target_school: schoolId,
   });
   if (error) throw error;
-  return data || [];
+  return (data || []).sort(byName());
 };
 
 export const fetchChildren = async (guardianId, schoolId) => {
@@ -1954,7 +1998,7 @@ export const fetchChildren = async (guardianId, schoolId) => {
     .eq("guardian_id", guardianId)
     .eq("school_id", schoolId);
   if (error) throw error;
-  return data.filter((row) => row.student);
+  return data.filter((row) => row.student).sort(byName((row) => row.student));
 };
 
 export const fetchGuardiansOf = async (studentId, schoolId) => {
@@ -1964,7 +2008,7 @@ export const fetchGuardiansOf = async (studentId, schoolId) => {
     .eq("student_id", studentId)
     .eq("school_id", schoolId);
   if (error) throw error;
-  return data.filter((row) => row.guardian);
+  return data.filter((row) => row.guardian).sort(byName((row) => row.guardian));
 };
 
 export const linkGuardian = async ({ schoolId, guardianId, studentId, relationship }) => {
@@ -2195,7 +2239,7 @@ export const fetchClassRoster = async (classId, schoolId) => {
     .eq("class_id", classId)
     .eq("classes.school_id", schoolId);
   if (error) throw error;
-  return data.filter((row) => row.student);
+  return data.filter((row) => row.student).sort(byName((row) => row.student));
 };
 
 // class_students has no school_id of its own — verify the target class
@@ -2389,7 +2433,7 @@ export const logSchoolAttendance = async ({ schoolId, personId, resumedAt, note 
 // or logged — the same roster a front-desk search box picks a name from.
 export const fetchSchoolPeopleForAttendance = async (schoolId) => {
   const rows = await fetchSchoolMembers(schoolId);
-  return rows.map((r) => ({ id: r.profiles.id, role: r.role, profile: r.profiles }));
+  return rows.map((r) => ({ id: r.profiles.id, role: r.role, profile: r.profiles })).sort(byName((r) => r.profile));
 };
 
 export const fetchSchoolAttendanceRecords = async ({ schoolId, personId, from, to }) => {
@@ -2930,7 +2974,7 @@ export const fetchStudentRegistrations = async (schoolId) => {
     .eq("school_id", schoolId)
     .order("registered_at", { ascending: false });
   if (error) throw error;
-  return data || [];
+  return (data || []).sort(byName((row) => row.student));
 };
 
 export const updateStudentRegistration = async ({ id, schoolId, status, notes }) => {
@@ -4154,7 +4198,7 @@ export const fetchChildTeachers = async (studentId, schoolId) => {
     target_school: schoolId,
   });
   if (error) throw error;
-  return data || [];
+  return (data || []).sort(byName());
 };
 
 /* -------------------------------------------------------------------------- */
