@@ -12,6 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { platformSecret } from "../_shared/platform/settings.ts";
+import { PAYSTACK_CURRENCIES } from "../_shared/gateways/units.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -72,6 +73,13 @@ Deno.serve(async (req) => {
       });
       if (error) return json({ error: error.message }, 400);
       if (!quote?.email) return json({ error: "Your account has no email address to bill." }, 400);
+      // Priced in the school's currency where Schoolivio has a price for it
+      // (supabase/227); Paystack only charges some currencies.
+      const currency = String(quote.currency || "NGN").toUpperCase();
+      if (!PAYSTACK_CURRENCIES.has(currency)) {
+        await admin.rpc("mark_subscription_payment", { ref, status_in: "failed", response: { reason: "currency", currency } });
+        return json({ error: `Online payment in ${currency} is not available yet. Please write to us to pay.` }, 400);
+      }
 
       const started = await fetch("https://api.paystack.co/transaction/initialize", {
         method: "POST",
@@ -79,7 +87,7 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           email: quote.email,
           amount: Math.round(Number(quote.amount) * 100),
-          currency: "NGN",
+          currency,
           reference: ref,
           callback_url: safeCallback(body.callbackUrl, quote.slug),
           metadata: { purpose: "schoolivio_subscription", school_id: schoolId, school_name: quote.school_name, plan: quote.plan },
@@ -98,7 +106,7 @@ Deno.serve(async (req) => {
       if (!/^SCHV-[0-9A-F]{16}$/.test(ref)) return json({ error: "Unknown payment." }, 400);
       // Only someone who can see the payment (the school's owners and
       // admins, or the console) may ask about it.
-      const { data: mine } = await caller.from("subscription_payments").select("id").eq("reference", ref).maybeSingle();
+      const { data: mine } = await caller.from("subscription_payments").select("id, currency").eq("reference", ref).maybeSingle();
       if (!mine) return json({ error: "Unknown payment." }, 404);
 
       const checked = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(ref)}`, {
@@ -107,7 +115,8 @@ Deno.serve(async (req) => {
       const result = await checked.json().catch(() => null);
       const tx = result?.data;
       if (!checked.ok || !tx) return json({ status: "pending" });
-      if (tx.status === "success" && tx.currency === "NGN") {
+      // Paid, and in the currency it was priced in: 450 dollars is not 450 naira.
+      if (tx.status === "success" && String(tx.currency).toUpperCase() === String(mine.currency || "NGN").toUpperCase()) {
         const { data, error } = await admin.rpc("confirm_subscription_payment", {
           ref,
           paid_amount: Number(tx.amount) / 100,

@@ -85,9 +85,33 @@ const sum = (rows, f) => rows.reduce((t, r) => t + num(f(r)), 0);
 const M = "money";
 const T = "text";
 
+/* ----------------------------------------------------------------- labels */
+
+// What the school calls its statutory deductions (supabase/227). A Nigerian
+// school starts with PAYE, pension and NHF under the Nigeria Tax Act 2025;
+// a school anywhere else starts with none, named "Income tax", "Pension" and
+// "Housing fund", and enters its own country's bands and rates. Everything
+// below reads the names from here, so a payslip in Toronto never says NHF.
+const isNigerian = (school) => (school?.country || (school?.currency === "NGN" ? "NG" : "")) === "NG";
+const labelsFor = (settings, school) => ({
+  tax: settings?.tax_label || (isNigerian(school) ? "PAYE" : "Income tax"),
+  pension: settings?.pension_label || "Pension",
+  fund: settings?.fund_label || (isNigerian(school) ? "NHF" : "Housing fund"),
+  nigeria: isNigerian(school),
+  // Rent relief and the housing fund only show where they are in use.
+  rentRelief: num(settings?.rent_relief_percent) > 0 || isNigerian(school),
+  fundInUse: num(settings?.nhf_percent) > 0,
+  pensionStaff: num(settings?.pension_employee_percent),
+  pensionSchool: num(settings?.pension_employer_percent),
+});
+const LabelsContext = React.createContext(labelsFor(null, null));
+const useLabels = () => React.useContext(LabelsContext);
+
 /* ------------------------------------------------------------------ setup */
 
 const Setup = ({ schoolId, onDone }) => {
+  const { school } = useSchool();
+  const nigeria = isNigerian(school);
   const [busy, setBusy] = useState(false);
   const { setError } = useActionFeedback();
   const go = async () => {
@@ -105,9 +129,15 @@ const Setup = ({ schoolId, onDone }) => {
     <Card className="pr-setup">
       <h3>{"Set up payroll"}</h3>
       <p>
-        {"Payroll works out each month's pay for your staff: PAYE under the Nigeria Tax Act 2025, contributory pension (8% staff, 10% school), NHF, and your own deductions such as loans and cooperative savings. It also pays consultants and vendors with withholding tax."}
+        {nigeria
+          ? "Payroll works out each month's pay for your staff: PAYE under the Nigeria Tax Act 2025, contributory pension (8% staff, 10% school), NHF, and your own deductions such as loans and cooperative savings. It also pays consultants and vendors with withholding tax."
+          : "Payroll works out each month's pay for your staff: income tax, pension and any housing fund at your country's rates, and your own deductions such as loans and savings. It also pays consultants and vendors with withholding tax."}
       </p>
-      <p>{"You can check and change every rate under Settings before the first payroll is approved."}</p>
+      <p>
+        {nigeria
+          ? "You can check and change every rate under Settings before the first payroll is approved."
+          : "Schoolivio starts with no statutory deductions for your country. Enter your income tax bands, pension and housing fund rates under Settings, and confirm them, before the first payroll is approved."}
+      </p>
       <Button disabled={busy} onClick={go}>{busy ? "Setting up..." : "Set up payroll"}</Button>
     </Card>
   );
@@ -127,7 +157,9 @@ const monthOptions = () => {
   return out;
 };
 
-const PayslipDetail = ({ slip, money }) => (
+const PayslipDetail = ({ slip, money }) => {
+  const L = useLabels();
+  return (
   <div className="pr-slip">
     <div className="pr-slip-cols">
       <div>
@@ -139,9 +171,9 @@ const PayslipDetail = ({ slip, money }) => (
       </div>
       <div>
         <h4>{"Deductions"}</h4>
-        <div className="pr-line"><span>{"PAYE"}</span><b>{money(slip.paye)}</b></div>
-        {num(slip.pension_employee) ? <div className="pr-line"><span>{"Pension (8%)"}</span><b>{money(slip.pension_employee)}</b></div> : null}
-        {num(slip.nhf) ? <div className="pr-line"><span>{"NHF"}</span><b>{money(slip.nhf)}</b></div> : null}
+        {num(slip.paye) || L.nigeria ? <div className="pr-line"><span>{L.tax}</span><b>{money(slip.paye)}</b></div> : null}
+        {num(slip.pension_employee) ? <div className="pr-line"><span>{`${L.pension} (${L.pensionStaff}%)`}</span><b>{money(slip.pension_employee)}</b></div> : null}
+        {num(slip.nhf) ? <div className="pr-line"><span>{L.fund}</span><b>{money(slip.nhf)}</b></div> : null}
         {(slip.deductions || []).map((d, i) => (
           <div key={i} className="pr-line"><span>{d.label}</span><b>{money(d.amount)}</b></div>
         ))}
@@ -149,13 +181,15 @@ const PayslipDetail = ({ slip, money }) => (
       </div>
     </div>
     <p className="pr-slip-note">
-      {`Taxable income for the year ${money(slip.taxable_annual)}${num(slip.rent_relief) ? ` after rent relief of ${money(slip.rent_relief)}` : ""}. The school also pays ${money(slip.pension_employer)} into pension.`}
+      {`Taxable income for the year ${money(slip.taxable_annual)}${num(slip.rent_relief) ? ` after rent relief of ${money(slip.rent_relief)}` : ""}. ${num(slip.pension_employer) ? ` The school also pays ${money(slip.pension_employer)} into ${L.pension.toLowerCase()}.` : ""}`}
       {num(slip.days_factor) < 1 ? ` Part month: ${Math.round(num(slip.days_factor) * 100)}% of the month's pay.` : ""}
     </p>
   </div>
-);
+  );
+};
 
 const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove }) => {
+  const L = useLabels();
   const { setError, setNotice } = useActionFeedback();
   const confirmAction = useConfirm();
   const promptFor = usePrompt();
@@ -258,21 +292,23 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
           { key: "full_name", label: "Name" }, { key: "bank_name", label: "Bank" },
           { key: "account_number", label: "Account number", type: T }, { key: "account_name", label: "Account name" },
           { key: "net", label: "Net pay", type: M }] },
-        paye: { name: "PAYE", rows: slips, columns: [
+        paye: { name: L.tax, rows: slips, columns: [
           { key: "full_name", label: "Name" }, { key: "tin", label: "TIN", type: T },
-          { key: "gross", label: "Gross pay", type: M }, { key: "rent_relief", label: "Rent relief (year)", type: M },
-          { key: "taxable_annual", label: "Taxable (year)", type: M }, { key: "paye", label: "PAYE", type: M }] },
-        pension: { name: "Pension", rows: withPension, columns: [
+          { key: "gross", label: "Gross pay", type: M },
+          ...(L.rentRelief ? [{ key: "rent_relief", label: "Rent relief (year)", type: M }] : []),
+          { key: "taxable_annual", label: "Taxable (year)", type: M }, { key: "paye", label: L.tax, type: M }] },
+        pension: { name: L.pension, rows: withPension, columns: [
           { key: "full_name", label: "Name" }, { key: "pension_provider", label: "Pension provider" },
-          { key: "rsa_pin", label: "RSA PIN", type: T }, { key: "pension_employee", label: "Employee 8%", type: M },
-          { key: "pension_employer", label: "Employer 10%", type: M },
+          ...(L.nigeria ? [{ key: "rsa_pin", label: "RSA PIN", type: T }] : []),
+          { key: "pension_employee", label: `Employee ${L.pensionStaff}%`, type: M },
+          { key: "pension_employer", label: `Employer ${L.pensionSchool}%`, type: M },
           { key: (s) => num(s.pension_employee) + num(s.pension_employer), label: "Total", type: M }] },
-        nhf: { name: "NHF", rows: withNhf, columns: [
-          { key: "full_name", label: "Name" }, { key: "nhf", label: "NHF", type: M }] },
+        nhf: { name: L.fund, rows: withNhf, columns: [
+          { key: "full_name", label: "Name" }, { key: "nhf", label: L.fund, type: M }] },
         payslips: { name: "Payslips", rows: slips, columns: [
           { key: "full_name", label: "Name" }, { key: "job_title", label: "Role" },
-          { key: "gross", label: "Gross", type: M }, { key: "paye", label: "PAYE", type: M },
-          { key: "pension_employee", label: "Pension", type: M }, { key: "nhf", label: "NHF", type: M },
+          { key: "gross", label: "Gross", type: M }, { key: "paye", label: L.tax, type: M },
+          { key: "pension_employee", label: L.pension, type: M }, { key: "nhf", label: L.fund, type: M },
           { key: "other_deductions", label: "Other deductions", type: M }, { key: "net", label: "Net pay", type: M },
           { key: "pension_employer", label: "School pension", type: M }] },
       }
@@ -283,9 +319,9 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
     ? [
         ["Everything", `payroll-${tag}`, [sheets.payslips, sheets.bank, sheets.paye, sheets.pension, sheets.nhf]],
         ["Bank schedule", `salaries-${tag}`, [sheets.bank]],
-        ["PAYE", `paye-${tag}`, [sheets.paye]],
-        ["Pension", `pension-${tag}`, [sheets.pension]],
-        ["NHF", `nhf-${tag}`, [sheets.nhf]],
+        [L.tax, `tax-${tag}`, [sheets.paye]],
+        [L.pension, `pension-${tag}`, [sheets.pension]],
+        ...(L.fundInUse || withNhf.length ? [[L.fund, `housing-fund-${tag}`, [sheets.nhf]]] : []),
       ]
     : [];
 
@@ -293,7 +329,9 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
     <div className="pr-stack">
       {!settings.bands_confirmed_at ? (
         <Notice tone="warn">
-          {"Before the first payroll can be approved, check the PAYE bands and rates under Settings and confirm them. "}
+          {L.nigeria
+            ? "Before the first payroll can be approved, check the PAYE bands and rates under Settings and confirm them. "
+            : `Before the first payroll can be approved, enter your country's ${L.tax.toLowerCase()} bands, ${L.pension.toLowerCase()} and other rates under Settings and confirm them. `}
           <button type="button" className="pr-link" onClick={() => onGo("settings")}>{"Open Settings"}</button>
         </Notice>
       ) : null}
@@ -368,7 +406,7 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
               ) : null}
 
               <div className="pr-totals">
-                {[["Gross pay", totals.gross], ["PAYE", totals.paye], ["Pension (staff + school)", totals.pension], ["NHF", totals.nhf], ["Other deductions", totals.other], ["Net pay", totals.net]].map(([label, value]) => (
+                {[["Gross pay", totals.gross], [L.tax, totals.paye], [`${L.pension} (staff + school)`, totals.pension], ...(L.fundInUse || num(totals.nhf) ? [[L.fund, totals.nhf]] : []), ["Other deductions", totals.other], ["Net pay", totals.net]].map(([label, value]) => (
                   <div key={label} className="pr-total"><span>{label}</span><b>{money(value)}</b></div>
                 ))}
               </div>
@@ -379,7 +417,7 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
                 <div className="table-wrap table-wrap-plain">
                   <table className="data pr-table">
                     <thead>
-                      <tr><th>{"Staff"}</th><th>{"Gross"}</th><th>{"PAYE"}</th><th>{"Pension"}</th><th>{"NHF"}</th><th>{"Other"}</th><th>{"Net"}</th></tr>
+                      <tr><th>{"Staff"}</th><th>{"Gross"}</th><th>{L.tax}</th><th>{L.pension}</th><th>{L.fund}</th><th>{"Other"}</th><th>{"Net"}</th></tr>
                     </thead>
                     <tbody>
                       {slips.map((s) => (
@@ -428,6 +466,7 @@ const blankStaff = {
 };
 
 const StaffForm = ({ schoolId, initial, members, types, deductions, money, onSaved, onCancel }) => {
+  const L = useLabels();
   const { setError, setNotice } = useActionFeedback();
   const [f, setF] = useState(() => ({ ...blankStaff, ...initial, other_allowances: initial?.other_allowances || [] }));
   const [busy, setBusy] = useState(false);
@@ -535,14 +574,14 @@ const StaffForm = ({ schoolId, initial, members, types, deductions, money, onSav
 
         <h4>{"Tax and pension"}</h4>
         <div className="pr-grid">
-          <Field label="Yearly rent paid" hint="Reduces PAYE (rent relief). Leave 0 if none."><MoneyInput value={f.annual_rent} onChange={(v) => set({ annual_rent: v })} placeholder="0" /></Field>
-          <Field label="Tax ID (TIN)"><input className="input" value={f.tin || ""} onChange={(e) => set({ tin: e.target.value })} /></Field>
-          <Field label="Pension provider (PFA)"><input className="input" value={f.pension_provider || ""} onChange={(e) => set({ pension_provider: e.target.value })} /></Field>
-          <Field label="RSA PIN"><input className="input" value={f.rsa_pin || ""} onChange={(e) => set({ rsa_pin: e.target.value })} /></Field>
+          {L.rentRelief ? <Field label="Yearly rent paid" hint={`Reduces ${L.tax} (rent relief). Leave 0 if none.`}><MoneyInput value={f.annual_rent} onChange={(v) => set({ annual_rent: v })} placeholder="0" /></Field> : null}
+          <Field label={L.nigeria ? "Tax ID (TIN)" : "Tax ID"}><input className="input" value={f.tin || ""} onChange={(e) => set({ tin: e.target.value })} /></Field>
+          <Field label={L.nigeria ? "Pension provider (PFA)" : "Pension provider"}><input className="input" value={f.pension_provider || ""} onChange={(e) => set({ pension_provider: e.target.value })} /></Field>
+          <Field label={L.nigeria ? "RSA PIN" : "Pension number"}><input className="input" value={f.rsa_pin || ""} onChange={(e) => set({ rsa_pin: e.target.value })} /></Field>
         </div>
         <div className="pr-switches">
-          <Switch compact label="Contributory pension" checked={f.pension_applies} onChange={(v) => set({ pension_applies: v })} />
-          <Switch compact label="Contributes to NHF" checked={f.nhf_applies} onChange={(v) => set({ nhf_applies: v })} />
+          <Switch compact label={L.nigeria ? "Contributory pension" : L.pension} checked={f.pension_applies} onChange={(v) => set({ pension_applies: v })} />
+          {L.fundInUse || f.nhf_applies ? <Switch compact label={`Contributes to ${L.fund}`} checked={f.nhf_applies} onChange={(v) => set({ nhf_applies: v })} /> : null}
           <Switch compact label="Active" checked={f.is_active} onChange={(v) => set({ is_active: v })} />
         </div>
 
@@ -859,6 +898,7 @@ const APPROVERS = [
 ];
 
 const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
+  const L = useLabels();
   const { setError, setNotice } = useActionFeedback();
   const { canEdit } = useModuleAccess("payroll");
   const [f, setF] = useState(() => ({
@@ -880,6 +920,9 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
         pension_employee_percent: num(f.pension_employee_percent),
         pension_employer_percent: num(f.pension_employer_percent),
         nhf_percent: num(f.nhf_percent),
+        tax_label: (f.tax_label || "").trim() || L.tax,
+        pension_label: (f.pension_label || "").trim() || L.pension,
+        fund_label: (f.fund_label || "").trim() || L.fund,
         approver_roles: f.approver_roles?.length ? f.approver_roles : ["owner"],
         tax_office: f.tax_office || null,
         paying_bank: f.paying_bank || null,
@@ -896,7 +939,7 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
   const confirm = async () => {
     try {
       await confirmPayrollBands(schoolId);
-      setNotice("PAYE bands confirmed. Payroll can now be approved.");
+      setNotice(`${L.tax} bands confirmed. Payroll can now be approved.`);
       onChanged();
     } catch (err) {
       setError(err.message || "Could not confirm.");
@@ -907,8 +950,12 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
   return (
     <fieldset className="pr-fieldset pr-stack" disabled={!canEdit}>
       <Card>
-        <h3>{"PAYE bands (a year)"}</h3>
-        <p className="pr-hint">{"Loaded with the Nigeria Tax Act 2025 rates, in force from 1 January 2026. Change them only if the law changes."}</p>
+        <h3>{`${L.tax} bands (a year)`}</h3>
+        <p className="pr-hint">
+          {L.nigeria
+            ? "Loaded with the Nigeria Tax Act 2025 rates, in force from 1 January 2026. Change them only if the law changes."
+            : "Enter your country's income tax bands for a year: each band's upper limit and its rate, with no limit on the last. Add a band for each step. Schoolivio starts with none (0%) rather than guess your country's law."}
+        </p>
         <div className="pr-bands">
           {f.paye_bands.map((b, i) => {
             const label = `${money(from)} ${b.upto === "" ? "and above" : `to ${money(b.upto)}`}`;
@@ -923,6 +970,22 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
             );
           })}
         </div>
+        {!L.nigeria || f.paye_bands.length > 1 ? (
+          <div className="pr-inline">
+            {/* A new band goes just before the last ("and above") one; fill in its upper limit. */}
+            <Button size="sm" variant="secondary" onClick={() => {
+              const last = f.paye_bands[f.paye_bands.length - 1] || { upto: "", rate: "0" };
+              set({ paye_bands: [...f.paye_bands.slice(0, -1), { upto: "", rate: "0" }, { ...last, upto: "" }] });
+            }}>{"Add a band"}</Button>
+            {f.paye_bands.length > 1 ? (
+              <Button size="sm" variant="ghost" onClick={() => {
+                const bands = f.paye_bands.slice(0, -1);
+                bands[bands.length - 1] = { ...bands[bands.length - 1], upto: "" };
+                set({ paye_bands: bands });
+              }}>{"Remove the last band"}</Button>
+            ) : null}
+          </div>
+        ) : null}
         <div className="pr-grid">
           <Field label="Rent relief (% of rent)"><input className="input" type="number" value={f.rent_relief_percent} onChange={(e) => set({ rent_relief_percent: e.target.value })} /></Field>
           <Field label="Rent relief cap (a year)"><MoneyInput value={f.rent_relief_cap} onChange={(v) => set({ rent_relief_cap: v })} /></Field>
@@ -941,13 +1004,16 @@ const SettingsTab = ({ schoolId, settings, money, onChanged }) => {
       </Card>
 
       <Card>
-        <h3>{"Pension, NHF and approval"}</h3>
+        <h3>{`${L.pension}, ${L.fund} and approval`}</h3>
         <div className="pr-grid">
+          <Field label="Name of income tax" hint="As it appears on payslips, e.g. PAYE"><input className="input" maxLength={40} value={f.tax_label || ""} onChange={(e) => set({ tax_label: e.target.value })} /></Field>
+          <Field label="Name of pension" hint="e.g. Pension, CPP, SSNIT"><input className="input" maxLength={40} value={f.pension_label || ""} onChange={(e) => set({ pension_label: e.target.value })} /></Field>
+          <Field label="Name of housing fund" hint="e.g. NHF; leave its % at 0 if none"><input className="input" maxLength={40} value={f.fund_label || ""} onChange={(e) => set({ fund_label: e.target.value })} /></Field>
           <Field label="Pension, staff %"><input className="input" type="number" value={f.pension_employee_percent} onChange={(e) => set({ pension_employee_percent: e.target.value })} /></Field>
           <Field label="Pension, school %"><input className="input" type="number" value={f.pension_employer_percent} onChange={(e) => set({ pension_employer_percent: e.target.value })} /></Field>
-          <Field label="NHF % of basic"><input className="input" type="number" step="0.5" value={f.nhf_percent} onChange={(e) => set({ nhf_percent: e.target.value })} /></Field>
-          <Field label="State tax office for PAYE"><input className="input" placeholder="e.g. Lagos State IRS" value={f.tax_office || ""} onChange={(e) => set({ tax_office: e.target.value })} /></Field>
-          <Field label="Salaries are paid from"><input className="input" placeholder="e.g. First Bank" value={f.paying_bank || ""} onChange={(e) => set({ paying_bank: e.target.value })} /></Field>
+          <Field label={`${L.fund} % of basic`}><input className="input" type="number" step="0.5" value={f.nhf_percent} onChange={(e) => set({ nhf_percent: e.target.value })} /></Field>
+          <Field label={L.nigeria ? "State tax office for PAYE" : "Tax office"}><input className="input" placeholder={L.nigeria ? "e.g. Lagos State IRS" : ""} value={f.tax_office || ""} onChange={(e) => set({ tax_office: e.target.value })} /></Field>
+          <Field label="Salaries are paid from"><input className="input" placeholder={L.nigeria ? "e.g. First Bank" : ""} value={f.paying_bank || ""} onChange={(e) => set({ paying_bank: e.target.value })} /></Field>
         </div>
         <h4>{"Who approves payroll"}</h4>
         <div className="pr-switches">
@@ -1017,6 +1083,8 @@ const Payroll = () => {
   useEffect(() => { load(); }, [load]);
   const refresh = () => load({ quiet: true });
 
+  const labels = useMemo(() => labelsFor(settings, school), [settings, school]);
+
   const canApprove = useMemo(
     () => (settings?.approver_roles || ["owner"]).some((r) => (roles || []).includes(r)),
     [settings, roles]
@@ -1030,6 +1098,7 @@ const Payroll = () => {
         subtitle={school ? `Staff pay at ${school.name}` : "Staff pay"}
         toolbar={settings ? <Tabs tabs={TABS} active={tab} onChange={setTab} /> : null}
       >
+        <LabelsContext.Provider value={labels}>
         <div className="pr-page">
           {loading ? <SkeletonCards count={3} lines={3} /> : null}
           {!loading && !settings && canEdit ? <Setup schoolId={schoolId} onDone={() => load()} /> : null}
@@ -1040,6 +1109,7 @@ const Payroll = () => {
           {!loading && settings && tab === "payees" ? <PayeesTab schoolId={schoolId} payees={payees} payments={payments} money={money} onChanged={refresh} /> : null}
           {!loading && settings && tab === "settings" ? <SettingsTab key={settings.updated_at} schoolId={schoolId} settings={settings} money={money} onChanged={refresh} /> : null}
         </div>
+        </LabelsContext.Provider>
       </Page>
     </div>
   );

@@ -1541,7 +1541,7 @@ export const updateSchool = async (id, changes) => {
     .update(changes)
     .eq("id", id)
     .select(
-      `id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency,
+      `id, name, slug, logo_url, theme_color, address, phone, email, timezone, currency, country,
        disabled_modules, idle_lockout_enabled, idle_lockout_minutes,
        signature_url, signatory_name, signatory_title,
        admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
@@ -1963,11 +1963,14 @@ export const fetchPlatformSchools = async () => {
   return data || [];
 };
 
-export const createSchool = async ({ name, slug, ownerEmail }) => {
+export const createSchool = async ({ name, slug, ownerEmail, currency, timezone, country }) => {
   const { data, error } = await supabase.rpc("create_school", {
     school_name: name,
     school_slug: slug,
     owner_email: ownerEmail || null,
+    currency_in: currency || "NGN",
+    timezone_in: timezone || "Africa/Lagos",
+    country_in: country || null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;

@@ -128,8 +128,10 @@ const ConfigPanel = ({ schoolId, sessionId }) => {
             <Field label="Amount">
               <MoneyInput value={form.application_fee_amount} onChange={set("application_fee_amount")} />
             </Field>
+            {/* Always the school's own currency (School settings), kept in step
+                by the database (supabase/226), so it is shown, not typed. */}
             <Field label="Currency">
-              <input className="input" value={form.currency} onChange={(e) => set("currency")(e.target.value)} />
+              <input className="input" value={form.currency} readOnly title="Set in School settings" />
             </Field>
           </div>
         ) : null}

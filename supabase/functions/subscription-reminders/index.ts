@@ -33,9 +33,18 @@ interface Due {
   recipients: { email: string; name: string | null; user_id: string }[];
   plan_name: string;
   amount: number | null;
+  /** The currency Schoolivio prices this school in (supabase/227). */
+  currency: string;
 }
 
-const naira = (n: number) => `₦${Number(n).toLocaleString("en-NG")}`;
+// In the currency the school is priced in: ₦450,000, CA$450.
+const money = (n: number, currency: string) => {
+  try {
+    return new Intl.NumberFormat("en", { style: "currency", currency, currencyDisplay: "narrowSymbol", maximumFractionDigits: 2, minimumFractionDigits: Number(n) % 1 ? 2 : 0 }).format(Number(n));
+  } catch {
+    return `${currency} ${Number(n).toLocaleString("en")}`;
+  }
+};
 const longDate = (iso: string) =>
   new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 
@@ -44,7 +53,7 @@ export function compose(d: Due, contact: string) {
   const what = d.kind === "trial" ? "free trial" : "Schoolivio plan";
   const subject = `Your ${what} for ${d.school_name} ends ${when}`;
   const price = d.amount
-    ? `Your plan is <strong>${escapeHtml(d.plan_name)}</strong>, at <strong>${naira(d.amount)} a month</strong>, based on your number of students.`
+    ? `Your plan is <strong>${escapeHtml(d.plan_name)}</strong>, at <strong>${money(d.amount, d.currency)} a month</strong>, based on your number of students.`
     : `With more than 800 students, ${escapeHtml(d.school_name)} is on <strong>Enterprise</strong>, which we price with you directly.`;
   const ask = d.kind === "trial"
     ? "To keep everything running without a break, please start your monthly payment."
@@ -68,7 +77,7 @@ export function compose(d: Due, contact: string) {
     badge: d.days_left === 0 ? "Ends today" : `${d.days_left} day${d.days_left === 1 ? "" : "s"} left`,
     heading: `Your ${what} ends ${when}`,
     bodyHtml,
-    ctaLabel: d.amount ? `Pay ${naira(d.amount)} now` : "Contact us",
+    ctaLabel: d.amount ? `Pay ${money(d.amount, d.currency)} now` : "Contact us",
     ctaUrl: d.amount ? `https://${d.slug}.schoolivio.com/School?tab=billing` : `mailto:${contact}?subject=${subjectLine}`,
     footNote: "You receive this because you are an owner or administrator of this school on Schoolivio.",
   });

@@ -26,7 +26,7 @@ const cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((c) =
 // Some models group digits with spaces ("₦20 456 000"); money reads with
 // commas here, whatever the model wrote.
 const moneyCommas = (text) =>
-  text.replace(/(₦|NGN\s?|\$|£)(\d{1,3}(?:[   ]\d{3})+)(?=\D|$)/g, (m, sign, digits) => `${sign}${digits.replace(/[   ]/g, ",")}`);
+  text.replace(/(\p{Sc}|[A-Z]{3}\s?)(\d{1,3}(?:[   ]\d{3})+)(?=\D|$)/gu, (m, sign, digits) => `${sign}${digits.replace(/[   ]/g, ",")}`);
 
 export const renderMarkdown = (source) => {
   const lines = moneyCommas(String(source || "")).replace(/\r/g, "").split("\n");

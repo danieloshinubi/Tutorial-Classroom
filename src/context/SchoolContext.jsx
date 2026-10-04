@@ -116,7 +116,7 @@ export const SchoolProvider = ({ children }) => {
             // leaving it out here does not fail loudly — the school simply
             // loads without it, disabledModules reads as empty, and every
             // module stays visible however the admin sets them.
-            `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, paid_until, is_active,
+            `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, country, plan, trial_ends_at, paid_until, is_active,
              disabled_modules, idle_lockout_enabled, idle_lockout_minutes,
              signature_url, signatory_name, signatory_title,
              admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`

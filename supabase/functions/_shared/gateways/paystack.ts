@@ -3,6 +3,7 @@
 // change from what was already live.
 
 import type { CheckoutContext, CheckoutResult, PaymentGatewayAdapter, WebhookEvent } from "./types.ts";
+import { PAYSTACK_CURRENCIES } from "./units.ts";
 
 const hex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer))
@@ -24,6 +25,11 @@ export const paystackAdapter: PaymentGatewayAdapter = {
   async initCheckout(ctx: CheckoutContext): Promise<CheckoutResult> {
     const secretKey = ctx.secrets.secret_key;
     if (!secretKey) throw new Error("Online payment is not configured. The school has not connected Paystack yet.");
+    // Schools can use any currency (supabase/226); Paystack takes only a few.
+    const currency = (ctx.currency || "NGN").toUpperCase();
+    if (!PAYSTACK_CURRENCIES.has(currency)) {
+      throw new Error(`Paystack does not take payments in ${currency}. The school can choose Flutterwave or Stripe under School admin → Online payments.`);
+    }
 
     // Paystack works in the smallest unit — kobo for naira. Rounding is
     // deliberate: a fractional kobo is rejected by the API.

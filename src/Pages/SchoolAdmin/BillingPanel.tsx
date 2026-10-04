@@ -6,7 +6,7 @@ import {
   startSubscriptionPayment,
   verifySubscriptionPayment,
   takeReturnedReference,
-  naira,
+  price,
   PLAN_LABEL,
   type SchoolSubscription,
 } from "../../lib/subscriptionApi";
@@ -117,7 +117,7 @@ export const PlanPayCard = ({ compact = false }: { compact?: boolean }) => {
           {`With ${sub.students} active student${sub.students === 1 ? "" : "s"}, your school is on `}
           <strong>{sub.plan_name}</strong>
           {" at "}
-          <strong>{`${naira(sub.amount)} a month`}</strong>
+          <strong>{`${price(sub.amount, sub.currency)} a month`}</strong>
           {"."}
           {!onTrial && sub.paid_until ? " Paying now adds a month after your current one." : ""}
         </p>
@@ -132,7 +132,7 @@ export const PlanPayCard = ({ compact = false }: { compact?: boolean }) => {
       <div className="btn-row">
         {sub.amount ? (
           <Button onClick={pay} disabled={paying}>
-            {paying ? "Opening Paystack…" : `Pay ${naira(sub.amount)} with Paystack`}
+            {paying ? "Opening Paystack…" : `Pay ${price(sub.amount, sub.currency)} with Paystack`}
           </Button>
         ) : null}
         <a className="btn btn-secondary" href={mailto}>
@@ -162,7 +162,7 @@ export const PlanPayCard = ({ compact = false }: { compact?: boolean }) => {
                 <tr key={p.reference}>
                   <td>{formatDate(p.paid_at || p.created_at, { withTime: false })}</td>
                   <td>{PLAN_LABEL[p.plan] || p.plan}</td>
-                  <td>{naira(p.amount)}</td>
+                  <td>{price(p.amount, p.currency || sub.currency)}</td>
                   <td>{p.period_end ? formatDate(p.period_end, { withTime: false }) : "—"}</td>
                   <td>
                     <Badge tone={STATUS_TONE[p.status] || "muted"}>{p.status}</Badge>
@@ -177,30 +177,43 @@ export const PlanPayCard = ({ compact = false }: { compact?: boolean }) => {
   );
 };
 
+// The plans, in the currency this school is charged in.
+const PlanList = () => {
+  const { schoolId } = useSchool();
+  const [sub, setSub] = useState<SchoolSubscription | null>(null);
+  useEffect(() => {
+    if (schoolId) fetchSubscription(schoolId).then(setSub).catch(() => setSub(null));
+  }, [schoolId]);
+  if (!sub) return null;
+  return (
+    <Card className="plan-pay-prices">
+      <span className="file-meta">{"Plans"}</span>
+      <ul>
+        <li>
+          <strong>{"Starter"}</strong>
+          {` — ${price(sub.starter_price, sub.currency)} a month, up to 200 students`}
+        </li>
+        <li>
+          <strong>{"Growth"}</strong>
+          {` — ${price(sub.growth_price, sub.currency)} a month, up to 800 students`}
+        </li>
+        <li>
+          <strong>{"Enterprise"}</strong>
+          {" — more than 800 students, priced with you"}
+        </li>
+      </ul>
+      <p className="plan-pay-note">{"Your plan follows your number of active students and is worked out when you pay."}</p>
+    </Card>
+  );
+};
+
 const BillingPanel = () => {
   const { isAdmin } = useSchool();
   if (!isAdmin) return <Empty>{"Only the school's owner or an administrator can see and pay for its plan."}</Empty>;
   return (
     <>
       <PlanPayCard />
-      <Card className="plan-pay-prices">
-        <span className="file-meta">{"Plans"}</span>
-        <ul>
-          <li>
-            <strong>{"Starter"}</strong>
-            {" — ₦450,000 a month, up to 200 students"}
-          </li>
-          <li>
-            <strong>{"Growth"}</strong>
-            {" — ₦950,000 a month, up to 800 students"}
-          </li>
-          <li>
-            <strong>{"Enterprise"}</strong>
-            {" — more than 800 students, priced with you"}
-          </li>
-        </ul>
-        <p className="plan-pay-note">{"Your plan follows your number of active students and is worked out when you pay."}</p>
-      </Card>
+      <PlanList />
     </>
   );
 };

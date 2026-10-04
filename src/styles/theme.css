@@ -8573,3 +8573,22 @@ button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-colo
   background: var(--brand-soft, #f1ebfb); color: var(--ink); border: 1px solid var(--line);
   font-size: 14px;
 }
+
+/* "It looks like you are in Canada…": confirming a new school's currency
+   (Components/LocalePickers.tsx, supabase/226). Also on schoolivio.com. */
+.currency-confirm {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 12px 14px; border-radius: 12px;
+  background: var(--brand-soft, #efe6ff); border: 1px solid var(--line, #e5e1ef);
+  font-size: 14px; line-height: 1.45; color: var(--ink, #1d1730);
+}
+.currency-confirm p { margin: 0; }
+.currency-confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.currency-confirm.is-chosen { flex-direction: row; align-items: center; justify-content: space-between; padding: 10px 14px; }
+.currency-confirm-change {
+  background: none; border: 0; padding: 0; cursor: pointer;
+  color: var(--brand, #6d3fc4); font-weight: 600; font: inherit;
+}
+.locale-choose { display: grid; gap: 6px; }
+.locale-choose-label { font-size: 12px; font-weight: 600; color: var(--ink-2, #5d5670); margin-top: 4px; }
+.plan-price-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; margin-top: 12px; }

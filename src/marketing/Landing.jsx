@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { fetchPlanPrices } from "../lib/marketingApi";
+import { detectLocale } from "../lib/currencies";
+import { formatMoney } from "../lib/money";
 import { Icon } from "react-icons-kit";
 import { grid } from "react-icons-kit/feather/grid";
 import { clipboard } from "react-icons-kit/feather/clipboard";
@@ -929,7 +932,31 @@ const ConfigureSection = () => {
 };
 
 /* ── Pricing ────────────────────────────────────────────────────────────── */
-const Pricing = () => (
+// Prices in the visitor's own currency when Schoolivio has set one for it,
+// else US dollars, else naira (supabase/227). Until they load, the naira
+// prices written into PLANS show.
+const usePlanPrices = () => {
+  const [prices, setPrices] = useState(null);
+  useEffect(() => {
+    let live = true;
+    fetchPlanPrices()
+      .then((rows) => {
+        if (!live || !rows.length) return;
+        const want = detectLocale().currency;
+        const row = rows.find((r) => r.currency === want) || rows.find((r) => r.currency === "USD") || rows.find((r) => r.currency === "NGN");
+        if (row) setPrices({ starter: formatMoney(row.starter, row.currency), growth: formatMoney(row.growth, row.currency) });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, []);
+  return prices;
+};
+
+const Pricing = () => {
+  const prices = usePlanPrices();
+  return (
   <section className="mkt-pricing" id="pricing">
     <div className="mkt-wrap">
       <div className="mkt-reveal" style={{ marginBottom: 52 }}>
@@ -946,7 +973,7 @@ const Pricing = () => (
             <div className="mkt-pricing-name">{p.name}</div>
             <p className="mkt-pricing-tagline">{p.tagline}</p>
             <div className="mkt-pricing-price">
-              {p.price}
+              {(prices && prices[p.key]) || p.price}
               {p.period ? <span>{p.period}</span> : null}
             </div>
             <p className="mkt-pricing-note">{p.note}</p>
@@ -968,7 +995,8 @@ const Pricing = () => (
       <p className="mkt-pricing-fine">{"Illustrative pricing — tell us about your school and we'll confirm what's right for you."}</p>
     </div>
   </section>
-);
+  );
+};
 
 /* ── Final CTA ──────────────────────────────────────────────────────────── */
 const FinalCta = () => (

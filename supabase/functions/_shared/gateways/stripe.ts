@@ -14,6 +14,7 @@
 //                  BYO credential field (secrets.webhook_secret) beside
 //                  secret_key/public_key.
 import type { CheckoutContext, CheckoutResult, PaymentGatewayAdapter, WebhookEvent } from "./types.ts";
+import { fromMinorUnits, toMinorUnits } from "./units.ts";
 
 const hex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer))
@@ -54,7 +55,8 @@ export const stripeAdapter: PaymentGatewayAdapter = {
 
     // Stripe works in the smallest unit — cents for most currencies — same
     // rounding-is-deliberate reasoning as Paystack's kobo conversion.
-    const smallestUnit = Math.round(ctx.amount * 100);
+    // Not for yen, CFA francs and the like, which have none (units.ts).
+    const smallestUnit = toMinorUnits(ctx.amount, ctx.currency || "USD");
 
     const started = await fetch("https://api.stripe.com/v1/checkout/sessions", {
       method: "POST",
@@ -159,7 +161,7 @@ export const stripeAdapter: PaymentGatewayAdapter = {
       kind: "success",
       reference: session?.id,
       // Back from the smallest unit — cents to dollars/naira/etc.
-      amount: typeof session?.amount_total === "number" ? session.amount_total / 100 : undefined,
+      amount: typeof session?.amount_total === "number" ? fromMinorUnits(session.amount_total, session?.currency || "usd") : undefined,
       invoiceId: session?.metadata?.invoice_id,
       payerId: session?.metadata?.payer_id,
     };

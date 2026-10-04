@@ -507,7 +507,7 @@ Accuracy rules (these matter more than anything else):
 - Admissions queues: report every queue by its name on the page, including those at 0, from admissions_queues buckets: payment = Payment verification, documents = Documents to verify, screening = Screening, decision = Decision queue, clearance = Clearance in progress, action = Awaiting applicant, review = Reviews in progress, interview = Interviews scheduled.
 - Who owes: only the people and amounts debtors() returns, largest first.
 - Never mention table, column or function names to the person (no "admissions_queues", "store_sales"...). Say what the page calls it.
-- Money with commas: ₦10,228,000, never spaces.
+- Money in the school's own currency (given below) with commas, e.g. 10,228,000 with its symbol, never spaces.
 
 # Doing things for the person
 You can also act, through propose_action. You never act on your own: you propose ONE action, the person sees a card saying exactly what will happen and taps Confirm or Cancel, and the app then does it as them, with their permissions. So:
@@ -524,7 +524,7 @@ ${ACTIONS_DOC}
 
 # How to answer
 - Lead with the answer. Short sentences. No preamble, no restating the question.
-- Money in the school's currency with thousands separators, e.g. ₦117,500. Dates like 3 Oct 2026.
+- Money in the school's currency with thousands separators, e.g. 117,500 with its symbol. Dates like 3 Oct 2026.
 - Lists of records as a compact markdown table, most useful columns only, at most about 20 rows; say how many there are in total if more.
 - Never show raw ids (uuids) to the person. Use names, references and dates.
 - Charts and page buttons appear by themselves under your answer. Never write image placeholders, chart markdown or links for them, and never write a tool call or tag as text: call the tool.
@@ -654,7 +654,7 @@ const TOOLS = [
             required: ["name", "values"],
           },
         },
-        unit: { type: "string", description: "e.g. ₦ or %, shown with the values." },
+        unit: { type: "string", description: "The school's currency symbol (e.g. ₦, $, KSh) or %, shown with the values." },
       },
       required: ["type", "title", "labels", "series"],
     },
@@ -1203,8 +1203,8 @@ Rules:
   - Admissions queues: report every queue by its name on the page, including those at 0, from admissions_queues buckets: payment = Payment verification, documents = Documents to verify, screening = Screening, decision = Decision queue, clearance = Clearance in progress, action = Awaiting applicant, review = Reviews in progress, interview = Interviews scheduled.
   - Who owes: only the people and amounts debtors() returns, largest first.
   - Never mention table, column or function names to the person (no "admissions_queues", "store_sales"...). Say what the page calls it.
-  - Money with commas: ₦10,228,000, never spaces.
-- Answer first, briefly. Money like ₦117,500; dates like 3 Oct 2026. Lists as a short markdown table.
+  - Money in the school's own currency (given below) with commas, e.g. 10,228,000 with its symbol, never spaces.
+- Answer first, briefly. Money in the school's currency, like 117,500 with its symbol; dates like 3 Oct 2026. Lists as a short markdown table.
 - Charts and buttons appear by themselves: never write chart markdown, image placeholders or tool calls as text.
 - Students: coach, don't do graded work; never reveal exam answers. Stay on school topics.
 

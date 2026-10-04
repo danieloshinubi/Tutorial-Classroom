@@ -40,11 +40,14 @@ export const fetchTenantAdmins = async (schoolId) => {
   return data || [];
 };
 
-export const createTenant = async ({ name, slug, ownerEmail }) => {
+export const createTenant = async ({ name, slug, ownerEmail, currency, timezone, country }) => {
   const { data, error } = await supabase.rpc("create_school", {
     school_name: name,
     school_slug: slug,
     owner_email: ownerEmail || null,
+    currency_in: currency || "NGN",
+    timezone_in: timezone || "Africa/Lagos",
+    country_in: country || null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;

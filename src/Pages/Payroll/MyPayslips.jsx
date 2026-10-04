@@ -7,6 +7,13 @@ import { Page, Card, Empty, SkeletonCards } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { ExportMenu } from "../../Components/ExportButton";
 
+// The school's own names for its deductions (supabase/227): "PAYE" and
+// "National Housing Fund" in Nigeria, "Income tax", "CPP" or whatever the
+// school set elsewhere.
+const taxName = (slip) => (slip.tax_label === "PAYE" ? "PAYE (income tax)" : slip.tax_label || "Income tax");
+const fundName = (slip) => (slip.fund_label === "NHF" ? "National Housing Fund" : slip.fund_label || "Housing fund");
+const nigerian = (slip) => (slip.school_country || "NG") === "NG";
+
 // A payslip as a file (PDF by default for most people, or Excel/CSV):
 // what was earned, what came off, and the net, as two short tables.
 const payslipSheets = (slip) => [
@@ -19,9 +26,9 @@ const payslipSheets = (slip) => [
     name: "Deductions",
     columns: [{ key: "label", label: "Deductions" }, { key: "amount", label: "Amount", type: "money" }],
     rows: [
-      { label: "PAYE (income tax)", amount: slip.paye },
-      ...(Number(slip.pension_employee) ? [{ label: "Pension", amount: slip.pension_employee }] : []),
-      ...(Number(slip.nhf) ? [{ label: "National Housing Fund", amount: slip.nhf }] : []),
+      { label: taxName(slip), amount: slip.paye },
+      ...(Number(slip.pension_employee) ? [{ label: slip.pension_label || "Pension", amount: slip.pension_employee }] : []),
+      ...(Number(slip.nhf) ? [{ label: fundName(slip), amount: slip.nhf }] : []),
       ...(slip.deductions || []).map((d) => ({ label: d.label, amount: d.amount })),
       { label: "Net pay", amount: slip.net },
     ],
@@ -63,9 +70,9 @@ const Slip = ({ slip, money }) => (
       </div>
       <div>
         <h4>{"Deductions"}</h4>
-        <div className="pr-line"><span>{"PAYE (income tax)"}</span><b>{money(slip.paye)}</b></div>
-        {num(slip.pension_employee) ? <div className="pr-line"><span>{"Pension"}</span><b>{money(slip.pension_employee)}</b></div> : null}
-        {num(slip.nhf) ? <div className="pr-line"><span>{"National Housing Fund"}</span><b>{money(slip.nhf)}</b></div> : null}
+        <div className="pr-line"><span>{taxName(slip)}</span><b>{money(slip.paye)}</b></div>
+        {num(slip.pension_employee) ? <div className="pr-line"><span>{slip.pension_label || "Pension"}</span><b>{money(slip.pension_employee)}</b></div> : null}
+        {num(slip.nhf) ? <div className="pr-line"><span>{fundName(slip)}</span><b>{money(slip.nhf)}</b></div> : null}
         {(slip.deductions || []).map((d, i) => (
           <div key={i} className="pr-line"><span>{d.label}</span><b>{money(d.amount)}</b></div>
         ))}
@@ -73,9 +80,9 @@ const Slip = ({ slip, money }) => (
       </div>
     </div>
     <p className="pr-slip-note">
-      {`The school also paid ${money(slip.pension_employer)} into your pension this month.`}
-      {slip.rsa_pin ? ` RSA PIN ${slip.rsa_pin}.` : ""}
-      {slip.tin ? ` TIN ${slip.tin}.` : ""}
+      {num(slip.pension_employer) ? `The school also paid ${money(slip.pension_employer)} into your ${(slip.pension_label || "pension").toLowerCase()} this month.` : ""}
+      {slip.rsa_pin ? ` ${nigerian(slip) ? "RSA PIN" : "Pension number"} ${slip.rsa_pin}.` : ""}
+      {slip.tin ? ` ${nigerian(slip) ? "TIN" : "Tax ID"} ${slip.tin}.` : ""}
     </p>
   </div>
 );

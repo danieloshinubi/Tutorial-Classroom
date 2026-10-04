@@ -1,5 +1,6 @@
 import { supabase } from "./supabaseClient";
 import { db, fail } from "./db";
+import { formatMoney } from "./money";
 
 // A school paying Schoolivio for its plan (supabase/225): what it owes, and
 // paying it with Paystack through the subscription-pay Edge Function. The
@@ -9,6 +10,7 @@ import { db, fail } from "./db";
 export interface SubscriptionPayment {
   reference: string;
   amount: number;
+  currency?: string;
   status: "pending" | "paid" | "failed" | "abandoned";
   plan: string;
   paid_at: string | null;
@@ -20,9 +22,12 @@ export interface SchoolSubscription {
   students: number;
   plan: "starter" | "growth" | "enterprise";
   plan_name: string;
-  /** Monthly, in naira; null for Enterprise (priced directly). */
+  /** Monthly, in `currency`; null for Enterprise (priced directly). */
   amount: number | null;
+  /** The school's own currency when Schoolivio has a price in it, else USD, else NGN (supabase/227). */
   currency: string;
+  starter_price: number;
+  growth_price: number;
   current_plan: string;
   trial_ends_at: string | null;
   paid_until: string | null;
@@ -89,7 +94,8 @@ export const takeReturnedReference = (): string | null => {
   return ref;
 };
 
-export const naira = (n: number) => `₦${Number(n).toLocaleString("en-NG")}`;
+/** An amount in Schoolivio's price currency for this school: ₦450,000, CA$450. */
+export const price = (n: number, currency: string) => formatMoney(n, currency);
 
 export const PLAN_LABEL: Record<string, string> = {
   trial: "Free trial",

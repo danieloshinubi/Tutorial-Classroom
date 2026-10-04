@@ -35,6 +35,8 @@ import OrganogramPanel from "./OrganogramPanel";
 import SecurityPanel from "./SecurityPanel";
 import SchoolAccessPanel from "./SchoolAccessPanel";
 import BillingPanel from "./BillingPanel";
+import { CountrySelect, CurrencySelect, TimeZoneSelect } from "../../Components/LocalePickers";
+import { currencyLabel } from "../../lib/currencies";
 import { shield } from "react-icons-kit/feather/shield";
 import { STAFF_ROLES } from "../../lib/orgChart";
 import { ROLES, ROLE_LABEL, toneFor, roleAccent } from "../../lib/roles";
@@ -849,6 +851,9 @@ const SettingsPanel = () => {
     admission_letter_offer_intro: "",
     admission_letter_enrolled_intro: "",
     admission_letter_closing: "",
+    currency: "NGN",
+    timezone: "Africa/Lagos",
+    country: "",
   });
   const [saving, setSaving] = useState(false);
   const [previewStatus, setPreviewStatus] = useState(null);
@@ -869,6 +874,9 @@ const SettingsPanel = () => {
       admission_letter_offer_intro: school.admission_letter_offer_intro || "",
       admission_letter_enrolled_intro: school.admission_letter_enrolled_intro || "",
       admission_letter_closing: school.admission_letter_closing || "",
+      currency: school.currency || "NGN",
+      timezone: school.timezone || "Africa/Lagos",
+      country: school.country || "",
     });
   }, [school]);
 
@@ -904,9 +912,23 @@ const SettingsPanel = () => {
       setError("Theme colour must be a hex code like #2563eb.");
       return;
     }
+    // Amounts are never converted: a fee of 45,000 stays 45,000 in the new
+    // currency. Fine for a school that chose the wrong one at sign-up; worth a
+    // pause for one that already has bills and payslips.
+    if (form.currency !== (school.currency || "NGN")) {
+      const ok = await confirmDialog({
+        title: `Change the school's currency to ${currencyLabel(form.currency)}?`,
+        body: "Fees, bills, store prices and salaries will show in the new currency. Amounts already entered are not converted: 45,000 stays 45,000.",
+        confirmLabel: "Change currency",
+      });
+      if (!ok) return;
+    }
     setSaving(true);
     try {
       await updateSchool(school.id, {
+        currency: form.currency,
+        timezone: form.timezone,
+        country: form.country || null,
         name: form.name.trim(),
         email: form.email.trim() || null,
         phone: form.phone.trim() || null,
@@ -974,6 +996,17 @@ const SettingsPanel = () => {
         <Field label="Address">
           <textarea className="textarea" style={{ minHeight: 80 }} value={form.address} onChange={update("address")} />
         </Field>
+        <Field label="Country" hint="Where the school is. Payroll starts with this country's pay rules only for Nigeria; elsewhere you enter your own tax bands under Payroll → Settings.">
+          <CountrySelect value={form.country} onChange={(country) => setForm((f) => ({ ...f, country }))} />
+        </Field>
+        <div className="split">
+          <Field label="Currency" hint="What the school bills parents, sells and pays salaries in.">
+            <CurrencySelect value={form.currency} onChange={(currency) => setForm((f) => ({ ...f, currency }))} />
+          </Field>
+          <Field label="Time zone" hint="Dates, deadlines and reminders follow this.">
+            <TimeZoneSelect value={form.timezone} onChange={(timezone) => setForm((f) => ({ ...f, timezone }))} />
+          </Field>
+        </div>
         <Field
           label="Logo"
           hint="Replaces the Schoolivio mark everywhere this school's app shows it — the sidebar, the sign-in screen, the applicant portal, and the browser tab icon. Until one is set, Schoolivio's own mark is shown as a placeholder."

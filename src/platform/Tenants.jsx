@@ -18,6 +18,8 @@ import {
 import { ExportMenu } from "../Components/ExportButton";
 import { useActionFeedback } from "../Components/Toast";
 import { confirmDialog } from "../Components/Confirm";
+import { LocaleConfirm, TimeZoneSelect } from "../Components/LocalePickers";
+import { detectLocale } from "../lib/currencies";
 
 // A slug becomes a hostname, so it has to be safe to put in one.
 const slugify = (value) =>
@@ -40,6 +42,13 @@ const Tenants = () => {
   const [slug, setSlug] = useState("");
   const [slugTouched, setSlugTouched] = useState(false);
   const [ownerEmail, setOwnerEmail] = useState("");
+  // The currency the school bills parents, sells and pays salaries in, and
+  // its time zone (supabase/226). Suggested from this device; the school may
+  // well be in another country, so the currency is confirmed, not assumed.
+  const [detected] = useState(detectLocale);
+  const [locale, setLocale] = useState({ country: detected.country, currency: detected.currency });
+  const [timezone, setTimezone] = useState(detected.timezone);
+  const [currencyDecided, setCurrencyDecided] = useState(!detected.country);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -69,6 +78,10 @@ const Tenants = () => {
       setError("A school needs a name, and a slug that can live in a hostname.");
       return;
     }
+    if (!currencyDecided) {
+      setError("Confirm the school's currency first.");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -76,6 +89,9 @@ const Tenants = () => {
         name: name.trim(),
         slug: finalSlug,
         ownerEmail: ownerEmail.trim(),
+        currency: locale.currency,
+        country: locale.country,
+        timezone,
       });
       setNotice(
         `${created?.name || name} is live at ${finalSlug}.schoolivio.com.` +
@@ -195,6 +211,20 @@ const Tenants = () => {
                 onChange={(e) => setOwnerEmail(e.target.value)}
               />
             </Field>
+
+            <div className="split">
+              <Field label="Country and currency" hint="What the school bills parents, sells and pays salaries in. The country sets which pay rules payroll starts with.">
+                <LocaleConfirm
+                  detected={detected}
+                  value={locale}
+                  onChange={setLocale}
+                  onDecided={() => setCurrencyDecided(true)}
+                />
+              </Field>
+              <Field label="Time zone">
+                <TimeZoneSelect value={timezone} onChange={setTimezone} />
+              </Field>
+            </div>
 
             <Button type="submit" disabled={busy}>
               {busy ? "Creating..." : "Create school"}

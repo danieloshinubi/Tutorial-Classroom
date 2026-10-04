@@ -4,6 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import { checkSlugAvailable, startTrialSchool } from "../lib/marketingApi";
 import { schoolUrl } from "../lib/tenant";
 import { Mark } from "../Components/Logo";
+import { LocaleConfirm, TimeZoneSelect } from "../Components/LocalePickers";
+import { detectLocale } from "../lib/currencies";
 
 const slugify = (s) =>
   s.toLowerCase().trim().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 40);
@@ -11,9 +13,16 @@ const slugify = (s) =>
 const StartTrial = () => {
   const { user, signUp, signIn } = useAuth();
 
-  const [form, setForm] = useState({
+  // The currency the school bills parents, sells and pays salaries in, and
+  // its time zone (supabase/226). The device suggests them; the person
+  // confirms the country and currency before the school is created
+  // (LocaleConfirm). The country sets which pay rules payroll starts with.
+  const [detected] = useState(detectLocale);
+  const [form, setForm] = useState(() => ({
     schoolName: "", slug: "", firstName: "", surname: "", email: "", password: "",
-  });
+    country: detected.country, currency: detected.currency, timezone: detected.timezone,
+  }));
+  const [currencyDecided, setCurrencyDecided] = useState(!detected.country);
   const [slugTouched, setSlugTouched] = useState(false);
   const [slugStatus, setSlugStatus] = useState(null); // null | "checking" | "ok" | "taken" | "invalid"
   const [submitting, setSubmitting] = useState(false);
@@ -66,13 +75,14 @@ const StartTrial = () => {
 
     if (!form.schoolName.trim()) return setError("Give your school a name.");
     if (slugStatus !== "ok") return setError("Choose an available subdomain first.");
+    if (!currencyDecided) return setError("Confirm your school's currency first.");
 
     setSubmitting(true);
     try {
       // Already signed in (came back to finish, or started a second school)
       // — skip straight to creating the school under this account.
       if (user) {
-        await startTrialSchool({ name: form.schoolName.trim(), slug: form.slug });
+        await startTrialSchool({ name: form.schoolName.trim(), slug: form.slug, currency: form.currency, timezone: form.timezone, country: form.country });
         goToNewSchool();
         return;
       }
@@ -109,7 +119,7 @@ const StartTrial = () => {
         return;
       }
 
-      await startTrialSchool({ name: form.schoolName.trim(), slug: form.slug });
+      await startTrialSchool({ name: form.schoolName.trim(), slug: form.slug, currency: form.currency, timezone: form.timezone, country: form.country });
       goToNewSchool();
     } catch (err) {
       setError(err.message || "Could not start your trial. Please try again.");
@@ -179,6 +189,22 @@ const StartTrial = () => {
             {slugStatus === "ok" ? <p className="mkt-hint ok">{"Available"}</p> : null}
             {slugStatus === "taken" ? <p className="mkt-hint bad">{"That address is already taken"}</p> : null}
             {slugStatus === "invalid" ? <p className="mkt-hint bad">{"Lowercase letters, numbers and hyphens only, 3+ characters"}</p> : null}
+          </div>
+
+          <div className="mkt-field">
+            <label>{"Country and currency"}</label>
+            <LocaleConfirm
+              detected={detected}
+              value={{ country: form.country, currency: form.currency }}
+              onChange={(next) => setForm((f) => ({ ...f, ...next }))}
+              onDecided={() => setCurrencyDecided(true)}
+            />
+            <p className="mkt-hint muted">{"What your school bills parents, sells and pays salaries in."}</p>
+          </div>
+
+          <div className="mkt-field">
+            <label>{"Time zone"}</label>
+            <TimeZoneSelect value={form.timezone} onChange={(timezone) => setForm((f) => ({ ...f, timezone }))} />
           </div>
 
           {!user ? (

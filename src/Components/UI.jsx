@@ -257,13 +257,14 @@ export const Select = ({
       next.top = t.bottom + 6;
       next.bottom = "auto";
     }
-    if (t.left + panel.offsetWidth > viewW - 8) {
-      next.left = "auto";
-      next.right = Math.max(8, viewW - t.right);
-    } else {
-      next.left = Math.max(8, t.left);
-      next.right = "auto";
-    }
+    // Never wider than the screen (long names such as "Canadian Dollar
+    // (CAD · $)" on a phone), and always fully on it: under the button,
+    // else lined up with its right edge, else against the screen's edge.
+    const width = Math.min(panel.offsetWidth, viewW - 16);
+    next.maxWidth = viewW - 16;
+    next.right = "auto";
+    if (t.left + width <= viewW - 8) next.left = Math.max(8, t.left);
+    else next.left = Math.max(8, Math.min(t.right, viewW - 8) - width);
     setPlacement(next);
   }, []);
   useLayoutEffect(() => {
@@ -325,11 +326,14 @@ export const Select = ({
 
   // Typing goes straight into the search box with a mouse or keyboard; on a
   // touch screen it waits for a tap, so the keyboard does not cover the list.
+  // Only once the list is placed: before that it is measured hidden, and a
+  // hidden box cannot take the cursor, so typing went nowhere.
+  const placed = Boolean(placement);
   useEffect(() => {
-    if (!open || !canSearch) return;
+    if (!open || !canSearch || !placed) return;
     const coarse = window.matchMedia ? window.matchMedia("(pointer: coarse)").matches : false;
     if (!coarse) searchRef.current?.focus();
-  }, [open, canSearch]);
+  }, [open, canSearch, placed]);
 
   const openMenu = () => {
     setQuery("");

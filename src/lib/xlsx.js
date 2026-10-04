@@ -67,7 +67,7 @@ const cellXml = (ref, value, type) => {
     else kind = "text";
   }
   if (kind === "number" || kind === "money") {
-    const n = typeof value === "number" ? value : Number(String(value).replace(/[,\s₦$£]/g, ""));
+    const n = typeof value === "number" ? value : Number(String(value).replace(/[,\s\p{Sc}]/gu, ""));
     if (Number.isFinite(n)) return `<c r="${ref}" s="${STYLE[kind]}"><v>${n}</v></c>`;
     kind = "text";
   }

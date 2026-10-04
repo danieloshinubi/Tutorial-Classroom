@@ -10,10 +10,21 @@ export const checkSlugAvailable = async (candidate) => {
   return Boolean(data);
 };
 
-export const startTrialSchool = async ({ name, slug }) => {
+// Schoolivio's plan prices per currency, set in Console → Settings
+// (supabase/227). Public, so the pricing section can show them.
+export const fetchPlanPrices = async () => {
+  const { data, error } = await supabase.from("platform_plan_prices").select("currency, starter, growth");
+  if (error) throw error;
+  return data || [];
+};
+
+export const startTrialSchool = async ({ name, slug, currency, timezone, country }) => {
   const { data, error } = await supabase.rpc("start_trial_school", {
     school_name: name,
     school_slug: slug,
+    currency_in: currency || "NGN",
+    timezone_in: timezone || "Africa/Lagos",
+    country_in: country || null,
   });
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;

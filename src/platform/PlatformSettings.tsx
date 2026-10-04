@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabaseClient";
 import { db } from "../lib/db";
 import { Page, Card, Button, Badge, Field, Select, SkeletonText } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
+import PlanPrices from "./PlanPrices";
 
 // Console → Settings (supabase/225): Schoolivio's own email sender, which
 // sends schools their trial and renewal reminders, and Schoolivio's Paystack
@@ -190,7 +191,7 @@ const PlatformSettings = () => {
             <Badge tone={saved.paystack_connected ? "success" : "warn"}>{saved.paystack_connected ? "Connected" : "Not set up"}</Badge>
           </div>
           <p className="plan-pay-note">
-            {"Schools pay their plan into this account (Starter ₦450,000, Growth ₦950,000 a month). From your Paystack dashboard → Settings → API Keys."}
+            {"Schools pay their plan into this account, at the prices under Plan prices below. From your Paystack dashboard → Settings → API Keys."}
           </p>
           <div className="team-name-row">
             <Field label="Public key">
@@ -215,6 +216,9 @@ const PlatformSettings = () => {
           </Button>
         </div>
       </form>
+      <div style={{ marginTop: 16 }}>
+        <PlanPrices />
+      </div>
     </Page>
   );
 };

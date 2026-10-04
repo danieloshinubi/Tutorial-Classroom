@@ -4048,15 +4048,18 @@ export type Database = {
           bands_confirmed_at: string | null
           bands_confirmed_by: string | null
           created_at: string
+          fund_label: string
           nhf_percent: number
           pay_day: number | null
           paye_bands: Json
           paying_bank: string | null
           pension_employee_percent: number
           pension_employer_percent: number
+          pension_label: string
           rent_relief_cap: number
           rent_relief_percent: number
           school_id: string
+          tax_label: string
           tax_office: string | null
           updated_at: string
         }
@@ -4065,15 +4068,18 @@ export type Database = {
           bands_confirmed_at?: string | null
           bands_confirmed_by?: string | null
           created_at?: string
+          fund_label?: string
           nhf_percent?: number
           pay_day?: number | null
           paye_bands?: Json
           paying_bank?: string | null
           pension_employee_percent?: number
           pension_employer_percent?: number
+          pension_label?: string
           rent_relief_cap?: number
           rent_relief_percent?: number
           school_id: string
+          tax_label?: string
           tax_office?: string | null
           updated_at?: string
         }
@@ -4082,15 +4088,18 @@ export type Database = {
           bands_confirmed_at?: string | null
           bands_confirmed_by?: string | null
           created_at?: string
+          fund_label?: string
           nhf_percent?: number
           pay_day?: number | null
           paye_bands?: Json
           paying_bank?: string | null
           pension_employee_percent?: number
           pension_employer_percent?: number
+          pension_label?: string
           rent_relief_cap?: number
           rent_relief_percent?: number
           school_id?: string
+          tax_label?: string
           tax_office?: string | null
           updated_at?: string
         }
@@ -4444,6 +4453,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      platform_plan_prices: {
+        Row: {
+          currency: string
+          growth: number
+          starter: number
+          updated_at: string
+        }
+        Insert: {
+          currency: string
+          growth: number
+          starter: number
+          updated_at?: string
+        }
+        Update: {
+          currency?: string
+          growth?: number
+          starter?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       platform_settings: {
         Row: {
@@ -4952,6 +4982,7 @@ export type Database = {
           ai_token_limit: number
           allow_self_signup: boolean
           archived_at: string | null
+          country: string | null
           created_at: string
           currency: string
           disabled_modules: string[]
@@ -4981,6 +5012,7 @@ export type Database = {
           ai_token_limit?: number
           allow_self_signup?: boolean
           archived_at?: string | null
+          country?: string | null
           created_at?: string
           currency?: string
           disabled_modules?: string[]
@@ -5010,6 +5042,7 @@ export type Database = {
           ai_token_limit?: number
           allow_self_signup?: boolean
           archived_at?: string | null
+          country?: string | null
           created_at?: string
           currency?: string
           disabled_modules?: string[]
@@ -7259,7 +7292,14 @@ export type Database = {
         }
       }
       create_school: {
-        Args: { owner_email?: string; school_name: string; school_slug: string }
+        Args: {
+          country_in?: string
+          currency_in?: string
+          owner_email?: string
+          school_name: string
+          school_slug: string
+          timezone_in?: string
+        }
         Returns: {
           address: string | null
           admission_letter_closing: string | null
@@ -7268,6 +7308,7 @@ export type Database = {
           ai_token_limit: number
           allow_self_signup: boolean
           archived_at: string | null
+          country: string | null
           created_at: string
           currency: string
           disabled_modules: string[]
@@ -7640,6 +7681,7 @@ export type Database = {
         Args: never
         Returns: {
           amount: number
+          currency: string
           days_before: number
           days_left: number
           ends_on: string
@@ -8476,15 +8518,18 @@ export type Database = {
           bands_confirmed_at: string | null
           bands_confirmed_by: string | null
           created_at: string
+          fund_label: string
           nhf_percent: number
           pay_day: number | null
           paye_bands: Json
           paying_bank: string | null
           pension_employee_percent: number
           pension_employer_percent: number
+          pension_label: string
           rent_relief_cap: number
           rent_relief_percent: number
           school_id: string
+          tax_label: string
           tax_office: string | null
           updated_at: string
         }
@@ -8583,6 +8628,7 @@ export type Database = {
           ai_token_limit: number
           allow_self_signup: boolean
           archived_at: string | null
+          country: string | null
           created_at: string
           currency: string
           disabled_modules: string[]
@@ -8675,6 +8721,7 @@ export type Database = {
           ai_token_limit: number
           allow_self_signup: boolean
           archived_at: string | null
+          country: string | null
           created_at: string
           currency: string
           disabled_modules: string[]
@@ -8780,6 +8827,10 @@ export type Database = {
         Args: { target_user: string }
         Returns: undefined
       }
+      platform_remove_plan_price: {
+        Args: { currency_in: string }
+        Returns: undefined
+      }
       platform_save_settings: {
         Args: { actor: string; settings: Json }
         Returns: undefined
@@ -8847,6 +8898,7 @@ export type Database = {
           ai_token_limit: number
           allow_self_signup: boolean
           archived_at: string | null
+          country: string | null
           created_at: string
           currency: string
           disabled_modules: string[]
@@ -8874,6 +8926,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      platform_set_plan_price: {
+        Args: { currency_in: string; growth_in: number; starter_in: number }
+        Returns: undefined
       }
       platform_set_secret: {
         Args: { plaintext: string; which: string }
@@ -10313,7 +10369,13 @@ export type Database = {
         Returns: Json
       }
       start_trial_school: {
-        Args: { school_name: string; school_slug: string }
+        Args: {
+          country_in?: string
+          currency_in?: string
+          school_name: string
+          school_slug: string
+          timezone_in?: string
+        }
         Returns: {
           address: string | null
           admission_letter_closing: string | null
@@ -10322,6 +10384,7 @@ export type Database = {
           ai_token_limit: number
           allow_self_signup: boolean
           archived_at: string | null
+          country: string | null
           created_at: string
           currency: string
           disabled_modules: string[]
