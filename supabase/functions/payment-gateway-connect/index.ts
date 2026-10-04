@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
         if (!isImplemented(provider)) {
           return json({ error: `${provider} isn't available yet.` }, 400);
         }
-        const check = await verifyCredentials(provider, secrets.secret_key);
+        const check = await verifyCredentials(provider, secrets);
         if (!check.ok) {
           return json(
             {

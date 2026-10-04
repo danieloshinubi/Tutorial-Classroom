@@ -12,6 +12,7 @@ const ENV_VARS_BY_PROVIDER: Record<string, Record<string, string>> = {
   paystack: { secret_key: "PAYSTACK_SECRET_KEY" },
   flutterwave: { secret_key: "FLUTTERWAVE_SECRET_KEY", hash: "FLUTTERWAVE_SECRET_HASH" },
   stripe: { secret_key: "STRIPE_SECRET_KEY", webhook_secret: "STRIPE_WEBHOOK_SECRET" },
+  sznd: { api_key: "SZND_API_KEY", secret_key: "SZND_SECRET_KEY" },
 };
 
 export function resolvePlatformSecrets(provider: string): Record<string, string> {

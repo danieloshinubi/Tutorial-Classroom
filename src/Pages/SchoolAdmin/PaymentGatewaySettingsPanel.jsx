@@ -54,6 +54,13 @@ const IMPLEMENTED_PROVIDERS = {
       },
     ],
   },
+  sznd: {
+    label: "Sznd",
+    fields: [
+      { key: "api_key", label: "API key", placeholder: "Your Sznd API key", secret: true },
+      { key: "secret_key", label: "Secret key", placeholder: "Your Sznd secret key", secret: true },
+    ],
+  },
 };
 
 // Not a real provider — picking it just tells the server "figure out which
@@ -118,6 +125,11 @@ const PaymentGatewaySettingsPanel = () => {
     setMode(key);
     setCredentials({});
     setError("");
+    // "Other / not listed" only means anything in BYO mode (there's a key to
+    // detect a provider from) — platform mode always picks a real,
+    // adapter-backed provider, so switching back to it from "other" needs a
+    // real fallback rather than an unselectable option.
+    if (key === "platform" && provider === OTHER_PROVIDER) setProvider("paystack");
   };
 
   const save = async (e) => {
@@ -204,7 +216,7 @@ const PaymentGatewaySettingsPanel = () => {
   const currentlyLabel = !gateway?.provider
     ? "Not connected — online payments will not work for this school until an owner or admin chooses one below."
     : gateway.mode === "platform"
-    ? "Schoolivio's shared Paystack account."
+    ? `Schoolivio's shared ${IMPLEMENTED_PROVIDERS[gateway.provider]?.label || gateway.provider} account.`
     : `Your own ${IMPLEMENTED_PROVIDERS[gateway.provider]?.label || gateway.provider} account.`;
 
   return (
@@ -268,9 +280,18 @@ const PaymentGatewaySettingsPanel = () => {
               </p>
             </>
           ) : (
-            <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>
-              {"Nothing to set up — payments settle through Schoolivio's own Paystack account. Free to switch to your own account at any time."}
-            </p>
+            <>
+              <Field label="Provider">
+                <Select
+                  value={provider}
+                  onChange={(value) => setProvider(value)}
+                  options={Object.entries(IMPLEMENTED_PROVIDERS).map(([key, p]) => ({ value: key, label: p.label }))}
+                />
+              </Field>
+              <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>
+                {"Nothing to set up — payments settle through Schoolivio's own account with this provider. Free to switch to your own account, or a different shared provider, at any time."}
+              </p>
+            </>
           )}
 
           <Button type="submit" disabled={saving}>
