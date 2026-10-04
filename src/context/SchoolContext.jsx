@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { joinSchool } from "../lib/api";
+import { platformSchoolAccess } from "../lib/schoolAccessApi";
 import { resolveSlug } from "../lib/tenant";
 import { applyTenantBranding } from "../lib/branding";
 import { useAuth } from "./AuthContext";
@@ -54,6 +55,10 @@ export const SchoolProvider = ({ children }) => {
   // (supabase/208). Loaded with everything else, before `loading` clears,
   // so a route guard never turns someone away before it arrives.
   const [moduleGrants, setModuleGrants] = useState({});
+  // A Schoolivio console account that is not (yet) let into this school:
+  // where it stands (supabase/224). Null for everyone else.
+  const [platformAccess, setPlatformAccess] = useState(null);
+  const platformRetryRef = useRef(false);
   const loadedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -120,7 +125,7 @@ export const SchoolProvider = ({ children }) => {
           .maybeSingle(),
         supabase
           .from("school_members")
-          .select("id, role, is_active, schools!inner ( slug )")
+          .select("id, role, is_active, access_expires_at, granted_via, schools!inner ( slug )")
           .eq("schools.slug", slug)
           .eq("user_id", userId)
           .maybeSingle(),
@@ -153,21 +158,45 @@ export const SchoolProvider = ({ children }) => {
       // member" arrive the same way. Say so plainly rather than guessing.
       if (!schoolRow) {
         setSchool(null);
+        // A console account is let in per school, not a member by default.
+        // Break-glass accounts are let in by this very check; once in, load
+        // again (once) to pick the school up.
+        if (platform) {
+          const access = await platformSchoolAccess(slug).catch(() => null);
+          if (access?.state === "granted" && !platformRetryRef.current) {
+            platformRetryRef.current = true;
+            setTimeout(() => load(), 0);
+            return;
+          }
+          setPlatformAccess(access || { state: "none" });
+          return;
+        }
         setError(`You do not have access to ${slug}.schoolivio.com.`);
         return;
       }
+      setPlatformAccess(null);
       setSchool(schoolRow);
       // The join columns are dropped so these keep exactly the shape the rest
       // of the app has always received.
       setLevels((levelRows || []).map(({ year, label }) => ({ year, label })));
       setModuleGrants(Object.fromEntries((grantRows || []).map((r) => [r.module, r.level])));
-      const mine = mineRow ? { id: mineRow.id, role: mineRow.role, is_active: mineRow.is_active } : null;
+      const mine = mineRow
+        ? {
+            id: mineRow.id,
+            role: mineRow.role,
+            is_active: mineRow.is_active,
+            // Set when this is time-limited Schoolivio support access.
+            access_expires_at: mineRow.access_expires_at || null,
+            granted_via: mineRow.granted_via || null,
+          }
+        : null;
 
       // A person who signed themselves up has no membership yet. Ask the
       // database to add them as a student — it refuses if the school is
       // invitation-only, which is the right answer.
       let membershipRow = mine;
-      if (!membershipRow) {
+      // A console account is never enrolled as a student by visiting.
+      if (!membershipRow && !platform) {
         membershipRow = await joinSchool(slug).catch(() => null);
       }
 
@@ -262,6 +291,7 @@ export const SchoolProvider = ({ children }) => {
       // row so navigation and route guards cannot disagree about it, and
       // defaulted to [] for a school row loaded before this column existed.
       disabledModules: school?.disabled_modules || [],
+      platformAccess,
       moduleGrants,
       membership,
       memberships,
@@ -286,7 +316,7 @@ export const SchoolProvider = ({ children }) => {
       error,
       reload: load,
     }),
-    [slug, school, levels, moduleGrants, membership, memberships, role, roles, isPlatformAdmin, trialExpired, loading, authLoading, error, load]
+    [slug, school, levels, moduleGrants, platformAccess, membership, memberships, role, roles, isPlatformAdmin, trialExpired, loading, authLoading, error, load]
   );
 
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>;

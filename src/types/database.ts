@@ -4369,16 +4369,69 @@ export type Database = {
           },
         ]
       }
-      platform_admins: {
+      platform_access_requests: {
         Row: {
           created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decline_note: string | null
+          expires_at: string | null
+          hours: number | null
+          id: string
+          reason: string
+          school_id: string
+          status: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decline_note?: string | null
+          expires_at?: string | null
+          hours?: number | null
+          id?: string
+          reason: string
+          school_id: string
+          status?: string
           user_id: string
         }
         Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          decline_note?: string | null
+          expires_at?: string | null
+          hours?: number | null
+          id?: string
+          reason?: string
+          school_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_access_requests_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_admins: {
+        Row: {
+          access_type: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          access_type?: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          access_type?: string
           created_at?: string
           user_id?: string
         }
@@ -4783,7 +4836,10 @@ export type Database = {
       }
       school_members: {
         Row: {
+          access_expires_at: string | null
           created_at: string
+          granted_by: string | null
+          granted_via: string | null
           id: string
           is_active: boolean
           job_title: string | null
@@ -4793,7 +4849,10 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          access_expires_at?: string | null
           created_at?: string
+          granted_by?: string | null
+          granted_via?: string | null
           id?: string
           is_active?: boolean
           job_title?: string | null
@@ -4803,7 +4862,10 @@ export type Database = {
           user_id: string
         }
         Update: {
+          access_expires_at?: string | null
           created_at?: string
+          granted_by?: string | null
+          granted_via?: string | null
           id?: string
           is_active?: boolean
           job_title?: string | null
@@ -6782,6 +6844,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      cancel_school_access_request: {
+        Args: { target_slug: string }
+        Returns: undefined
+      }
       carry_forward_balances: { Args: { target_term: string }; Returns: Json }
       chat_overview: { Args: { target_school: string }; Returns: Json }
       child_courses: {
@@ -7282,6 +7348,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      decide_school_access: {
+        Args: {
+          approve: boolean
+          hours_in: number
+          note?: string
+          target_request: string
+        }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decline_note: string | null
+          expires_at: string | null
+          hours: number | null
+          id: string
+          reason: string
+          school_id: string
+          status: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "platform_access_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       declare_admissions_payment: {
         Args: {
           amount: number
@@ -7405,6 +7498,11 @@ export type Database = {
         Args: { target_school: string; target_user: string }
         Returns: string
       }
+      end_school_access: {
+        Args: { target_school: string; target_user: string }
+        Returns: undefined
+      }
+      expire_school_access: { Args: never; Returns: number }
       forget_push_subscription: {
         Args: { endpoint_in: string }
         Returns: undefined
@@ -7593,6 +7691,7 @@ export type Database = {
       is_my_invoice: { Args: { target_invoice: string }; Returns: boolean }
       is_platform_admin: { Args: never; Returns: boolean }
       is_school_admin: { Args: { target_school: string }; Returns: boolean }
+      is_school_approver: { Args: { target_school: string }; Returns: boolean }
       is_school_staff: { Args: { target_school: string }; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
       is_ticket_staff: { Args: { target_school: string }; Returns: boolean }
@@ -7634,7 +7733,10 @@ export type Database = {
       join_school: {
         Args: { target_slug: string }
         Returns: {
+          access_expires_at: string | null
           created_at: string
+          granted_by: string | null
+          granted_via: string | null
           id: string
           is_active: boolean
           job_title: string | null
@@ -8258,9 +8360,11 @@ export type Database = {
         Args: { target_run: string }
         Returns: undefined
       }
+      person_label: { Args: { target: string }; Returns: string }
       platform_add_admin: {
         Args: { target_email: string }
         Returns: {
+          access_type: string
           created_at: string
           user_id: string
         }
@@ -8443,9 +8547,19 @@ export type Database = {
           school_name: string
         }[]
       }
+      platform_grant_admin: {
+        Args: {
+          actor: string
+          is_new: boolean
+          target_user: string
+          type_in?: string
+        }
+        Returns: undefined
+      }
       platform_list_admins: {
         Args: never
         Returns: {
+          access_type: string
           added_at: string
           email: string
           name: string
@@ -8496,6 +8610,7 @@ export type Database = {
         Args: { target_user: string }
         Returns: undefined
       }
+      platform_school_access: { Args: { target_slug: string }; Returns: Json }
       platform_schools: {
         Args: never
         Returns: {
@@ -8520,6 +8635,10 @@ export type Database = {
           school_name: string
           school_slug: string
         }[]
+      }
+      platform_set_access_type: {
+        Args: { target_user: string; type_in: string }
+        Returns: undefined
       }
       platform_set_billing_status: {
         Args: { status_in: string; target_record: string }
@@ -8616,6 +8735,10 @@ export type Database = {
           role: Database["classroom"]["Enums"]["member_role"]
           user_id: string
         }[]
+      }
+      platform_user_by_email: {
+        Args: { target_email: string }
+        Returns: string
       }
       post_manual_journal: {
         Args: {
@@ -9371,6 +9494,28 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_school_access: {
+        Args: { reason: string; target_slug: string }
+        Returns: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          decline_note: string | null
+          expires_at: string | null
+          hours: number | null
+          id: string
+          reason: string
+          school_id: string
+          status: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "platform_access_requests"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       require_password_change: {
         Args: { target_user: string }
         Returns: undefined
@@ -9670,6 +9815,24 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      school_access_requests: {
+        Args: { target_school: string }
+        Returns: {
+          created_at: string
+          decided_at: string
+          decided_by_name: string
+          decline_note: string
+          expires_at: string
+          hours: number
+          id: string
+          reason: string
+          requester_email: string
+          requester_name: string
+          status: string
+          user_id: string
+        }[]
+      }
+      school_approvers: { Args: { target_school: string }; Returns: string[] }
       school_presence: {
         Args: { target_school: string }
         Returns: {

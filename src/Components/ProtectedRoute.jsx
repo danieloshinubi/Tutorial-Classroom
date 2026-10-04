@@ -8,6 +8,7 @@ import { fetchMyApplicantAccount, createApplicantAccount } from "../lib/api";
 import { useActionFeedback } from "./Toast";
 import { AppLoading } from "./UI";
 import { fetchPublicSchool } from "../lib/publicSchool";
+import PlatformAccessGate, { SupportAccessPill } from "./PlatformAccessGate";
 
 // Reachable with no school_members row at this tenant — an applicant's own
 // portal, and basic account management every signed-in person needs
@@ -29,7 +30,7 @@ const CONFIRM_DELAY_MS = 700;
 
 const ProtectedRoute = () => {
   const { session, profile, loading, signOut } = useAuth();
-  const { membership, loading: schoolLoading } = useSchool();
+  const { membership, platformAccess, loading: schoolLoading } = useSchool();
   const location = useLocation();
   const { setError } = useActionFeedback();
 
@@ -52,7 +53,10 @@ const ProtectedRoute = () => {
   const needsMembership = !MEMBERSHIP_NOT_REQUIRED.some(
     (path) => location.pathname === path || location.pathname.startsWith(`${path}/`)
   );
-  const noMembershipSignal = !loading && !!session && !schoolLoading && !membership && needsMembership;
+  // A Schoolivio console account not let into this school asks for access
+  // (PlatformAccessGate) rather than being treated as a stranger and signed out.
+  const platformGate = !!platformAccess && !membership && needsMembership;
+  const noMembershipSignal = !loading && !!session && !schoolLoading && !membership && needsMembership && !platformGate;
 
   const [confirmedNoMembership, setConfirmedNoMembership] = useState(false);
   useEffect(() => {
@@ -142,6 +146,10 @@ const ProtectedRoute = () => {
     return <AppLoading label="Loading your school..." />;
   }
 
+  if (platformGate && !schoolLoading) {
+    return <PlatformAccessGate access={platformAccess} />;
+  }
+
   if (confirmedNoMembership) {
     if (applicantStatus === "applicant") {
       return <Navigate to="/Applications" replace />;
@@ -157,6 +165,17 @@ const ProtectedRoute = () => {
   // whole check exists to avoid ever showing.
   if (noMembershipSignal) {
     return <AppLoading />;
+  }
+
+  // Inside a school on time-limited Schoolivio support access: say so, and
+  // close the page when it ends.
+  if (membership?.access_expires_at) {
+    return (
+      <>
+        <Outlet />
+        <SupportAccessPill expiresAt={membership.access_expires_at} />
+      </>
+    );
   }
 
   return <Outlet />;

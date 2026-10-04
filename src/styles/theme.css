@@ -8510,3 +8510,48 @@ button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-colo
   .tt-grid { min-width: 560px; }
   .tt-grid .tt-corner, .tt-grid tbody th { width: 92px; }
 }
+
+/* Platform → Team: adding someone, and the details shown once. */
+.team-issued { margin-bottom: 18px; max-width: 640px; background: var(--success-soft); border-color: transparent; }
+.team-issued h3 { margin-top: 0; }
+.team-issued p { font-size: 14px; margin-top: 0; }
+.team-issued-grid { display: grid; gap: 10px; max-width: 440px; margin-bottom: 12px; }
+.team-mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+.team-password { font-size: 17px; letter-spacing: .02em; }
+.team-issued-note { font-size: 13px; color: var(--ink-2); }
+.team-name-row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.team-form-error { margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--danger-soft); color: var(--danger); font-size: 13.5px; }
+
+/* Schoolivio staff at a school they have not been let into (PlatformAccessGate). */
+.pag-page { min-height: 100vh; min-height: 100dvh; display: grid; place-items: center; padding: 24px 16px; background: radial-gradient(1200px 600px at 50% -10%, #e7deff 0%, #f5f2ff 45%, #faf9ff 100%); color: #17142a; }
+.pag-card { width: min(560px, 100%); padding: 32px 30px 24px; border-radius: 20px; background: #fff; border: 1px solid #e3dafb; box-shadow: 0 24px 60px rgba(109, 63, 196, .14); }
+.pag-brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 18px; color: #5b34b8; }
+.pag-card h1 { margin: 0 0 8px; font-size: 22px; line-height: 1.25; text-wrap: balance; }
+.pag-lede { margin: 0 0 18px; color: #5b5772; font-size: 14.5px; line-height: 1.55; }
+.pag-note { margin: 0 0 14px; padding: 8px 12px; border-radius: 10px; background: #fff4e5; color: #8a5a00; font-size: 13.5px; }
+.pag-quote { padding: 12px 14px; border-radius: 12px; background: #f6f3ff; margin-bottom: 16px; }
+.pag-quote span { font-size: 12px; font-weight: 600; color: #7c4fe0; text-transform: uppercase; letter-spacing: .06em; }
+.pag-quote p { margin: 4px 0; font-size: 14.5px; }
+.pag-quote small { color: #8a86a0; }
+.pag-error { margin: 8px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--danger-soft, #fde8e8); color: var(--danger, #b42318); font-size: 13.5px; }
+.pag-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.pag-foot { margin: 22px 0 0; border-top: 1px solid #efeaff; padding-top: 12px; text-align: center; }
+/* Inside a school on Schoolivio support access (ProtectedRoute). */
+.support-pill { position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 80; max-width: calc(100vw - 24px); padding: 7px 14px; border-radius: 999px; background: #5b34b8; color: #fff; font-size: 12.5px; font-weight: 600; box-shadow: 0 8px 20px rgba(91, 52, 184, .3); pointer-events: none; text-align: center; }
+
+/* School admin → Schoolivio access. */
+.sa-access { display: grid; gap: 16px; max-width: 980px; }
+.sa-access-h { margin: 0 0 12px; }
+.sa-access-list { list-style: none; margin: 0; padding: 0; display: grid; }
+.sa-access-item { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; padding: 14px 0; border-top: 1px solid var(--line); }
+.sa-access-item:first-child { border-top: 0; padding-top: 0; }
+.sa-access-who { display: grid; gap: 3px; min-width: 0; }
+.sa-access-who > span { font-size: 12.5px; color: var(--ink-3); }
+.sa-access-reason { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; background: var(--bg); font-size: 14px; }
+.sa-access-decide { display: grid; gap: 8px; min-width: 220px; }
+.sa-access-decide .field { margin: 0; }
+.sa-access-sub { font-size: 12.5px; color: var(--ink-3); }
+.sa-access-reason-cell { max-width: 320px; }
+@media (max-width: 700px) { .sa-access-item { flex-direction: column; } .sa-access-decide { width: 100%; min-width: 0; } }
+
+.team-access-self { font-size: 13px; color: var(--ink-2); }

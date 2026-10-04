@@ -33,6 +33,8 @@ import FeesSetupPanel from "./FeesSetupPanel";
 import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
 import OrganogramPanel from "./OrganogramPanel";
 import SecurityPanel from "./SecurityPanel";
+import SchoolAccessPanel from "./SchoolAccessPanel";
+import { shield } from "react-icons-kit/feather/shield";
 import { STAFF_ROLES } from "../../lib/orgChart";
 import { ROLES, ROLE_LABEL, toneFor, roleAccent } from "../../lib/roles";
 import { GRANTABLE_MODULES, ACCESS_LABEL, roleCovers, moduleById } from "../../lib/modules";
@@ -667,6 +669,10 @@ const PeoplePanel = () => {
                 {filtered.map((row) => {
                   const isSelf = row.profiles.id === user?.id;
                   const rowBusy = busyId === row.id;
+                  // Schoolivio support let in for a while: their account is
+                  // Schoolivio's, not the school's, so only Remove applies
+                  // (it ends their access early).
+                  const isSupport = Boolean(row.granted_via);
                   return (
                     <tr key={row.id} className={`people-row${row.is_active ? "" : " suspended"}`}>
                       <td>
@@ -692,6 +698,9 @@ const PeoplePanel = () => {
                               {displayName(row.profiles)}
                               {isSelf ? <Badge tone="success">{"you"}</Badge> : null}
                               {!row.is_active ? <Badge>{"suspended"}</Badge> : null}
+                              {row.granted_via ? (
+                                <Badge tone="warn">{`Schoolivio support · until ${formatDate(row.access_expires_at)}`}</Badge>
+                              ) : null}
                             </span>
                             {row.job_title ? <span className="people-job">{row.job_title}</span> : null}
                             <span className="people-email">{row.profiles.email || "—"}</span>
@@ -709,7 +718,9 @@ const PeoplePanel = () => {
                       <td>
                         {/* Changing your own role away from admin would lock
                             you out of this page, so it is fixed for yourself. */}
-                        {isSelf ? (
+                        {/* Schoolivio support access is set under School admin →
+                            Schoolivio access, never by changing the role here. */}
+                        {isSelf || row.granted_via ? (
                           <Badge tone={toneFor(row.role)}>{ROLE_LABEL[row.role]}</Badge>
                         ) : (
                           <Select
@@ -733,7 +744,7 @@ const PeoplePanel = () => {
                             className="select"
                             style={{ width: "auto", minWidth: 160, padding: "6px 8px" }}
                             value={row.manager_id || ""}
-                            disabled={rowBusy}
+                            disabled={rowBusy || isSupport}
                             onChange={(v) => changeManager(row, v)}
                             options={[
                               { value: "", label: "Not set" },
@@ -769,7 +780,7 @@ const PeoplePanel = () => {
                             className="row-action-btn"
                             title="Edit"
                             aria-label={`Edit ${displayName(row.profiles)}`}
-                            disabled={rowBusy}
+                            disabled={rowBusy || isSupport}
                             onClick={() => startEdit(row)}
                           >
                             <Icon icon={edit2} size={15} />
@@ -779,7 +790,7 @@ const PeoplePanel = () => {
                             className="row-action-btn"
                             title="Reset password"
                             aria-label={`Reset ${displayName(row.profiles)}'s password`}
-                            disabled={isSelf || rowBusy}
+                            disabled={isSelf || rowBusy || isSupport}
                             onClick={() => handleResetPassword(row)}
                           >
                             <Icon icon={lock} size={15} />
@@ -789,7 +800,7 @@ const PeoplePanel = () => {
                             className="row-action-btn"
                             title={row.is_active ? "Suspend" : "Restore"}
                             aria-label={`${row.is_active ? "Suspend" : "Restore"} ${displayName(row.profiles)}`}
-                            disabled={isSelf || rowBusy}
+                            disabled={isSelf || rowBusy || isSupport}
                             onClick={() => toggleActive(row)}
                           >
                             <Icon icon={row.is_active ? userX : userCheck} size={15} />
@@ -1492,6 +1503,7 @@ const SECTIONS = [
       { id: "mailboxes", label: "Mailboxes", icon: mailIcon, description: "Email accounts whose messages arrive as tickets." },
       { id: "modules", label: "Modules", icon: toggleRight, description: "Switch parts of Schoolivio on or off for this school." },
       { id: "security", label: "Security", icon: lock, description: "Sign people out after a set time of inactivity, or not at all." },
+      { id: "access", label: "Schoolivio access", icon: shield, description: "Let Schoolivio support into your school for a set time, or decline." },
       { id: "settings", label: "School settings", icon: settingsIcon, description: "Name, logo, colours, contact details and letters." },
     ],
   },
@@ -1513,6 +1525,7 @@ const PANELS = {
   fees: FeesSetupPanel,
   modules: ModulesPanel,
   security: SecurityPanel,
+  access: SchoolAccessPanel,
   settings: SettingsPanel,
 };
 

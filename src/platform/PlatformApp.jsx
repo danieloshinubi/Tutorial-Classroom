@@ -26,6 +26,7 @@ import { amIPlatformAdmin, platformSearch } from "../lib/platformApi";
 import ConfigNotice from "../Components/ConfigNotice";
 import { ToastProvider } from "../Components/Toast";
 import PlatformLogin from "./PlatformLogin";
+import PlatformSetPassword from "./PlatformSetPassword";
 import Overview from "./Overview";
 import Tenants from "./Tenants";
 import TenantDetail from "./TenantDetail";
@@ -220,7 +221,7 @@ const PlatformNav = () => {
 // good account and no business in this console, so the answer comes from
 // classroom.platform_admins rather than from any school membership.
 const PlatformGate = ({ children }) => {
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
   const [allowed, setAllowed] = useState(null);
 
   const check = useCallback(() => {
@@ -240,6 +241,10 @@ const PlatformGate = ({ children }) => {
   }
 
   if (!user) return <PlatformLogin />;
+
+  // Signed in on a temporary password (Team → Add someone): it has to be
+  // replaced before anything else opens, as on a school's own site.
+  if (profile?.must_change_password) return <PlatformSetPassword />;
 
   if (allowed === null) {
     return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Checking access..."}</p>;

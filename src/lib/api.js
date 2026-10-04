@@ -1559,7 +1559,7 @@ export const fetchSchoolMembers = async (schoolId) => {
     // user_id is what invoices and payments and every other table joins on;
     // without it the Bursary invoice table falls back to "Student" instead
     // of the child's name.
-    .select(`id, user_id, role, is_active, created_at, manager_id, job_title, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS}, bio )`)
+    .select(`id, user_id, role, is_active, created_at, manager_id, job_title, access_expires_at, granted_via, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS}, bio )`)
     .eq("school_id", schoolId)
     .order("created_at", { ascending: false });
   if (error) throw error;
