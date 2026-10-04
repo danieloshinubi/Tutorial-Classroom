@@ -8440,3 +8440,25 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
 .nf-body { margin: 0 0 22px; color: #5b5772; font-size: 14.5px; line-height: 1.55; }
 .nf-link { display: inline-block; padding: 11px 20px; border-radius: 999px; background: #7c4fe0; color: #fff; font-weight: 600; text-decoration: none; box-shadow: 0 8px 20px rgba(124, 79, 224, .28); }
 .nf-link:hover { background: #6d3fc4; }
+
+/* Presence: a green dot on someone's photo while they are online (Chat,
+   People), as in Teams and WhatsApp. */
+.presence-wrap { position: relative; display: inline-flex; flex: none; line-height: 0; }
+.presence-dot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  background: #22a559;
+  box-shadow: 0 0 0 2px var(--surface, #fff);
+}
+
+.people-last-in { white-space: nowrap; font-size: 13px; color: var(--ink-2); }
+.people-online { display: inline-flex; align-items: center; gap: 6px; color: #1b8a4b; font-weight: 600; }
+.people-online::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #22a559; }
+.person-presence { font-size: 12.5px; color: var(--ink-3); }
+.person-presence.on { color: #1b8a4b; font-weight: 600; }
+
+.presence-dot.away { background: #f2a516; }
+.people-online.away { color: #a86a00; }
+.people-online.away::before { background: #f2a516; }

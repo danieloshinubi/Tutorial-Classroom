@@ -52,6 +52,8 @@ import {
 } from "../../lib/api";
 import { Page, Button, Empty, Modal, displayName, initials } from "../../Components/UI";
 import { ROLE_LABEL } from "../../lib/roles";
+import { usePresence } from "../../context/PresenceContext";
+import { presenceLabel } from "../../lib/presence";
 
 // An empty Tiptap document still serialises to "<p></p>" — the same reason
 // Tickets' own composer checks text content rather than the raw HTML.
@@ -229,8 +231,10 @@ const ReplyPreview = ({ message, className }) => (
 // One circle — a photo when there is one, initials otherwise. Sizes are
 // computed (the cluster below scales its pieces), so geometry goes in a style
 // prop; a Tailwind class cannot be generated from a runtime number.
-const Avatar = ({ profile, size }) =>
-  profile?.avatar_url ? (
+// presence: "online" | "away" | "offline" to show a dot (green when online,
+// amber when away, as in Teams); leave it out where presence means nothing.
+const Avatar = ({ profile, size, presence: state }) => {
+  const face = profile?.avatar_url ? (
     <img
       src={profile.avatar_url}
       alt=""
@@ -245,6 +249,17 @@ const Avatar = ({ profile, size }) =>
       {initials(profile)}
     </span>
   );
+  if (state === undefined) return face;
+  const dot = Math.max(9, Math.round(size * 0.26));
+  return (
+    <span className="presence-wrap">
+      {face}
+      {state === "online" || state === "away" ? (
+        <span className={`presence-dot${state === "away" ? " away" : ""}`} style={{ width: dot, height: dot }} title={state === "away" ? "Away" : "Online"} />
+      ) : null}
+    </span>
+  );
+};
 
 // A group's avatar, the way Teams does it: the first few members' own avatars
 // clustered into one circle, rather than initials taken from the group's name
@@ -1036,6 +1051,7 @@ const NewChatModal = ({ schoolId, myUserId, onClose, onCreated, onError }) => {
 };
 
 const ChatPage = () => {
+  const presence = usePresence();
   const { channelId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -1171,6 +1187,7 @@ const ChatPage = () => {
         );
         if (user?.id && payload.new.author_id !== user.id) {
           markChannelRead({ channelId, userId: user.id }).catch(() => {});
+          presence.markSeen(payload.new.author_id);
         }
       } else if (payload.eventType === "UPDATE") {
         setMessages((current) => current.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m)));
@@ -1577,10 +1594,17 @@ const ChatPage = () => {
     typingNames.length > 0 ? `${typingNames.join(", ")} ${typingNames.length > 1 ? "are" : "is"} typing…` : "";
   // Under the name in the thread head: what this chat is, unless someone is
   // typing, which is the more useful thing to know right then.
+  // A conversation with one person says whether they are online or when
+  // they were last seen, then what they do; a group says how many are in it.
   const threadSubtitle = isGroup
     ? `${channelMembers.length} participants`
     : otherMember
-    ? otherMember.job_title || ROLE_LABEL[otherMember.role] || otherMember.role
+    ? [
+        presenceLabel({ status: presence.status(otherMemberId), lastSeen: presence.lastSeen(otherMemberId) }),
+        otherMember.job_title || ROLE_LABEL[otherMember.role] || otherMember.role,
+      ]
+        .filter(Boolean)
+        .join(" · ")
     : "";
   const headerProfile = otherMemberId ? membersById[otherMemberId] : { first_name: activeChannel?.name };
 
@@ -1736,7 +1760,7 @@ const ChatPage = () => {
                           disabled={!c.other_user_id}
                           onClick={(e) => { e.stopPropagation(); if (c.other_user_id) openPerson(c.other_user_id); }}
                         >
-                          <Avatar profile={membersById[c.other_user_id] || { first_name: c.name }} size={44} />
+                          <Avatar profile={membersById[c.other_user_id] || { first_name: c.name }} size={44} presence={c.other_user_id ? presence.status(c.other_user_id) : undefined} />
                         </button>
                       )}
                       <span className="tw-flex-1 tw-min-w-0">
@@ -1843,7 +1867,7 @@ const ChatPage = () => {
                       disabled={!otherMemberId}
                       onClick={() => otherMemberId && openPerson(otherMemberId)}
                     >
-                      <Avatar profile={headerProfile} size={40} />
+                      <Avatar profile={headerProfile} size={40} presence={otherMemberId ? presence.status(otherMemberId) : undefined} />
                     </button>
                   )}
                   <button

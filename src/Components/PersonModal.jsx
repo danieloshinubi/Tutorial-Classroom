@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Modal, displayName, initials } from "./UI";
 import { findTopOfChain } from "../lib/orgChart";
+import { usePresence } from "../context/PresenceContext";
+import { presenceLabel } from "../lib/presence";
 
 // One card in the Organisation section — a photo (or initials) above a
 // name and role, the same "Manager" / "People reporting to X" layout
@@ -59,6 +61,10 @@ const PersonModal = ({ person, schoolMembers, onClose }) => {
   const manager = viewing.manager_id ? schoolMembers.find((m) => m.user_id === viewing.manager_id) : null;
   const reports = schoolMembers.filter((m) => m.manager_id === viewing.user_id);
   const top = findTopOfChain(viewing.user_id, schoolMembers);
+  const presence = usePresence();
+  const presenceState = presence.status(viewing.user_id);
+  const presenceOnline = presenceState === "online";
+  const presenceText = presenceLabel({ status: presenceState, lastSeen: presence.lastSeen(viewing.user_id) });
   const isTop = !manager;
 
   return (
@@ -72,6 +78,7 @@ const PersonModal = ({ person, schoolMembers, onClose }) => {
         <div>
           <div className="tw-text-[17px] tw-font-bold">{displayName(viewing.profiles)}</div>
           {viewing.job_title ? <div className="tw-text-[14px] tw-font-semibold tw-text-ink-2">{viewing.job_title}</div> : null}
+          {presenceText ? <div className={`person-presence${presenceOnline ? " on" : ""}`}>{presenceText}</div> : null}
           <div className="tw-text-[13px] tw-text-ink-3 tw-capitalize">{viewing.role}</div>
         </div>
       </div>

@@ -36,6 +36,8 @@ import SecurityPanel from "./SecurityPanel";
 import { STAFF_ROLES } from "../../lib/orgChart";
 import { ROLES, ROLE_LABEL, toneFor, roleAccent } from "../../lib/roles";
 import { GRANTABLE_MODULES, ACCESS_LABEL, roleCovers, moduleById } from "../../lib/modules";
+import { usePresence } from "../../context/PresenceContext";
+import { relativeMoment } from "../../lib/presence";
 import {
   fetchSchoolMembers,
   updateMemberRole,
@@ -99,6 +101,7 @@ const PEOPLE_EXPORT_COLUMNS = [
 /* ------------------------------------------------------------------ people */
 const PeoplePanel = () => {
   const { user } = useAuth();
+  const presence = usePresence();
   const { schoolId } = useSchool();
 
   const [members, setMembers] = useState([]);
@@ -655,6 +658,7 @@ const PeoplePanel = () => {
                   <th>{"Person"}</th>
                   <th>{"Role"}</th>
                   <th>{"Reports to"}</th>
+                  <th>{"Last signed in"}</th>
                   <th>{"Added"}</th>
                   <th>{""}</th>
                 </tr>
@@ -667,17 +671,22 @@ const PeoplePanel = () => {
                     <tr key={row.id} className={`people-row${row.is_active ? "" : " suspended"}`}>
                       <td>
                         <span className="people-person">
-                          {row.profiles.avatar_url ? (
-                            <img
-                              src={row.profiles.avatar_url}
-                              alt=""
-                              className="people-avatar people-avatar-photo"
-                            />
-                          ) : (
-                            <span className={`people-avatar ${bandClass(row.profiles.id || displayName(row.profiles))}`}>
-                              {initials(row.profiles)}
-                            </span>
-                          )}
+                          <span className="presence-wrap">
+                            {row.profiles.avatar_url ? (
+                              <img
+                                src={row.profiles.avatar_url}
+                                alt=""
+                                className="people-avatar people-avatar-photo"
+                              />
+                            ) : (
+                              <span className={`people-avatar ${bandClass(row.profiles.id || displayName(row.profiles))}`}>
+                                {initials(row.profiles)}
+                              </span>
+                            )}
+                            {presence.status(row.user_id) !== "offline" ? (
+                              <span className={`presence-dot${presence.status(row.user_id) === "away" ? " away" : ""}`} style={{ width: 10, height: 10 }} title={presence.status(row.user_id) === "away" ? "Away" : "Online"} />
+                            ) : null}
+                          </span>
                           <span className="people-person-text">
                             <span className="people-name">
                               {displayName(row.profiles)}
@@ -735,6 +744,19 @@ const PeoplePanel = () => {
                           />
                         ) : (
                           <span style={{ color: "var(--ink-3)" }}>{"—"}</span>
+                        )}
+                      </td>
+                      <td className="people-last-in">
+                        {presence.status(row.user_id) !== "offline" ? (
+                          <span className={`people-online${presence.status(row.user_id) === "away" ? " away" : ""}`}>
+                            {presence.status(row.user_id) === "away" ? "Away" : "Online now"}
+                          </span>
+                        ) : presence.lastSignIn(row.user_id) ? (
+                          <span title={new Date(presence.lastSignIn(row.user_id)).toLocaleString()}>
+                            {relativeMoment(presence.lastSignIn(row.user_id))}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--ink-3)" }}>{"Never"}</span>
                         )}
                       </td>
                       <td style={{ whiteSpace: "nowrap", color: "var(--ink-3)" }}>

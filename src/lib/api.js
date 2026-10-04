@@ -5384,6 +5384,19 @@ export const saveNotificationPrefs = async ({ chatEmail }) => {
 
 // What is waiting on the signed-in person in each module, { module: count }
 // (supabase/212): the dot beside a module in the menu.
+// Presence (supabase/219): "still here" every couple of minutes, and the
+// last seen / last signed in times of the people the caller can see.
+export const touchPresence = async () => {
+  const { error } = await supabase.rpc("touch_presence");
+  if (error) throw error;
+};
+
+export const fetchSchoolPresence = async (schoolId) => {
+  const { data, error } = await supabase.rpc("school_presence", { target_school: schoolId });
+  if (error) throw error;
+  return data || [];
+};
+
 // Opening News, Reports, Attendance or Courses clears what was new there
 // (supabase/213).
 export const markModuleSeen = async (schoolId, moduleId) => {

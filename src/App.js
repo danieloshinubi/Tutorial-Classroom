@@ -19,6 +19,7 @@ import SchoolRoute from "./Components/SchoolRoute";
 import Login from "./Pages/Login/Login";
 import TenantGate from "./Components/TenantGate";
 import { NavDataProvider } from "./context/NavDataContext";
+import { PresenceProvider } from "./context/PresenceContext";
 import TrialGate from "./Components/TrialGate";
 import { isPlatformHost, isMarketingHost } from "./lib/tenant";
 import "typeface-poppins";
@@ -127,6 +128,7 @@ function App() {
       <AuthProvider>
         <SchoolProvider>
         <NavDataProvider>
+        <PresenceProvider>
           <ConfigNotice />
         <TrialGate>
         {/* Each module's code downloads the first time it is opened, so the
@@ -282,6 +284,7 @@ function App() {
         </Routes>
         </Suspense>
         </TrialGate>
+        </PresenceProvider>
         </NavDataProvider>
         </SchoolProvider>
       </AuthProvider>
