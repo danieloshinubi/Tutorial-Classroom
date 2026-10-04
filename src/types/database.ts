@@ -823,6 +823,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -843,6 +844,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -883,6 +885,7 @@ export type Database = {
           guardian_relation?: string | null
           id?: string
           interview_state?: string
+          it_ticket_id?: string | null
           middle_name?: string | null
           next_of_kin?: Json | null
           notes?: string | null
@@ -903,6 +906,7 @@ export type Database = {
           seq: number
           session_id?: string | null
           status?: Database["classroom"]["Enums"]["application_status"]
+          student_account_id?: string | null
           student_id?: string | null
           submitted_at?: string | null
           submitted_snapshot?: Json | null
@@ -943,6 +947,7 @@ export type Database = {
           guardian_relation?: string | null
           id?: string
           interview_state?: string
+          it_ticket_id?: string | null
           middle_name?: string | null
           next_of_kin?: Json | null
           notes?: string | null
@@ -963,6 +968,7 @@ export type Database = {
           seq?: number
           session_id?: string | null
           status?: Database["classroom"]["Enums"]["application_status"]
+          student_account_id?: string | null
           student_id?: string | null
           submitted_at?: string | null
           submitted_snapshot?: Json | null
@@ -989,6 +995,13 @@ export type Database = {
             columns: ["decided_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applications_it_ticket_id_fkey"
+            columns: ["it_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "tickets"
             referencedColumns: ["id"]
           },
           {
@@ -6518,6 +6531,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -6538,6 +6552,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -6945,6 +6960,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -6965,6 +6981,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -7089,6 +7106,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -7109,6 +7127,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -7483,6 +7502,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -7503,6 +7523,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -7636,6 +7657,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -7656,6 +7678,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -7705,7 +7728,25 @@ export type Database = {
         Args: { target_school: string; target_user: string }
         Returns: undefined
       }
+      ensure_it_group: { Args: { target_school: string }; Returns: string }
       expire_school_access: { Args: never; Returns: number }
+      family_accounts_request: {
+        Args: { target_ticket: string }
+        Returns: Json
+      }
+      finish_family_accounts: {
+        Args: {
+          actor: string
+          emailed_to: string
+          parent_new: boolean
+          parent_user: string
+          student_user: string
+          student_username: string
+          target_application: string
+          target_ticket: string
+        }
+        Returns: undefined
+      }
       forget_push_subscription: {
         Args: { endpoint_in: string }
         Returns: undefined
@@ -8113,6 +8154,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -8133,6 +8175,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -8286,6 +8329,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -8306,6 +8350,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -9316,6 +9361,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -9336,6 +9382,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -9687,6 +9734,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -9707,6 +9755,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -9760,6 +9809,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      request_student_account: {
+        Args: { note_in?: string; target_application: string }
+        Returns: Json
       }
       require_password_change: {
         Args: { target_user: string }
@@ -9834,6 +9887,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -9854,6 +9908,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -9976,6 +10031,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -9996,6 +10052,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -10269,6 +10326,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sign_in_email: {
+        Args: { school_slug: string; username_in: string }
+        Returns: string
+      }
       slug_available: { Args: { candidate: string }; Returns: boolean }
       start_application: {
         Args: { target_programme?: string; target_session: string }
@@ -10306,6 +10367,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -10326,6 +10388,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -10548,6 +10611,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -10568,6 +10632,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null
@@ -10846,6 +10911,7 @@ export type Database = {
           guardian_relation: string | null
           id: string
           interview_state: string
+          it_ticket_id: string | null
           middle_name: string | null
           next_of_kin: Json | null
           notes: string | null
@@ -10866,6 +10932,7 @@ export type Database = {
           seq: number
           session_id: string | null
           status: Database["classroom"]["Enums"]["application_status"]
+          student_account_id: string | null
           student_id: string | null
           submitted_at: string | null
           submitted_snapshot: Json | null

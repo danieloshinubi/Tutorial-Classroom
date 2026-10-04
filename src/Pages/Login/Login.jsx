@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Field, Button, Notice } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { lastUserId } from "../../lib/lastUser";
+import { signInEmailFor } from "../../lib/signInName";
 
 const Login = () => {
   const { signIn, session } = useAuth();
@@ -61,20 +62,26 @@ const Login = () => {
     setError("");
 
     if (!email.trim() || !password) {
-      setError("Enter your email address and password.");
+      setError("Enter your email or username, and your password.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const result = await signIn({ email: email.trim(), password });
+      // A pupil signs in with the username the school gave them (supabase/229).
+      const address = await signInEmailFor(email);
+      if (!address) {
+        setError("We don't know that username at this school. Check it, or use your email address.");
+        return;
+      }
+      const result = await signIn({ email: address, password });
       navigate(destinationFor(result?.user?.id), { replace: true });
     } catch (err) {
       // Supabase says "Invalid login credentials" for both a wrong password
       // and an unknown address. Say what to do instead of restating that.
       setError(
         /invalid login/i.test(err.message || "")
-          ? "That email and password do not match. Check both, or use forgot password."
+          ? "That sign-in and password do not match. Check both, or use forgot password."
           : err.message || "Could not sign you in."
       );
     } finally {
@@ -86,7 +93,7 @@ const Login = () => {
     <AuthLayout
       title="Sign in"
       badge="Staff · Student · Parent sign in"
-      subtitle="Use the email address your school gave you."
+      subtitle="Use the email address or username your school gave you."
       footer={
         <>
           <p>
@@ -119,16 +126,19 @@ const Login = () => {
             {`You were signed out after ${Number(params.get("mins")) || 10} minutes of inactivity. Sign in again to continue.`}
           </Notice>
         ) : null}
-        <Field label="Email">
+        <Field label="Email or username">
           <input
             required
             autoFocus
-            type="email"
+            type="text"
+            inputMode="email"
+            autoCapitalize="none"
+            spellCheck={false}
             className="input"
-            placeholder="you@school.com"
+            placeholder="you@school.com or your username"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            autoComplete="email"
+            autoComplete="username"
           />
         </Field>
 

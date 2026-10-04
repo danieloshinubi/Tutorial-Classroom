@@ -69,6 +69,11 @@ const AdmissionLetter = ({ application: app, className, onClose }) => {
       </div>
 
       <article className="letter">
+        {/* The school's logo, faint and large behind the text, so the letter
+            reads as the school's own official paper. An image rather than a
+            CSS background, because browsers leave backgrounds off when
+            printing; on paper it repeats on every page. */}
+        {school.logo_url ? <img src={school.logo_url} alt="" aria-hidden="true" className="letter-watermark" /> : null}
         <header className="letter-head">
           <div>
             {school.logo_url ? (

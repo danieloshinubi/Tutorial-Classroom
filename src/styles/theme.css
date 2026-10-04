@@ -2257,6 +2257,18 @@ table.data tr:last-child td { border-bottom: none; }
   box-shadow: var(--shadow-2);
   font-size: 15px;
   line-height: 1.7;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+.letter-watermark {
+  position: absolute; top: 50%; left: 50%;
+  width: min(62%, 420px); height: auto; max-height: 70%;
+  object-fit: contain;
+  transform: translate(-50%, -50%);
+  opacity: .07;
+  pointer-events: none; user-select: none;
+  z-index: -1;
 }
 .letter p { margin: 0 0 15px; }
 .letter-head {
@@ -2299,6 +2311,9 @@ table.data tr:last-child td { border-bottom: none; }
     box-shadow: none; border-radius: 0;
     font-size: 12pt;
   }
+  /* Behind every printed page, centred on the sheet. */
+  .letter { overflow: visible; }
+  .letter-watermark { position: fixed; width: 110mm; max-height: 150mm; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   @page { size: A4; margin: 18mm 16mm; }
 }
 
@@ -8592,3 +8607,67 @@ button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-colo
 .locale-choose { display: grid; gap: 6px; }
 .locale-choose-label { font-size: 12px; font-weight: 600; color: var(--ink-2, #5d5670); margin-top: 4px; }
 .plan-price-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; margin-top: 12px; }
+
+/* Admissions → Register as a student: ask IT, then register (supabase/228). */
+.enrol-steps { display: grid; gap: 18px; }
+.enrol-step { display: grid; gap: 4px; }
+.enrol-step h4 { margin: 0 0 4px; font-size: 14px; }
+.enrol-hint { margin: 0 0 6px; font-size: 13.5px; color: var(--ink-3); }
+.enrol-requested { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+
+/* Applicant portal: a section that has just been saved says so (it closes,
+   with a tick and what to do next). */
+.apd-saved {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px;
+  margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+  background: var(--success-soft); color: var(--success);
+  border: 1px solid color-mix(in srgb, var(--success) 25%, transparent);
+  font-size: 13.5px;
+}
+.apd-saved-actions { display: flex; gap: 14px; }
+.apd-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit; text-decoration: underline; cursor: pointer; }
+
+/* "Write with AI" on every note and message box (Components/ComposeAssist.tsx). */
+.ca-pill {
+  position: fixed; z-index: 1090;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 24px; padding: 0 9px; border-radius: 999px;
+  background: var(--surface); color: var(--brand);
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, var(--line));
+  box-shadow: var(--shadow-1, 0 1px 3px rgba(0,0,0,.08));
+  font: inherit; font-size: 11.5px; font-weight: 600; cursor: pointer;
+}
+.ca-pill:hover, .ca-pill.is-open { background: var(--brand-soft); }
+.ca-panel {
+  position: fixed; z-index: 1095; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px; border-radius: 14px;
+  background: var(--surface); color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-3, 0 12px 32px rgba(20, 16, 40, .18));
+}
+.ca-title { font-weight: 700; font-size: 13.5px; color: var(--brand); }
+.ca-ask { min-height: 60px; font-size: 14px; }
+.ca-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.ca-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ca-chip {
+  height: 28px; padding: 0 11px; border-radius: 999px; cursor: pointer;
+  background: var(--bg); color: var(--ink-2); border: 1px solid var(--line);
+  font: inherit; font-size: 12.5px;
+}
+.ca-chip:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.ca-result {
+  white-space: pre-wrap; font-size: 14px; line-height: 1.55;
+  padding: 10px 12px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line);
+  max-height: 260px; overflow-y: auto;
+}
+.ca-error { margin: 0; font-size: 13px; color: var(--danger); }
+.ca-note { margin: 0; font-size: 11.5px; color: var(--ink-3); }
+
+/* Ticket → Pupil & parent accounts (Pages/Tickets/FamilyAccountsCard.tsx). */
+.fam-card { display: grid; gap: 8px; }
+.fam-hint { margin: 0; font-size: 13px; color: var(--ink-2); }
+.fam-error { margin: 0; font-size: 13px; color: var(--danger); }
+.fam-done p { margin: 0 0 6px; font-size: 13.5px; }
+.fam-creds { padding: 10px 12px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line); font-family: "IBM Plex Mono", monospace; font-size: 13px; display: grid; gap: 4px; }
+.fam-creds p { font-family: inherit; }

@@ -542,6 +542,7 @@ const TakeExam = () => {
 
                 {active.kind === "short_answer" ? (
                   <textarea
+                    data-no-ai /* a student's own exam answer: no writing helper (ComposeAssist) */
                     className="textarea exam-short"
                     value={activeAnswer.text || ""}
                     placeholder="Your answer"

@@ -211,6 +211,9 @@ const Section = ({ id, title, description, value, onSave, disabled, fields, defa
   const [draft, setDraft] = useState(value || {});
   const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
+  // Saved just now: the section closes and says so, rather than staying open
+  // looking exactly as it did before the button was pressed.
+  const [savedAt, setSavedAt] = useState(null);
   const { setError, setNotice } = useActionFeedback();
   const [customQual, setCustomQual] = useState(() => computeCustomQual(fields, value));
 
@@ -254,7 +257,10 @@ const Section = ({ id, title, description, value, onSave, disabled, fields, defa
     setNotice("");
     try {
       await onSave(draft);
-      setNotice("Saved.");
+      setSavedAt(new Date());
+      setOpen(false);
+      setNotice(flagged ? `${title} saved. When every section marked for correcting is saved, press Resubmit application.` : `${title} saved.`);
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     } catch (err) {
       setError(err.message || "Could not save that section.");
     } finally {
@@ -273,7 +279,11 @@ const Section = ({ id, title, description, value, onSave, disabled, fields, defa
         aria-expanded={open}
       >
         <h3>{title}</h3>
-        {flagged ? <Badge tone="danger">{"Needs correcting"}</Badge> : null}
+        {savedAt ? (
+          <Badge tone="success">{"✓ Saved"}</Badge>
+        ) : flagged ? (
+          <Badge tone="danger">{"Needs correcting"}</Badge>
+        ) : null}
         <span className={`appdash-section-caret${open ? " open" : ""}`} aria-hidden="true">
           {"›"}
         </span>
@@ -371,12 +381,28 @@ const Section = ({ id, title, description, value, onSave, disabled, fields, defa
           </form>
         </>
       ) : (
+        <>
+        {savedAt ? (
+          <div className="apd-saved" role="status">
+            <span>
+              {`Saved at ${savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}.`}
+              {flagged ? " Once every section marked for correcting is saved, resubmit your application." : ""}
+            </span>
+            <span className="apd-saved-actions">
+              <button type="button" className="apd-link" onClick={() => setOpen(true)}>{"Edit again"}</button>
+              {flagged ? (
+                <button type="button" className="apd-link" onClick={() => goTo("todo-resubmit")}>{"Go to Resubmit"}</button>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
         <p className="appdash-section-summary">
           {filled === 0
             ? "Nothing entered yet."
             : `${filled} of ${fields.length} filled.`}
           {disabled && lockReason ? ` · ${lockReason}` : disabled ? " · locked" : ""}
         </p>
+        </>
       )}
     </div>
   );
@@ -1050,7 +1076,7 @@ const ApplicationDashboard = () => {
                   {todos.map((t, i) => {
                     const waiting = !!t.blocked;
                     return (
-                      <li key={t.key} className={`apd-todo${waiting ? " waiting" : ""}${!waiting && todos.findIndex((x) => !x.blocked) === i ? " first" : ""}`}>
+                      <li key={t.key} id={`todo-${t.key}`} className={`apd-todo${waiting ? " waiting" : ""}${!waiting && todos.findIndex((x) => !x.blocked) === i ? " first" : ""}`}>
                         <span className="apd-todo-num" aria-hidden="true">{i + 1}</span>
                         <div className="apd-todo-body">
                           <strong className="apd-todo-title">{t.title}</strong>

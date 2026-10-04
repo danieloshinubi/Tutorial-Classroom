@@ -572,6 +572,7 @@ const Assistant = () => {
                   }}
                 />
                 <textarea
+                  data-no-ai /* already the AI's own box */
                   onPaste={onPaste}
                   ref={inputRef}
                   rows={1}

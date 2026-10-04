@@ -2766,7 +2766,8 @@ export const fetchApplication = async (id, schoolId) => {
       `id, school_id, reference, first_name, surname, middle_name, date_of_birth,
        gender, applying_for_level, previous_school, guardian_name, guardian_email,
        guardian_phone, guardian_relation, address, notes, document_links, status,
-       offer_expires_at, decided_at, created_at, student_id, class_id,
+       offer_expires_at, decided_at, created_at, student_id, class_id, it_ticket_id, student_account_id,
+       it_ticket:tickets!applications_it_ticket_id_fkey ( id, number, status ),
        sessions ( id, name ), classes ( id, name ),
        schools ( id, name, slug, logo_url, address, phone, email,
                  signature_url, signatory_name, signatory_title,
@@ -2863,6 +2864,18 @@ export const notifyApplicant = async ({ applicationId, schoolId, kind, message }
 // Supersedes the old enrol_applicant() — see 067_student_registrations.sql.
 // Returns the new student_registrations row (including the assigned
 // registration number), not the application row.
+// Asks IT (the school's administrators) for a fresh school account for an
+// accepted applicant: a ticket in the IT (Administrators) help desk group with
+// the pupil's details (supabase/228). Returns { ticket_id, number, already }.
+export const requestStudentAccount = async ({ applicationId, note }) => {
+  const { data, error } = await supabase.rpc("request_student_account", {
+    target_application: applicationId,
+    note_in: note?.trim() || null,
+  });
+  if (error) throw error;
+  return data;
+};
+
 export const promoteApplicantToStudent = async ({ id, studentId, classId, schoolId }) => {
   const { data, error } = await supabase.rpc("promote_applicant_to_student", {
     target_application: id,

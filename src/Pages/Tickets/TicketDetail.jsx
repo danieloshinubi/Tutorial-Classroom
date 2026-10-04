@@ -22,6 +22,7 @@ import {
 import { Page, Button, Select, SkeletonList, displayName, initials, formatDate } from "../../Components/UI";
 import { useLiveTicketThreadUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
+import FamilyAccountsCard from "./FamilyAccountsCard";
 
 const PRIORITY = ["low", "medium", "high", "urgent"];
 const PRIORITY_LABEL = { low: "Low", medium: "Medium", high: "High", urgent: "Urgent" };
@@ -32,11 +33,6 @@ const STATUS_LABEL = { open: "Open", pending: "Pending", resolved: "Resolved", c
 // student or parent who happens to also be a school_members row never
 // shows up here as someone to assign work to.
 const TICKET_STAFF_ROLES = ["owner", "admin", "principal", "bursar", "admissions", "teacher"];
-
-// owner/admin can always be assigned anything, matching their cross-
-// department oversight (classroom.can_access_ticket) — everyone else in
-// the Agent list has to actually belong to this ticket's own department.
-const RUNS_THE_SCHOOL = ["owner", "admin"];
 
 // An inbound email can come from someone with no Schoolivio account at all
 // — ticket_messages.external_from ("Jane Doe <jane@example.com>") is what
@@ -303,14 +299,21 @@ const TicketDetail = () => {
   const requesterEmail = ticket.requester?.email || ticket.requester_email || "";
   const currentTags = pending.tags ?? ticket.tags ?? [];
 
-  // A department group (role set) only offers its own members plus
-  // owner/admin — a bursary ticket has no reason to list a teacher. A
-  // free-form group (no role) or no group at all falls back to every
-  // ticket-staff member, since there's no department to narrow it to.
+  // A department group (role set) offers exactly the people who hold that
+  // role: the Bursar group lists the bursars, Admissions the admissions
+  // staff, IT (Administrators) the admins (supabase/228). A free-form group
+  // (no role) or no group at all falls back to every ticket-staff member.
+  // Whoever is assigned now stays listed even if their role has changed, so
+  // the field never shows blank. One entry per person, A–Z.
   const currentGroup = groups.find((g) => g.id === (pending.groupId ?? ticket.group_id));
-  const assignableMembers = currentGroup?.role
-    ? members.filter((m) => m.role === currentGroup.role || RUNS_THE_SCHOOL.includes(m.role))
-    : members;
+  const currentAssignee = pending.assignedTo ?? ticket.assigned_to;
+  const assignableMembers = Array.from(
+    new Map(
+      members
+        .filter((m) => !currentGroup?.role || m.role === currentGroup.role || m.user_id === currentAssignee)
+        .map((m) => [m.user_id, m])
+    ).values()
+  ).sort((a, b) => displayName(a.profiles).localeCompare(displayName(b.profiles)));
 
   const isNote = composeKind === "note";
   const composeEmpty = sendingByEmail ? isHtmlEmpty(composeBody) : !composeBody.trim();
@@ -583,6 +586,10 @@ const TicketDetail = () => {
                 </div>
               </section>
 
+              {/* A "New pupil account" ticket: IT makes the pupil's and
+                  parent's accounts here (supabase/229). */}
+              <FamilyAccountsCard ticketId={ticketId} onDone={load} />
+
               <section className="tk-card">
                 <div className="tk-card-title">{"Properties"}</div>
                 <div className="tk-field">
@@ -608,7 +615,13 @@ const TicketDetail = () => {
                   <Select
                     className="select"
                     value={pending.groupId ?? ticket.group_id ?? ""}
-                    onChange={(v) => setField("groupId", v)}
+                    onChange={(v) => {
+                      // Moving to another department drops an agent who is not in it.
+                      const next = groups.find((g) => g.id === v);
+                      const agent = pending.assignedTo ?? ticket.assigned_to;
+                      const stays = !next?.role || !agent || members.some((m) => m.user_id === agent && m.role === next.role);
+                      setPending((c) => ({ ...c, groupId: v, ...(stays ? {} : { assignedTo: "" }) }));
+                    }}
                     options={[{ value: "", label: "No group" }, ...groups.map((g) => ({ value: g.id, label: g.name }))]}
                   />
                 </div>

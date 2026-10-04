@@ -1403,6 +1403,193 @@ ${context}`;
   });
 };
 
+// ------------------------------------------------------------------ compose
+//
+// The writing helper on every note and message box (src/Components/
+// ComposeAssist.tsx, supabase/228): a short piece of text for the box the
+// person is in — a correction reason, a message to a parent, a ticket reply,
+// a remark on a report card. It writes from what they say they want and
+// whatever they have already typed, and returns only the text to put in the
+// box. Signed in, counted against the school's monthly AI allowance like
+// the assistant, and recorded under its own "compose" surface.
+
+const COMPOSE_ACTIONS: Record<string, string> = {
+  write: "Write the text for this box from the request below.",
+  improve: "Rewrite the current text so it is clear, correct and well put. Keep its meaning and roughly its length.",
+  shorter: "Make the current text shorter and plainer, keeping everything that matters.",
+  formal: "Rewrite the current text in a more formal, professional tone.",
+  friendly: "Rewrite the current text in a warmer, friendlier tone, still professional.",
+  fix: "Correct the spelling, grammar and punctuation of the current text. Change nothing else.",
+};
+
+const ROLE_NAME: Record<string, string> = {
+  owner: "Proprietor", admin: "Administrator", principal: "Principal", bursar: "Bursar",
+  admissions: "Admissions Officer", teacher: "Teacher", parent: "Parent", student: "Student",
+};
+
+interface Writer {
+  name: string;
+  title: string;
+  email: string;
+}
+
+const composeSystem = (school: Record<string, unknown>, writer: Writer) =>
+  [
+    `You help staff and families at ${school.name}, a school using Schoolivio, write short pieces of text:`,
+    `notes, reasons, messages, replies and remarks typed into a box in the app.`,
+    ``,
+    `The person writing (the sender) is ${writer.name || "a member of the school"}${writer.title ? `, ${writer.title}` : ""}, at ${school.name}.`,
+    `When a message needs a sign-off, sign it with exactly: ${[writer.name, writer.title, school.name].filter(Boolean).join(", ")}.`,
+    school.email || school.phone ? `The school's contact details, if the message needs them: ${[school.email, school.phone].filter(Boolean).join(", ")}.` : "",
+    ``,
+    `Use the page details you are given to get the facts right: the recipient's name (greet them by name),`,
+    `references, dates, statuses, classes, amounts and what has happened so far. Read them carefully and use`,
+    `them; that is what makes the text ready to send without editing.`,
+    ``,
+    `Rules:`,
+    `- Return ONLY the text that goes in the box: no preamble, no quotation marks, no "Here is", no notes to the`,
+    `  writer, no subject line unless asked, no markdown. Plain sentences.`,
+    `- NEVER write a placeholder: no square brackets, no "[Your Name]", "[date]", "XXX", "insert ...". The text`,
+    `  must be complete and ready to send as it stands. If a detail is not known, write naturally without it`,
+    `  (say "at a time that suits you" rather than inventing a time).`,
+    `- Never invent facts, names, dates, amounts or grades that are not in the page details, the request or`,
+    `  the current text.`,
+    `- Match the box: a reason, note or remark is one to three sentences with no greeting or sign-off; a`,
+    `  message or email to a person has a greeting by name, a short body and the sign-off above.`,
+    `- British English spelling. Courteous, warm where it suits, clear and specific.`,
+  ].filter((line) => line !== "").join("\n");
+
+// Belt and braces: whatever placeholder still slips through is filled from
+// what is known or removed, so the box never receives "[Your Name]".
+const unplaceholder = (text: string, writer: Writer, schoolName: string) => {
+  let out = text
+    .replace(/\[\s*(your|my|sender'?s?)\s*(full\s*)?name\s*\]/gi, writer.name || "")
+    .replace(/\[\s*(your|my)\s*(job\s*)?(title|position|role)\s*\]/gi, writer.title || "")
+    .replace(/\[\s*(school|school'?s)\s*name\s*\]/gi, schoolName)
+    .replace(/\[\s*(your|my)\s*email\s*\]/gi, writer.email || "");
+  // Any other bracketed placeholder: drop a line that is only that, else the token.
+  out = out
+    .split("\n")
+    .filter((line) => !/^\s*\[[^\]\n]{1,60}\]\s*,?\s*$/.test(line))
+    .map((line) => line.replace(/\s*\[[^\]\n]{1,60}\]/g, "").replace(/\s+([,.;:!?])/g, "$1"))
+    .join("\n");
+  return out.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+const compose = async (req: Request, admin: SupabaseClient, body: Record<string, unknown>, apiKey: string) => {
+  const jwt = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!jwt) return json({ error: "Sign in to use the writing helper." }, 401);
+  const caller = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { Authorization: `Bearer ${jwt}` } },
+    db: { schema: "classroom" },
+    auth: { persistSession: false },
+  });
+  const { data: uid, error: whoError } = await caller.rpc("ai_whoami");
+  if (whoError || !uid) return json({ error: "Your sign-in has expired. Refresh the page and sign in again." }, 401);
+
+  const schoolId = String(body.schoolId || "");
+  if (!schoolId) return json({ error: "Missing school." }, 400);
+  const { data: memberships } = await caller
+    .from("school_members").select("role, is_active, job_title").eq("school_id", schoolId).eq("user_id", String(uid));
+  // deno-lint-ignore no-explicit-any
+  const active = ((memberships || []) as any[]).filter((m) => m.is_active);
+  if (!active.length) return json({ error: "You are not a member of this school." }, 403);
+
+  // Who is writing, from their own account: the full name and the job title
+  // the school gave them (else their role), so a message is signed properly.
+  // An account with no name saved still signs as someone: its username, else
+  // the part of its email before the @ ("danieloshinubi"), never a blank.
+  const { data: profile } = await admin.from("profiles").select("first_name, surname, username, email").eq("id", String(uid)).maybeSingle();
+  const rank = ["owner", "principal", "admin", "bursar", "admissions", "teacher", "parent", "student"];
+  const main = [...active].sort((a, b) => rank.indexOf(a.role) - rank.indexOf(b.role))[0];
+  const fullName = [profile?.first_name, profile?.surname].map((v) => String(v || "").trim()).filter(Boolean).join(" ");
+  const writer: Writer = {
+    name: fullName || String(profile?.username || "").trim() || String(profile?.email || "").split("@")[0],
+    title: String(active.find((m) => m.job_title)?.job_title || ROLE_NAME[main.role] || "").trim(),
+    email: String(profile?.email || ""),
+  };
+
+  const { data: school } = await admin.from("schools").select("id, name, email, phone, ai_token_limit").eq("id", schoolId).maybeSingle();
+  if (!school) return json({ error: "Unknown school." }, 404);
+  const limit = Number(school.ai_token_limit ?? 0);
+  if (limit <= 0) return json({ error: "AI is switched off for this school." }, 403);
+  const { data: used } = await admin.rpc("ai_tokens_this_month", { target_school: schoolId });
+  if (Number(used || 0) >= limit) return json({ error: "AI has reached this school's limit for this month. It resets on the 1st." }, 429);
+
+  const action = COMPOSE_ACTIONS[String(body.action)] ? String(body.action) : "write";
+  const field = String(body.field || "").slice(0, 200);
+  const page = String(body.page || "").slice(0, 200);
+  const context = String(body.context || "").slice(0, 1500);
+  const draft = String(body.draft || "").slice(0, 6000);
+  const request = String(body.request || "").slice(0, 1500);
+  // What the person can see around the box: the record's name and reference,
+  // statuses, dates, who it goes to. The same school data already on their
+  // screen, capped.
+  const details = String(body.details || "").replace(/\s+\n/g, "\n").slice(0, 5000);
+  if (action === "write" && !request.trim() && !draft.trim()) return json({ error: "Say what you would like it to say." }, 400);
+  if (action !== "write" && !draft.trim()) return json({ error: "Type something first, then ask to improve it." }, 400);
+
+  const prompt = [
+    COMPOSE_ACTIONS[action],
+    page ? `Page: ${page}` : "",
+    field ? `Box: ${field}` : "",
+    context ? `About: ${context}` : "",
+    details ? `Page details (what the writer can see):\n${details}` : "",
+    request ? `What they want: ${request}` : "",
+    draft ? `Current text:\n${draft}` : "Current text: (empty)",
+  ].filter(Boolean).join("\n\n");
+  const system = composeSystem(school, writer);
+
+  let input = 0;
+  let output = 0;
+  let model = MODEL;
+  let failure: string | null = null;
+  try {
+    let text = "";
+    if (provider() === "groq") {
+      const result = await groqComplete(
+        { model: groqModel(), max_tokens: 900, messages: [{ role: "system", content: system }, { role: "user", content: prompt }] },
+        () => {},
+        () => {},
+        Date.now() + 40_000,
+      );
+      text = result.text;
+      input = result.usage?.prompt_tokens ?? 0;
+      output = result.usage?.completion_tokens ?? 0;
+      model = `groq:${result.model}`;
+    } else {
+      const anthropic = new Anthropic({ apiKey });
+      const response = await anthropic.messages.create({
+        model: MODEL,
+        max_tokens: 1200,
+        output_config: { effort: "low" },
+        system,
+        messages: [{ role: "user", content: prompt }],
+      } as Anthropic.MessageCreateParamsNonStreaming);
+      input = response.usage?.input_tokens ?? 0;
+      output = response.usage?.output_tokens ?? 0;
+      if (response.stop_reason === "refusal") return json({ error: "It could not write that one." }, 200);
+      text = response.content.filter((b) => b.type === "text").map((b) => (b as Anthropic.TextBlock).text).join("");
+    }
+    // Whatever the model wraps round the text, the box only gets the text.
+    text = unplaceholder(text.trim().replace(/^["“]([\s\S]*)["”]$/, "$1").trim(), writer, String(school.name || ""));
+    return json({ text });
+  } catch (err) {
+    failure = (err as Error).message?.slice(0, 500) || "unknown";
+    const friendly = err instanceof GroqLimitError ? err.message
+      : err instanceof Anthropic.RateLimitError ? "AI is busy right now. Try again in a minute."
+      : "It could not write that just now. Try again.";
+    return json({ error: friendly }, 502);
+  } finally {
+    await admin
+      .rpc("record_ai_usage", {
+        target_school: schoolId, surface_in: "compose", model_in: model,
+        input_tokens_in: input, output_tokens_in: output, user_in: String(uid), error_in: failure,
+      })
+      .then(() => {}, () => {});
+  }
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -1421,5 +1608,6 @@ Deno.serve(async (req) => {
   }
 
   if (body.surface === "assistant") return assistant(req, admin, body, apiKey);
+  if (body.surface === "compose") return compose(req, admin, body, apiKey);
   return admissions(admin, body, apiKey);
 });

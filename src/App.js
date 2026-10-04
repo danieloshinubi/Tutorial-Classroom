@@ -19,6 +19,7 @@ import SchoolRoute from "./Components/SchoolRoute";
 import Login from "./Pages/Login/Login";
 import TenantGate from "./Components/TenantGate";
 import { NavDataProvider } from "./context/NavDataContext";
+import ComposeAssist from "./Components/ComposeAssist";
 import { PresenceProvider } from "./context/PresenceContext";
 import TrialGate from "./Components/TrialGate";
 import { isPlatformHost, isMarketingHost } from "./lib/tenant";
@@ -131,6 +132,8 @@ function App() {
         <NavDataProvider>
         <PresenceProvider>
           <ConfigNotice />
+          {/* "Write with AI" on every note and message box (supabase/228). */}
+          <ComposeAssist />
         <TrialGate>
         {/* Each module's code downloads the first time it is opened, so the
             first load carries the sign-in and shell, not every screen. */}

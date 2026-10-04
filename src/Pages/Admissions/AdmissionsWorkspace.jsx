@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool, useModuleAccess } from "../../context/SchoolContext";
@@ -25,10 +25,9 @@ import {
   recordOriginalVerification,
   promoteApplicantToStudent,
   fetchStudentRegistrationForApplication,
-  addSchoolUser,
   fetchClasses,
-  fetchApplicantAccount,
   notifyApplicant,
+  requestStudentAccount,
 } from "../../lib/api";
 import {
   Switch,
@@ -45,6 +44,7 @@ import {
   Modal,
   SkeletonStatRow,
   SkeletonText,
+  displayName,
 } from "../../Components/UI";
 import { useLiveApplicationUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
@@ -866,6 +866,9 @@ const AdmissionsWorkspace = () => {
                 disabled={busy}
                 onDone={reloadWithToast("Pupil registered.")}
                 onError={setError}
+                onRequested={(r) =>
+                  reloadWithToast(r.already ? `Already requested: ticket #${r.number} is still open.` : `Sent to IT as ticket #${r.number}.`)()
+                }
               />
             )}
           </Card>
@@ -1202,35 +1205,45 @@ const OriginalVerificationForm = ({ applicationId, schoolId, disabled, onDone, o
   );
 };
 
-const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled, onDone, onError }) => {
-  // An accounted applicant already has a real login — the one they applied
-  // with. Enrolling them should promote that same account, not collide with
-  // it by trying to create a second one under the same email (which is
-  // exactly what addSchoolUser below would do). An anonymous /Apply
-  // submission has no applicant_id at all, so it still needs the
-  // create/reuse choice further down.
-  const [ownAccount, setOwnAccount] = useState(undefined); // undefined = still loading
-  useEffect(() => {
-    let active = true;
-    if (!application.applicant_id) {
-      setOwnAccount(null);
-      return;
-    }
-    fetchApplicantAccount(application.applicant_id, schoolId)
-      .then((row) => { if (active) setOwnAccount(row); })
-      .catch(() => { if (active) setOwnAccount(null); });
-    return () => { active = false; };
-  }, [application.applicant_id, schoolId]);
+// Registering an accepted, cleared applicant (supabase/228). The pupil gets
+// a fresh school account made by IT (the school's administrators), not the
+// sign-in they applied with: admissions asks IT, which raises a ticket to
+// the IT (Administrators) help desk group with the pupil's details; once IT
+// has made the account, admissions picks it here and registers the pupil.
+const TICKET_STATUS = { open: "Open", pending: "Pending", resolved: "Resolved", closed: "Closed" };
 
-  const students = members.filter((m) => m.role === "student");
-  const [mode, setMode] = useState("create");
-  const [existingStudent, setExistingStudent] = useState("");
+const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled, onDone, onError, onRequested }) => {
+  const students = useMemo(
+    () =>
+      Array.from(new Map(members.filter((m) => m.role === "student").map((m) => [m.user_id, m])).values())
+        .sort((a, b) => displayName(a.profiles).localeCompare(displayName(b.profiles))),
+    [members]
+  );
+  const [note, setNote] = useState("");
+  // The account IT created for this pupil (supabase/229), chosen already.
+  const [studentId, setStudentId] = useState(application.student_account_id || "");
   const [classId, setClassId] = useState(application.class_id || "");
-  const [studentEmail, setStudentEmail] = useState(application.guardian_email || "");
   const [busy, setBusy] = useState(false);
-  const [issued, setIssued] = useState(null);
+  const ticket = application.it_ticket || null;
+  const requested = Boolean(application.it_ticket_id);
 
-  const enrolAs = async (studentId) => {
+  const askIt = async () => {
+    setBusy(true);
+    onError("");
+    try {
+      const result = await requestStudentAccount({ applicationId: application.id, note });
+      setNote("");
+      onRequested(result);
+    } catch (err) {
+      onError(err.message || "Could not send the request to IT.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const register = async (e) => {
+    e.preventDefault();
+    if (!studentId) return onError("Choose the pupil account IT created.");
     setBusy(true);
     onError("");
     try {
@@ -1244,75 +1257,58 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
     }
   };
 
-  const submitOwnAccount = (e) => {
-    e.preventDefault();
-    enrolAs(ownAccount.user_id);
-  };
+  return (
+    <div className="enrol-steps">
+      <section className="enrol-step">
+        <h4>{"1. Ask IT for a school account"}</h4>
+        {requested ? (
+          <div className="enrol-requested">
+            <Badge tone={ticket && ["resolved", "closed"].includes(ticket.status) ? "success" : "warn"}>
+              {ticket ? TICKET_STATUS[ticket.status] || ticket.status : "Requested"}
+            </Badge>
+            <span>
+              {ticket ? (
+                <>
+                  {"Requested from IT · "}
+                  <Link to={`/Tickets/${ticket.id}`}>{`Ticket #${ticket.number}`}</Link>
+                </>
+              ) : (
+                "Requested from IT."
+              )}
+            </span>
+            {ticket && ["resolved", "closed"].includes(ticket.status) ? (
+              <Button size="sm" variant="ghost" disabled={busy || disabled} onClick={askIt}>
+                {"Ask again"}
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <>
+            <p className="enrol-hint">
+              {`IT (the school's administrators) creates the pupil's sign-in. This sends them a ticket with ${application.first_name}'s details: name, date of birth, level, and the parent's contact.`}
+            </p>
+            <Field label="Note for IT" hint="Optional, e.g. the email address the pupil should use.">
+              <textarea className="textarea" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+            </Field>
+            <Button type="button" disabled={busy || disabled} onClick={askIt}>
+              {busy ? "Sending..." : "Request a school account from IT"}
+            </Button>
+          </>
+        )}
+      </section>
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setBusy(true);
-    onError("");
-    try {
-      let studentId = existingStudent;
-      let justIssued = null;
-
-      // Creating the account here rather than sending the officer to
-      // another screen: enrolling and having a login are the same moment.
-      if (mode === "create") {
-        if (!studentEmail.trim()) {
-          onError("An email address is needed for the pupil's account.");
-          setBusy(false);
-          return;
-        }
-        const created = await addSchoolUser({
-          schoolId,
-          email: studentEmail,
-          firstName: application.first_name,
-          surname: application.surname,
-          role: "student",
-        });
-        studentId = created.user_id;
-        if (created.password) {
-          justIssued = { email: created.email, password: created.password };
-        }
-      }
-
-      if (!studentId) {
-        onError("Choose an existing pupil, or create a new account.");
-        setBusy(false);
-        return;
-      }
-
-      await promoteApplicantToStudent({ id: application.id, studentId, classId: classId || null, schoolId });
-      await notifyApplicant({ applicationId: application.id, schoolId, kind: "enrolled" }).catch(() => null);
-
-      // The parent hides this whole form the moment status flips to
-      // 'enrolled' (onDone() reloads it) — showing the one-time password
-      // first and deferring the reload until it's been copied, rather than
-      // having it flash and vanish underneath the reload.
-      if (justIssued) {
-        setIssued(justIssued);
-      } else {
-        onDone();
-      }
-    } catch (err) {
-      onError(err.message || "Could not register that applicant.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (ownAccount === undefined) {
-    return <p style={{ color: "var(--ink-3)", fontSize: 13.5 }}>{"Loading..."}</p>;
-  }
-
-  if (ownAccount) {
-    return (
-      <form onSubmit={submitOwnAccount}>
-        <p style={{ fontSize: 13.5, color: "var(--ink-3)", marginTop: 0 }}>
-          {`This applicant already signed in as ${ownAccount.email} to apply — enrolling adds that same account as a pupil here, no new login needed.`}
-        </p>
+      <form className="enrol-step" onSubmit={register}>
+        <h4>{"2. Register with the account IT created"}</h4>
+        {!requested ? <p className="enrol-hint">{"Once IT has created the account, choose it here."}</p> : null}
+        <Field label="Pupil account" hint={students.length ? "Pupil accounts at this school, A–Z." : "No pupil accounts yet."}>
+          <Select searchable value={studentId} onChange={setStudentId}
+            placeholder="Choose the pupil's account"
+            options={students.map((m) => ({
+              value: m.user_id,
+              label: `${displayName(m.profiles)}${m.profiles?.email ? ` · ${m.profiles.email}` : ""}`,
+            }))}
+          />
+        </Field>
         <Field label="Class" hint={classes.length ? "Optional — you can place them later." : "No classes yet."}>
           <Select className="select" value={classId} onChange={setClassId}
             options={[
@@ -1321,78 +1317,11 @@ const EnrolForm = ({ application, members, classes, labelFor, schoolId, disabled
             ]}
           />
         </Field>
-        <Button type="submit" disabled={disabled || busy}>
+        <Button type="submit" disabled={disabled || busy || !studentId}>
           {busy ? "Registering..." : "Register this pupil"}
         </Button>
       </form>
-    );
-  }
-
-  if (issued) {
-    return (
-      <div>
-        <p style={{ fontSize: 14 }}>{"Registered. The pupil's sign-in details — shown once. They will be asked to choose their own password."}</p>
-        <div style={{ fontFamily: "monospace", fontSize: 15 }}>
-          <div>{issued.email}</div>
-          <div>{issued.password}</div>
-        </div>
-        <div className="btn-row" style={{ marginTop: 12 }}>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() =>
-              navigator.clipboard?.writeText(`${issued.email}  ${issued.password}`).catch(() => {})
-            }
-          >
-            {"Copy"}
-          </Button>
-          <Button size="sm" onClick={onDone}>{"Done"}</Button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={submit}>
-      <p style={{ fontSize: 13.5, color: "var(--ink-3)", marginTop: 0 }}>
-        {"This creates the pupil's place: a school account and, if you pick one, a class."}
-      </p>
-      <Field label="Account">
-        <Select className="select" value={mode} onChange={setMode}
-          options={[
-            { value: "create", label: "Create a new pupil account" },
-            { value: "existing", label: "Use an existing pupil account" },
-          ]}
-        />
-      </Field>
-      {mode === "create" ? (
-        <Field label="Email for the pupil" hint="Defaults to whatever's on the application. Change it if the pupil has their own.">
-          <input type="email" className="input" value={studentEmail}
-            onChange={(e) => setStudentEmail(e.target.value)} />
-        </Field>
-      ) : (
-        <Field label="Pupil">
-          <Select className="select" value={existingStudent}
-            onChange={setExistingStudent}
-            options={[
-              { value: "", label: "Choose" },
-              ...students.map((m) => ({ value: m.user_id, label: `${m.profiles?.email}` })),
-            ]}
-          />
-        </Field>
-      )}
-      <Field label="Class" hint={classes.length ? "Optional — you can place them later." : "No classes yet."}>
-        <Select className="select" value={classId} onChange={setClassId}
-          options={[
-            { value: "", label: "Decide later" },
-            ...classes.map((c) => ({ value: c.id, label: `${c.name} — ${labelFor(c.level_year)}` })),
-          ]}
-        />
-      </Field>
-      <Button type="submit" disabled={disabled || busy}>
-        {busy ? "Registering..." : "Register this pupil"}
-      </Button>
-    </form>
+    </div>
   );
 };
 

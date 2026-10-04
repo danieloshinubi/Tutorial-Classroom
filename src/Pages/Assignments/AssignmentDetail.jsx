@@ -219,6 +219,7 @@ const SubmitPanel = ({ assignment, userId }) => {
       <form onSubmit={handleSubmit}>
         <Field label="Answer">
           <textarea
+            data-no-ai /* a student's own answer: no writing helper (ComposeAssist) */
             className="textarea"
             value={form.body}
             onChange={update("body")}
