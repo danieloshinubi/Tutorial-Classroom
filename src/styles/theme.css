@@ -8559,3 +8559,17 @@ button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-colo
 /* A dropdown's open list floats above everything (UI.jsx Select portal),
    including dialogs, so nothing can clip it. */
 .uiselect-panel.is-floating { z-index: 1100; margin: 0; }
+
+/* School admin → Plan & billing, and the closed-school screen (supabase/225). */
+.plan-pay { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.plan-pay p { margin: 0; }
+.plan-pay-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.plan-pay-head h3 { margin: 2px 0 0; }
+.plan-pay-note { color: var(--ink-3); font-size: 13px; }
+.plan-pay-prices ul { margin: 6px 0 10px; padding-left: 18px; display: grid; gap: 4px; }
+.plan-ending-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 10px 16px 0; padding: 10px 14px; border-radius: 12px;
+  background: var(--brand-soft, #f1ebfb); color: var(--ink); border: 1px solid var(--line);
+  font-size: 14px;
+}

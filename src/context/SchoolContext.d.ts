@@ -22,6 +22,10 @@ export interface SchoolValue {
   isStaff: boolean;
   isTeacher: boolean;
   isParent: boolean;
+  /** The trial has lapsed, or a paid month ended over 3 days ago: the app is closed (TrialGate). */
+  trialExpired: boolean;
+  /** The closed state is because a paid month ran out (supabase/225). */
+  planLapsed: boolean;
   loading: boolean;
   error: string;
   reload: () => Promise<void>;

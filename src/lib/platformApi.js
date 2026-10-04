@@ -67,7 +67,9 @@ export const setTenantPlan = async ({ id, plan }) => {
   return Array.isArray(data) ? data[0] : data;
 };
 
-export const PLANS = ["trial", "basic", "standard", "premium"];
+// The landing page's plans (supabase/225). Starter and Growth are paid by the
+// school itself with Paystack; Enterprise is arranged and recorded here.
+export const PLANS = ["trial", "starter", "growth", "enterprise"];
 
 /* --------------------------------------------------------------- team access */
 export const fetchPlatformAdmins = async () => {

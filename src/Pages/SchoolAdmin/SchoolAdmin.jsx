@@ -34,6 +34,7 @@ import StudentRegistrationsPanel from "./StudentRegistrationsPanel";
 import OrganogramPanel from "./OrganogramPanel";
 import SecurityPanel from "./SecurityPanel";
 import SchoolAccessPanel from "./SchoolAccessPanel";
+import BillingPanel from "./BillingPanel";
 import { shield } from "react-icons-kit/feather/shield";
 import { STAFF_ROLES } from "../../lib/orgChart";
 import { ROLES, ROLE_LABEL, toneFor, roleAccent } from "../../lib/roles";
@@ -1504,6 +1505,7 @@ const SECTIONS = [
       { id: "modules", label: "Modules", icon: toggleRight, description: "Switch parts of Schoolivio on or off for this school." },
       { id: "security", label: "Security", icon: lock, description: "Sign people out after a set time of inactivity, or not at all." },
       { id: "access", label: "Schoolivio access", icon: shield, description: "Let Schoolivio support into your school for a set time, or decline." },
+      { id: "billing", label: "Plan & billing", icon: creditCard, description: "Your Schoolivio plan, when it ends, and paying for it with Paystack." },
       { id: "settings", label: "School settings", icon: settingsIcon, description: "Name, logo, colours, contact details and letters." },
     ],
   },
@@ -1526,6 +1528,7 @@ const PANELS = {
   modules: ModulesPanel,
   security: SecurityPanel,
   access: SchoolAccessPanel,
+  billing: BillingPanel,
   settings: SettingsPanel,
 };
 

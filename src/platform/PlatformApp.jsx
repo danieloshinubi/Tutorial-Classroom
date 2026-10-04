@@ -21,6 +21,7 @@ import { logOut } from "react-icons-kit/feather/logOut";
 import { search as searchIcon } from "react-icons-kit/feather/search";
 import { chevronsLeft } from "react-icons-kit/feather/chevronsLeft";
 import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
+import { settings as settingsIcon } from "react-icons-kit/feather/settings";
 import { AuthProvider, useAuth } from "../context/AuthContext";
 import { amIPlatformAdmin, platformSearch } from "../lib/platformApi";
 import ConfigNotice from "../Components/ConfigNotice";
@@ -36,6 +37,7 @@ import PlatformTrials from "./PlatformTrials";
 import PlatformGateways from "./PlatformGateways";
 import PlatformMailboxes from "./PlatformMailboxes";
 import PlatformBilling from "./PlatformBilling";
+import PlatformSettings from "./PlatformSettings";
 import { Page, Card, Notice, Button } from "../Components/UI";
 import { Mark } from "../Components/Logo";
 
@@ -55,6 +57,7 @@ const NAV = [
   { to: "/Billing", label: "Billing", icon: dollarSign, end: false },
   { to: "/Team", label: "Team", icon: usersIcon, end: false },
   { to: "/AuditLog", label: "Audit log", icon: clipboard, end: false },
+  { to: "/Settings", label: "Settings", icon: settingsIcon, end: false },
 ];
 
 // "Which school is this person in" is a support-call question the console
@@ -300,6 +303,7 @@ const PlatformApp = () => (
               <Route path="/Billing" element={<PlatformBilling />} />
               <Route path="/Team" element={<PlatformTeam />} />
               <Route path="/AuditLog" element={<PlatformAuditLog />} />
+              <Route path="/Settings" element={<PlatformSettings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>

@@ -116,7 +116,7 @@ export const SchoolProvider = ({ children }) => {
             // leaving it out here does not fail loudly — the school simply
             // loads without it, disabledModules reads as empty, and every
             // module stays visible however the admin sets them.
-            `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, is_active,
+            `id, name, slug, logo_url, theme_color, email, phone, address, timezone, currency, plan, trial_ends_at, paid_until, is_active,
              disabled_modules, idle_lockout_enabled, idle_lockout_minutes,
              signature_url, signatory_name, signatory_title,
              admission_letter_offer_intro, admission_letter_enrolled_intro, admission_letter_closing`
@@ -247,10 +247,20 @@ export const SchoolProvider = ({ children }) => {
   // in the future (or unset — a school the platform console created
   // directly, never a trial). Once it lapses, App.js's TrialGate blocks the
   // routed app rather than letting every RLS-guarded write fail one at a time.
+  //
+  // A paid month (supabase/225, paid_until) gets 3 days of grace after it
+  // ends before the same gate closes. A school put on a plan by hand in the
+  // console has no paid_until and is never locked this way.
+  const planLapsed = Boolean(
+    school?.plan !== "trial" &&
+      school?.paid_until &&
+      new Date(`${school.paid_until}T00:00:00`).getTime() + 4 * 86400000 <= Date.now()
+  );
   const trialExpired = Boolean(
-    school?.plan === "trial" &&
+    (school?.plan === "trial" &&
       school?.trial_ends_at &&
-      new Date(school.trial_ends_at) < new Date()
+      new Date(school.trial_ends_at) < new Date()) ||
+      planLapsed
   );
 
   const role = membership?.role || null;
@@ -303,6 +313,7 @@ export const SchoolProvider = ({ children }) => {
       // separating the console was meant to end.
       isPlatformAdmin,
       trialExpired,
+      planLapsed,
       // Convenience predicates so pages don't repeat role arrays.
       isAdmin: roles.some((r) => r === "owner" || r === "admin"),
       isPrincipal: roles.includes("principal"),
@@ -316,7 +327,7 @@ export const SchoolProvider = ({ children }) => {
       error,
       reload: load,
     }),
-    [slug, school, levels, moduleGrants, platformAccess, membership, memberships, role, roles, isPlatformAdmin, trialExpired, loading, authLoading, error, load]
+    [slug, school, levels, moduleGrants, platformAccess, membership, memberships, role, roles, isPlatformAdmin, trialExpired, planLapsed, loading, authLoading, error, load]
   );
 
   return <SchoolContext.Provider value={value}>{children}</SchoolContext.Provider>;

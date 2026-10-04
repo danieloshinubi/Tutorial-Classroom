@@ -4445,6 +4445,51 @@ export type Database = {
           },
         ]
       }
+      platform_settings: {
+        Row: {
+          contact_email: string
+          id: boolean
+          paystack_public_key: string | null
+          paystack_secret_id: string | null
+          sender_address: string | null
+          sender_name: string
+          smtp_host: string | null
+          smtp_port: number | null
+          smtp_secret_id: string | null
+          smtp_security: string | null
+          smtp_username: string | null
+          updated_at: string
+        }
+        Insert: {
+          contact_email?: string
+          id?: boolean
+          paystack_public_key?: string | null
+          paystack_secret_id?: string | null
+          sender_address?: string | null
+          sender_name?: string
+          smtp_host?: string | null
+          smtp_port?: number | null
+          smtp_secret_id?: string | null
+          smtp_security?: string | null
+          smtp_username?: string | null
+          updated_at?: string
+        }
+        Update: {
+          contact_email?: string
+          id?: boolean
+          paystack_public_key?: string | null
+          paystack_secret_id?: string | null
+          sender_address?: string | null
+          sender_name?: string
+          smtp_host?: string | null
+          smtp_port?: number | null
+          smtp_secret_id?: string | null
+          smtp_security?: string | null
+          smtp_username?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -4917,6 +4962,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           name: string
+          paid_until: string | null
           phone: string | null
           plan: string
           signatory_name: string | null
@@ -4945,6 +4991,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           name: string
+          paid_until?: string | null
           phone?: string | null
           plan?: string
           signatory_name?: string | null
@@ -4973,6 +5020,7 @@ export type Database = {
           is_active?: boolean
           logo_url?: string | null
           name?: string
+          paid_until?: string | null
           phone?: string | null
           plan?: string
           signatory_name?: string | null
@@ -5566,6 +5614,94 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          gateway_response: Json | null
+          id: string
+          paid_at: string | null
+          period_end: string | null
+          period_start: string | null
+          plan: string
+          reference: string
+          school_id: string
+          started_by: string | null
+          status: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          gateway_response?: Json | null
+          id?: string
+          paid_at?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          plan: string
+          reference: string
+          school_id: string
+          started_by?: string | null
+          status?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          gateway_response?: Json | null
+          id?: string
+          paid_at?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          plan?: string
+          reference?: string
+          school_id?: string
+          started_by?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_payments_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      subscription_reminders: {
+        Row: {
+          days_before: number
+          ends_on: string
+          kind: string
+          school_id: string
+          sent_at: string
+        }
+        Insert: {
+          days_before: number
+          ends_on: string
+          kind: string
+          school_id: string
+          sent_at?: string
+        }
+        Update: {
+          days_before?: number
+          ends_on?: string
+          kind?: string
+          school_id?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_reminders_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
             referencedColumns: ["id"]
           },
         ]
@@ -6979,6 +7115,15 @@ export type Database = {
           settled: number
         }[]
       }
+      confirm_subscription_payment: {
+        Args: {
+          paid_amount: number
+          paid_at_in: string
+          ref: string
+          response: Json
+        }
+        Returns: Json
+      }
       copy_timetable: {
         Args: { from_term: string; to_term: string }
         Returns: number
@@ -7133,6 +7278,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           name: string
+          paid_until: string | null
           phone: string | null
           plan: string
           signatory_name: string | null
@@ -7490,6 +7636,21 @@ export type Database = {
         Args: { target_invoice: string; target_rule: string }
         Returns: number
       }
+      due_subscription_reminders: {
+        Args: never
+        Returns: {
+          amount: number
+          days_before: number
+          days_left: number
+          ends_on: string
+          kind: string
+          plan_name: string
+          recipients: Json
+          school_id: string
+          school_name: string
+          slug: string
+        }[]
+      }
       effective_admission_config: {
         Args: { target_school: string; target_session: string }
         Returns: Json
@@ -7823,6 +7984,10 @@ export type Database = {
         Args: { target_module: string; target_school: string }
         Returns: undefined
       }
+      mark_subscription_payment: {
+        Args: { ref: string; response: Json; status_in: string }
+        Returns: undefined
+      }
       markable_classes: {
         Args: { target_school: string }
         Returns: {
@@ -7945,6 +8110,7 @@ export type Database = {
         Returns: Database["classroom"]["Enums"]["user_role"]
       }
       my_school_ids: { Args: never; Returns: string[] }
+      my_school_subscription: { Args: { target_school: string }; Returns: Json }
       my_teaching: {
         Args: { target_school: string }
         Returns: {
@@ -8427,6 +8593,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           name: string
+          paid_until: string | null
           phone: string | null
           plan: string
           signatory_name: string | null
@@ -8518,6 +8685,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           name: string
+          paid_until: string | null
           phone: string | null
           plan: string
           signatory_name: string | null
@@ -8547,6 +8715,7 @@ export type Database = {
           school_name: string
         }[]
       }
+      platform_get_secret: { Args: { which: string }; Returns: string }
       platform_grant_admin: {
         Args: {
           actor: string
@@ -8566,6 +8735,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      platform_mail_settings: { Args: never; Returns: Json }
       platform_mailbox_health: {
         Args: never
         Returns: {
@@ -8608,6 +8778,10 @@ export type Database = {
       }
       platform_remove_admin: {
         Args: { target_user: string }
+        Returns: undefined
+      }
+      platform_save_settings: {
+        Args: { actor: string; settings: Json }
         Returns: undefined
       }
       platform_school_access: { Args: { target_slug: string }; Returns: Json }
@@ -8683,6 +8857,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           name: string
+          paid_until: string | null
           phone: string | null
           plan: string
           signatory_name: string | null
@@ -8700,6 +8875,11 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      platform_set_secret: {
+        Args: { plaintext: string; which: string }
+        Returns: undefined
+      }
+      platform_settings_view: { Args: never; Returns: Json }
       platform_tenant: {
         Args: { target_school: string }
         Returns: {
@@ -9286,6 +9466,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_subscription_reminder: {
+        Args: {
+          days_in: number
+          ends_on_in: string
+          kind_in: string
+          target_school: string
+        }
+        Returns: undefined
+      }
       reference_year: { Args: { session_name: string }; Returns: string }
       refresh_documents_state: {
         Args: { target_application: string }
@@ -9833,6 +10022,7 @@ export type Database = {
         }[]
       }
       school_approvers: { Args: { target_school: string }; Returns: string[] }
+      school_plan_quote: { Args: { target_school: string }; Returns: Json }
       school_presence: {
         Args: { target_school: string }
         Returns: {
@@ -10118,6 +10308,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      start_subscription_payment: {
+        Args: { actor: string; ref: string; target_school: string }
+        Returns: Json
+      }
       start_trial_school: {
         Args: { school_name: string; school_slug: string }
         Returns: {
@@ -10138,6 +10332,7 @@ export type Database = {
           is_active: boolean
           logo_url: string | null
           name: string
+          paid_until: string | null
           phone: string | null
           plan: string
           signatory_name: string | null

@@ -19,7 +19,7 @@ const STATUS_OPTIONS = [{ value: "", label: "All statuses" }, ...BILLING_STATUSE
 const AddRecordModal = ({ schools, onClose, onDone }) => {
   const [form, setForm] = useState({
     schoolId: schools[0]?.id || "",
-    plan: "basic",
+    plan: "enterprise",
     amount: "",
     currency: "NGN",
     periodStart: todayISO(),
