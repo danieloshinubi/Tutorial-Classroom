@@ -74,6 +74,7 @@ const Accounts = lazyPage(() => import("./Pages/Accounts/Accounts"));
 const Payroll = lazyPage(() => import("./Pages/Payroll/Payroll"));
 const MyPayslips = lazyPage(() => import("./Pages/Payroll/MyPayslips"));
 const Attendance = lazyPage(() => import("./Pages/Attendance/Attendance"));
+const Timetable = lazyPage(() => import("./Pages/Timetable/Timetable"));
 const Fees = lazyPage(() => import("./Pages/Fees/Fees"));
 const PaymentReturn = lazyPage(() => import("./Pages/Fees/PaymentReturn"));
 const Reports = lazyPage(() => import("./Pages/Reports/Reports"));
@@ -254,6 +255,9 @@ function App() {
                 child read (classroom.can_mark_attendance/is_guardian_of). */}
             <Route element={<SchoolRoute module="attendance" />}>
               <Route path="/Attendance" element={<Attendance />} />
+            </Route>
+            <Route element={<SchoolRoute module="timetable" />}>
+              <Route path="/Timetable" element={<Timetable />} />
             </Route>
 
             {/* School administration */}

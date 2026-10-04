@@ -8462,3 +8462,51 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
 .presence-dot.away { background: #f2a516; }
 .people-online.away { color: #a86a00; }
 .people-online.away::before { background: #f2a516; }
+
+/* Timetable (Pages/Timetable). */
+.tt-page { display: grid; gap: 16px; }
+.tt-stack { display: grid; gap: 16px; }
+.tt-toolbar { display: flex; }
+.tt-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.tt-controls .field { min-width: 200px; margin: 0; }
+.tt-spacer { flex: 1; }
+.tt-copy { display: flex; gap: 8px; align-items: center; }
+.tt-copy .uiselect { min-width: 220px; }
+.tt-wrap { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.tt-grid { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 720px; table-layout: fixed; }
+.tt-grid th, .tt-grid td { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); padding: 0; vertical-align: top; }
+.tt-grid tr > *:last-child { border-right: 0; }
+.tt-grid tbody tr:last-child > * { border-bottom: 0; }
+.tt-grid thead th { padding: 10px 12px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); text-align: left; background: var(--bg); }
+.tt-grid .tt-corner, .tt-grid tbody th { width: 128px; position: sticky; left: 0; z-index: 1; background: var(--surface); }
+.tt-grid thead .tt-corner { background: var(--bg); color: var(--ink); text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 700; }
+.tt-grid tbody th { padding: 10px 12px; text-align: left; }
+.tt-period { display: block; font-weight: 700; font-size: 13px; color: var(--ink); }
+.tt-time { display: block; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tt-day-short { display: none; }
+.tt-cell { display: flex; flex-direction: column; gap: 2px; width: 100%; min-height: 64px; padding: 8px 10px; text-align: left; border: 0; background: transparent; font: inherit; color: inherit; }
+button.tt-cell { cursor: pointer; }
+button.tt-cell:hover { background: var(--brand-soft, var(--bg)); }
+button.tt-cell:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+.tt-filled .tt-cell { background: color-mix(in srgb, var(--brand) 6%, var(--surface)); }
+.tt-subject { font-weight: 700; font-size: 13.5px; color: var(--ink); }
+.tt-meta { font-size: 12px; color: var(--ink-2); }
+.tt-room { font-size: 11.5px; color: var(--ink-3); }
+.tt-add { margin: auto; padding: 4px 10px; border: 1px dashed var(--line); border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-color: var(--brand); color: var(--brand); }
+.tt-hint { margin: 0; font-size: 13px; color: var(--ink-3); }
+.tt-start h3 { margin: 0 0 6px; }
+.tt-start p { margin: 0 0 14px; color: var(--ink-2); max-width: 62ch; }
+.tt-break td { padding: 6px 12px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); text-align: center; background: repeating-linear-gradient(135deg, var(--bg), var(--bg) 8px, var(--surface) 8px, var(--surface) 16px); }
+.tt-days { display: flex; flex-wrap: wrap; gap: 6px 22px; }
+.tt-period-form { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr) auto auto; gap: 12px; align-items: end; }
+.tt-period-form .field { margin: 0; }
+.tt-tag { margin-left: 8px; padding: 2px 8px; border-radius: 999px; background: var(--bg); color: var(--ink-3); font-size: 11.5px; font-weight: 600; }
+@media (max-width: 900px) {
+  .tt-period-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tt-controls .field { min-width: 0; flex: 1 1 160px; }
+  .tt-day-long { display: none; }
+  .tt-day-short { display: inline; }
+  .tt-grid { min-width: 560px; }
+  .tt-grid .tt-corner, .tt-grid tbody th { width: 92px; }
+}

@@ -10,6 +10,7 @@ import { pieChart } from "react-icons-kit/feather/pieChart";
 import { briefcase } from "react-icons-kit/feather/briefcase";
 import { award } from "react-icons-kit/feather/award";
 import { checkSquare } from "react-icons-kit/feather/checkSquare";
+import { calendar as calendarIcon } from "react-icons-kit/feather/calendar";
 import { fileText } from "react-icons-kit/feather/fileText";
 import { settings as settingsIcon } from "react-icons-kit/feather/settings";
 import { bell } from "react-icons-kit/feather/bell";
@@ -56,6 +57,7 @@ const ICONS = {
   payroll: briefcase,
   admissions: fileText,
   attendance: checkSquare,
+  timetable: calendarIcon,
   reports: fileText,
   tutors: usersIcon,
   school: settingsIcon,

@@ -136,6 +136,17 @@ export const MODULES = [
     roles: ["parent", "student"],
   },
   {
+    id: "timetable",
+    priority: 37,
+    group: "School",
+    path: "/Timetable",
+    label: "Timetable",
+    // The principal builds it (with owners and admins, supabase/222);
+    // everyone else reads what applies to them: a teacher their own week,
+    // students their class, parents their children's.
+    roles: ROLES,
+  },
+  {
     id: "attendance",
     priority: 38,
     group: "School",
