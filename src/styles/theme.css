@@ -8555,3 +8555,7 @@ button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-colo
 @media (max-width: 700px) { .sa-access-item { flex-direction: column; } .sa-access-decide { width: 100%; min-width: 0; } }
 
 .team-access-self { font-size: 13px; color: var(--ink-2); }
+
+/* A dropdown's open list floats above everything (UI.jsx Select portal),
+   including dialogs, so nothing can clip it. */
+.uiselect-panel.is-floating { z-index: 1100; margin: 0; }

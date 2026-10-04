@@ -1,4 +1,5 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "react-icons-kit";
 import { chevronDown } from "react-icons-kit/feather/chevronDown";
 import { chevronLeft } from "react-icons-kit/feather/chevronLeft";
@@ -222,35 +223,68 @@ export const Select = ({
   const wrapRef = useRef(null);
   const triggerRef = useRef(null);
   const listRef = useRef(null);
-  // Opens to the right unless that would run off the screen, in which case
-  // it lines up with the trigger's right edge. A term menu at the right of
-  // Bursary's header grew past the window and made the whole page scroll
-  // sideways.
-  const [alignEnd, setAlignEnd] = useState(false);
-  // Opens upward when the list would run off the bottom of the screen and
-  // there is more room above. On a phone, a class list near the foot of a
-  // form opened below the fold, so its last options (SS3) were out of sight.
-  const [dropUp, setDropUp] = useState(false);
-  const [upRoom, setUpRoom] = useState(null);
+  // The open list floats above the whole page (a portal on document.body,
+  // fixed under its button), so a table or card that scrolls or clips can
+  // never cut it off: Platform → Team's two-row table hid every option.
+  // It opens downward, or upward when there is more room above (a class
+  // list at the foot of a phone form), never taller than the room it has,
+  // and lines up with the button's right edge if it would run off the side.
+  // It follows the button while anything scrolls or the window resizes.
+  const [placement, setPlacement] = useState(null);
+  const place = useCallback(() => {
+    const t = triggerRef.current?.getBoundingClientRect();
+    const panel = listRef.current;
+    if (!t || !panel) return;
+    const viewH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
+    // The page's own width, without the scrollbar, which fixed positions
+    // are measured against.
+    const viewW = document.documentElement.clientWidth || window.innerWidth;
+    const below = viewH - t.bottom - 10;
+    const above = t.top - 10;
+    const up = panel.scrollHeight > below && above > below;
+    const room = Math.max(120, Math.floor(up ? above : below));
+    const next = {
+      position: "fixed",
+      minWidth: t.width,
+      maxHeight: `min(var(--dd-max-height), ${room}px)`,
+    };
+    // Each side set explicitly, so the stylesheet's in-place top/left
+    // (.uiselect-panel) can never stretch the list.
+    if (up) {
+      next.top = "auto";
+      next.bottom = viewH - t.top + 6;
+    } else {
+      next.top = t.bottom + 6;
+      next.bottom = "auto";
+    }
+    if (t.left + panel.offsetWidth > viewW - 8) {
+      next.left = "auto";
+      next.right = Math.max(8, viewW - t.right);
+    } else {
+      next.left = Math.max(8, t.left);
+      next.right = "auto";
+    }
+    setPlacement(next);
+  }, []);
   useLayoutEffect(() => {
     if (!open) {
-      setAlignEnd(false);
-      setDropUp(false);
-      setUpRoom(null);
+      setPlacement(null);
       return;
     }
-    const panel = listRef.current;
-    if (!panel) return;
-    const r = panel.getBoundingClientRect();
-    if (r.right > (window.innerWidth || document.documentElement.clientWidth) - 8) setAlignEnd(true);
-    const viewH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
-    const t = triggerRef.current?.getBoundingClientRect();
-    if (t && r.bottom > viewH - 8 && t.top > viewH - t.bottom) {
-      setDropUp(true);
-      // Never taller than the room above, or its first options sit off screen.
-      setUpRoom(Math.max(120, Math.floor(t.top - 12)));
-    }
-  }, [open]);
+    place();
+  }, [open, place]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const follow = () => place();
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    window.visualViewport?.addEventListener("resize", follow);
+    return () => {
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+      window.visualViewport?.removeEventListener("resize", follow);
+    };
+  }, [open, place]);
   const typeAhead = useRef({ text: "", timer: null });
   // Picking an option removes the <li> that was actually clicked, mid
   // pointer-event, and at least on Chromium the click that follows gets
@@ -277,7 +311,8 @@ export const Select = ({
   useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = (event) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+      if (wrapRef.current?.contains(event.target) || listRef.current?.contains(event.target)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
@@ -391,9 +426,25 @@ export const Select = ({
         <Icon icon={chevronDown} size={15} className={`uiselect-caret${open ? " up" : ""}`} />
       </button>
 
-      {open ? (
-        <ul id={id ? `${id}-listbox` : undefined} className={`uiselect-panel${alignEnd ? " align-end" : ""}${dropUp ? " drop-up" : ""}`}
-          style={dropUp && upRoom ? { maxHeight: `min(var(--dd-max-height), ${upRoom}px)` } : undefined} role="listbox" ref={listRef}>
+      {open ? createPortal(
+        <ul
+          id={id ? `${id}-listbox` : undefined}
+          className="uiselect-panel is-floating"
+          // Measured hidden first, then placed, all before it is painted.
+          style={
+            placement || {
+              position: "fixed",
+              top: 0,
+              left: 0,
+              visibility: "hidden",
+              // Measured at the button's width, not the stylesheet's 100%
+              // of the page, or it would always seem too wide to fit.
+              minWidth: triggerRef.current?.offsetWidth || 0,
+            }
+          }
+          role="listbox"
+          ref={listRef}
+        >
           {canSearch ? (
             <li className="uiselect-search" role="presentation" onMouseDown={(e) => e.stopPropagation()}>
               <input
@@ -427,7 +478,8 @@ export const Select = ({
               </li>
             ))
           )}
-        </ul>
+        </ul>,
+        document.body
       ) : null}
     </div>
   );
