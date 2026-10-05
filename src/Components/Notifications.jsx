@@ -10,6 +10,7 @@ import {
   subscribeToNotifications,
 } from "../lib/api";
 import { formatDate, useClampToViewport } from "./UI";
+import MailAlerts, { showMailAlert } from "../Pages/Mail/MailAlerts";
 
 const Notifications = () => {
   const { user } = useAuth();
@@ -47,11 +48,13 @@ const Notifications = () => {
   // without refreshing.
   useEffect(() => {
     if (!user || !schoolId) return undefined;
-    const channel = subscribeToNotifications(user.id, schoolId, (row) =>
+    const channel = subscribeToNotifications(user.id, schoolId, (row) => {
       setItems((current) =>
         current.some((item) => item.id === row.id) ? current : [row, ...current]
-      )
-    );
+      );
+      // Someone just opened your mail (supabase/241): a card pops up at once.
+      if (String(row.kind || "").startsWith("mail_")) showMailAlert(row);
+    });
     return () => channel.unsubscribe();
   }, [user, schoolId]);
 
@@ -111,6 +114,7 @@ const Notifications = () => {
 
   return (
     <span ref={wrapRef} style={{ position: "relative" }}>
+      <MailAlerts />
       <button
         type="button"
         className="bell"

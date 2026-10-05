@@ -15,6 +15,7 @@ import { users as usersIcon } from "react-icons-kit/feather/users";
 import { clipboard } from "react-icons-kit/feather/clipboard";
 import { creditCard } from "react-icons-kit/feather/creditCard";
 import { mail } from "react-icons-kit/feather/mail";
+import { send } from "react-icons-kit/feather/send";
 import { dollarSign } from "react-icons-kit/feather/dollarSign";
 import { clock } from "react-icons-kit/feather/clock";
 import { logOut } from "react-icons-kit/feather/logOut";
@@ -36,6 +37,7 @@ import PlatformAuditLog from "./PlatformAuditLog";
 import PlatformTrials from "./PlatformTrials";
 import PlatformGateways from "./PlatformGateways";
 import PlatformMailboxes from "./PlatformMailboxes";
+import PlatformMail from "./PlatformMail";
 import PlatformBilling from "./PlatformBilling";
 import PlatformSettings from "./PlatformSettings";
 import { Page, Card, Notice, Button } from "../Components/UI";
@@ -53,7 +55,8 @@ const NAV = [
   { to: "/Tenants", label: "Schools", icon: layers, end: false },
   { to: "/Trials", label: "Trials", icon: clock, end: false },
   { to: "/Gateways", label: "Gateways", icon: creditCard, end: false },
-  { to: "/Mailboxes", label: "Mailboxes", icon: mail, end: false },
+  { to: "/Mail", label: "Mail", icon: send, end: false },
+  { to: "/Mailboxes", label: "Ticket mailboxes", icon: mail, end: false },
   { to: "/Billing", label: "Billing", icon: dollarSign, end: false },
   { to: "/Team", label: "Team", icon: usersIcon, end: false },
   { to: "/AuditLog", label: "Audit log", icon: clipboard, end: false },
@@ -299,6 +302,7 @@ const PlatformApp = () => (
               <Route path="/Tenants/:schoolId" element={<TenantDetail />} />
               <Route path="/Trials" element={<PlatformTrials />} />
               <Route path="/Gateways" element={<PlatformGateways />} />
+              <Route path="/Mail" element={<PlatformMail />} />
               <Route path="/Mailboxes" element={<PlatformMailboxes />} />
               <Route path="/Billing" element={<PlatformBilling />} />
               <Route path="/Team" element={<PlatformTeam />} />

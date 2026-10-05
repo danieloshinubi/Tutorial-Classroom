@@ -68,6 +68,7 @@ const TicketDetail = lazyPage(() => import("./Pages/Tickets/TicketDetail"));
 const MyTickets = lazyPage(() => import("./Pages/Support/MyTickets"));
 const MyTicketDetail = lazyPage(() => import("./Pages/Support/MyTicketDetail"));
 const ChatPage = lazyPage(() => import("./Pages/Chat/ChatPage"));
+const MailPage = lazyPage(() => import("./Pages/Mail/MailPage"));
 const PlatformApp = lazyPage(() => import("./platform/PlatformApp"));
 const MarketingApp = lazyPage(() => import("./marketing/MarketingApp"));
 const News = lazyPage(() => import("./Pages/News/News"));
@@ -190,6 +191,10 @@ function App() {
             {/* Tenant-wide DMs and group channels — every signed-in role,
                 same reach as News/Support. RLS scopes each channel to its
                 own members. */}
+            {/* Schoolivio Mail: staff mailboxes (supabase/235). */}
+            <Route element={<SchoolRoute module="mail" />}>
+              <Route path="/Mail" element={<MailPage />} />
+            </Route>
             <Route path="/Chat" element={<ChatPage />} />
             <Route path="/Chat/:channelId" element={<ChatPage />} />
             {/* Where the gateway returns a family. It reports the outcome and

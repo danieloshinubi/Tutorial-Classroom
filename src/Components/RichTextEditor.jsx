@@ -8,6 +8,7 @@ import { TextStyle, Color, FontFamily, FontSize } from "@tiptap/extension-text-s
 import { TextAlign } from "@tiptap/extension-text-align";
 import { Highlight } from "@tiptap/extension-highlight";
 import { TableKit } from "@tiptap/extension-table";
+import Image from "@tiptap/extension-image";
 import { Icon } from "react-icons-kit";
 import { ic_undo } from "react-icons-kit/md/ic_undo";
 import { ic_redo } from "react-icons-kit/md/ic_redo";
@@ -242,6 +243,8 @@ export const RichTextEditor = forwardRef(({
             FontSize,
             Highlight.configure({ multicolor: true }),
             TextAlign.configure({ types: ["heading", "paragraph"] }),
+            // Pictures inside the message (Mail): kept in the body as data: URIs.
+            Image.configure({ inline: false, allowBase64: true, HTMLAttributes: { style: "max-width:100%;height:auto;" } }),
             TableKit.configure({
               table: { resizable: false, HTMLAttributes: { style: "border-collapse:collapse;width:100%;margin:8px 0;" } },
               tableCell: { HTMLAttributes: { style: CELL_STYLE } },
@@ -321,6 +324,7 @@ export const RichTextEditor = forwardRef(({
 
   useImperativeHandle(ref, () => ({
     insertContent: (text) => editor?.chain().focus().insertContent(text).run(),
+    insertImage: (src, alt = "") => editor?.chain().focus().setImage({ src, alt }).run(),
     focus: () => editor?.chain().focus().run(),
   }), [editor]);
 

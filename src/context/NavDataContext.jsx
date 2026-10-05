@@ -9,6 +9,7 @@ import {
   subscribeToMyChannels,
   subscribeToChatActivity,
   subscribeToNotifications,
+  subscribeToMail,
 } from "../lib/api";
 
 // What the menu shows beside each module: unread chats and the "something
@@ -75,6 +76,8 @@ export const NavDataProvider = ({ children }) => {
       subscribeToMyChannels(userId, loadChat),
       subscribeToChatActivity(userId, loadChat),
       subscribeToNotifications(userId, schoolId, loadAttention),
+      // New or read mail moves the Mail item's unread count.
+      subscribeToMail(userId, loadAttention),
     ];
     const timer = setInterval(loadAttention, 60000);
     const onFocus = () => {

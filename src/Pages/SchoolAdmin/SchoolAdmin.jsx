@@ -29,6 +29,7 @@ import OrganogramPanel from "./OrganogramPanel";
 import SecurityPanel from "./SecurityPanel";
 import SchoolAccessPanel from "./SchoolAccessPanel";
 import BillingPanel from "./BillingPanel";
+import MailSettingsPanel from "../Mail/MailSettingsPanel";
 import PeopleSection from "./people/PeopleSection";
 import { CountrySelect, CurrencySelect, TimeZoneSelect } from "../../Components/LocalePickers";
 import { currencyLabel } from "../../lib/currencies";
@@ -768,7 +769,8 @@ const SECTIONS = [
   {
     group: "School",
     items: [
-      { id: "mailboxes", label: "Mailboxes", icon: mailIcon, description: "Email accounts whose messages arrive as tickets." },
+      { id: "mail", label: "Mail settings", icon: mailIcon, description: "Staff email addresses, and the school's own domain and Resend account for mail to outside addresses." },
+      { id: "mailboxes", label: "Ticket mailboxes", icon: mailIcon, description: "Email accounts whose messages arrive as tickets." },
       { id: "modules", label: "Modules", icon: toggleRight, description: "Switch parts of Schoolivio on or off for this school." },
       { id: "security", label: "Security", icon: lock, description: "Sign people out after a set time of inactivity, or not at all." },
       { id: "access", label: "Schoolivio access", icon: shield, description: "Let Schoolivio support into your school for a set time, or decline." },
@@ -788,6 +790,7 @@ const PANELS = {
   levels: LevelsPanel,
   admissions: AdmissionsSettingsPanel,
   students: StudentRegistrationsPanel,
+  mail: MailSettingsPanel,
   mailboxes: MailboxesPanel,
   payments: PaymentGatewaySettingsPanel,
   fees: FeesSetupPanel,

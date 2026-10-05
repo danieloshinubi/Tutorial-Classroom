@@ -1,0 +1,18 @@
+{
+  "name": "schoolivio-pst-worker",
+  "private": true,
+  "description": "Builds public/workers/pst-worker.js: reads Outlook .pst/.ost files in the browser for Schoolivio Mail imports.",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test.mjs"
+  },
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "fflate": "^0.8.2",
+    "pst-extractor": "^1.12.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

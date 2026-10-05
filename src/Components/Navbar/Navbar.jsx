@@ -16,6 +16,7 @@ import { settings as settingsIcon } from "react-icons-kit/feather/settings";
 import { bell } from "react-icons-kit/feather/bell";
 import { helpCircle } from "react-icons-kit/feather/helpCircle";
 import { messageSquare } from "react-icons-kit/feather/messageSquare";
+import { mail as mailIcon } from "react-icons-kit/feather/mail";
 import { user as userIcon } from "react-icons-kit/feather/user";
 import { chevronsLeft } from "react-icons-kit/feather/chevronsLeft";
 import { chevronsRight } from "react-icons-kit/feather/chevronsRight";
@@ -47,6 +48,7 @@ const ICONS = {
   dashboard: grid,
   news: bell,
   chat: messageSquare,
+  mail: mailIcon,
   courses: bookOpen,
   teach: bookOpen,
   results: award,

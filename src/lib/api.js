@@ -595,6 +595,14 @@ const listen = (topic, onEvent) => {
   };
 };
 
+// Mail arriving, read, filed or deleted in the caller's mailboxes
+// (supabase/235), and old-mail imports moving on (supabase/240): the Mail
+// page and the menu's unread dot follow it live.
+export const subscribeToMail = (userId, onEvent) =>
+  listen(`user:${userId}`, (event) => {
+    if (event.table === "mail_messages" || event.table === "mail_imports") onEvent(event);
+  });
+
 export const subscribeToMessages = (courseId, onInsert) =>
   listen(`course:${courseId}`, (event) => {
     if (event.eventType === "INSERT" && event.new?.id) onInsert(event.new);

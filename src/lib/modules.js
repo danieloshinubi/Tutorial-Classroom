@@ -60,6 +60,16 @@ export const MODULES = [
     roles: ROLES,
   },
   {
+    id: "mail",
+    priority: 26,
+    group: "Overview",
+    path: "/Mail",
+    label: "Mail",
+    // Schoolivio Mail (supabase/235): staff mailboxes; parents and pupils
+    // keep their own email.
+    roles: [...RUNS_THE_SCHOOL, "principal", "bursar", "admissions", "teacher"],
+  },
+  {
     id: "chat",
     priority: 27,
     group: "Overview",
