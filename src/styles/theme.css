@@ -8671,3 +8671,45 @@ button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-colo
 .fam-done p { margin: 0 0 6px; font-size: 13.5px; }
 .fam-creds { padding: 10px 12px; border-radius: 10px; background: var(--bg); border: 1px dashed var(--line); font-family: "IBM Plex Mono", monospace; font-size: 13px; display: grid; gap: 4px; }
 .fam-creds p { font-family: inherit; }
+
+/* School admin → People: module access per person (supabase/230). */
+.people-access-row > span { display: grid; gap: 1px; }
+.people-access-source { font-size: 11.5px; color: var(--ink-3); font-weight: 400; }
+.people-access-row.is-changed > span { color: var(--brand); font-weight: 600; }
+
+/* Audit log in plain words (Pages/AuditLog/AuditLog.tsx). */
+.audit-row { margin-bottom: 10px; }
+.audit-row-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.audit-row-main { min-width: 0; display: grid; gap: 4px; }
+.audit-row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.audit-row-title strong { font-size: 14.5px; line-height: 1.4; }
+.audit-row-meta { font-size: 13px; color: var(--ink-2); }
+.audit-muted { color: var(--ink-3); font-size: 13px; }
+.audit-count { color: var(--ink-3); font-size: 13px; margin-top: 0; }
+.audit-detail { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; display: grid; gap: 14px; font-size: 13.5px; }
+.audit-facts-top, .audit-record dl { display: grid; gap: 8px; margin: 0; }
+.audit-facts-top > div, .audit-record dl > div { display: grid; grid-template-columns: 150px 1fr; gap: 12px; }
+.audit-facts-top dt, .audit-record dt { color: var(--ink-3); font-weight: 600; }
+.audit-facts-top dd, .audit-record dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.audit-record { padding: 12px 14px; border-radius: 12px; background: var(--bg); border: 1px solid var(--line); }
+.audit-record-title { font-weight: 700; margin-bottom: 8px; }
+.audit-changes td { overflow-wrap: anywhere; }
+.audit-before { color: var(--danger); }
+.audit-after { color: var(--success); }
+.audit-raw-toggle { justify-self: start; background: none; border: 0; padding: 0; font: inherit; font-size: 12.5px; color: var(--ink-3); text-decoration: underline; cursor: pointer; }
+.audit-raw { display: grid; gap: 6px; font-size: 12px; color: var(--ink-3); }
+.audit-raw pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; }
+@media (max-width: 640px) {
+  .audit-facts-top > div, .audit-record dl > div { grid-template-columns: 1fr; gap: 2px; }
+  .audit-row-head { flex-direction: column; }
+}
+
+/* View only (Components/ViewOnlyScope.tsx): the buttons that change things
+   are hidden on the page and in any window it opens. */
+.view-only-scope .btn-primary,
+.view-only-scope .btn-danger,
+.view-only-scope .btn-danger-outline,
+body.view-only-active .modal .btn-primary,
+body.view-only-active .modal .btn-danger,
+body.view-only-active .modal .btn-danger-outline { display: none !important; }
+.view-only-scope form[inert], body.view-only-active .modal form[inert] { opacity: .85; }

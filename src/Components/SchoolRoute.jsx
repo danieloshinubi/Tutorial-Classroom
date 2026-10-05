@@ -4,6 +4,7 @@ import { useSchool } from "../context/SchoolContext";
 import { accessFor, canUseModule, homeFor, moduleById } from "../lib/modules";
 import { Page, Card, Notice, AppLoading } from "./UI";
 import Navbar from "./Navbar/Navbar";
+import ViewOnlyScope from "./ViewOnlyScope";
 
 // Gate for everything behind a school role.
 //
@@ -60,12 +61,16 @@ const SchoolRoute = ({ module: moduleId, instead }) => {
     return <Navigate to={alternative || homeFor(roles, disabledModules, moduleGrants)} replace />;
   }
 
-  // Someone given view-only access (School admin → People) sees the module as
-  // it is, with a standing reminder; the database refuses their changes.
+  // Someone given view-only access (School admin → People → Module access)
+  // sees the module as it is, with a standing reminder; the page cannot
+  // change anything (ViewOnlyScope), and for the money and admissions
+  // modules the database refuses changes too.
   if (moduleId !== "auditlog" && accessFor(moduleId, roles, moduleGrants) === "read") {
     return (
       <>
-        <Outlet />
+        <ViewOnlyScope label={moduleById(moduleId)?.label || "here"}>
+          <Outlet />
+        </ViewOnlyScope>
         <div className="view-only-pill" role="status">
           {`View only — you can look around ${moduleById(moduleId)?.label || "here"}, but not change anything.`}
         </div>

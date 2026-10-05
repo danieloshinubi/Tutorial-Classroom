@@ -276,7 +276,32 @@ export const Select = ({
   }, [open, place]);
   useEffect(() => {
     if (!open) return undefined;
-    const follow = () => place();
+    // Follows its button as the page scrolls; once the button has scrolled
+    // out of sight (off the screen, or out of the box it sits in), the list
+    // closes instead of being left stranded at the edge of the screen.
+    const visible = () => {
+      const button = triggerRef.current;
+      if (!button) return false;
+      const r = button.getBoundingClientRect();
+      const viewH = window.visualViewport?.height || window.innerHeight;
+      if (r.bottom <= 0 || r.top >= viewH) return false;
+      for (let el = button.parentElement; el && el !== document.body; el = el.parentElement) {
+        const style = window.getComputedStyle(el);
+        if (!/(auto|scroll|hidden|clip)/.test(style.overflowY + style.overflowX)) continue;
+        const box = el.getBoundingClientRect();
+        if (r.bottom <= box.top + 2 || r.top >= box.bottom - 2) return false;
+      }
+      return true;
+    };
+    const follow = (event) => {
+      // Scrolling the list itself is not the page moving.
+      if (event?.type === "scroll" && listRef.current && event.target instanceof Node && listRef.current.contains(event.target)) return;
+      if (!visible()) {
+        setOpen(false);
+        return;
+      }
+      place();
+    };
     window.addEventListener("scroll", follow, true);
     window.addEventListener("resize", follow);
     window.visualViewport?.addEventListener("resize", follow);

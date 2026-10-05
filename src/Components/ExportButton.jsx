@@ -92,7 +92,10 @@ export const ExportMenu = ({
 // People) exports like its own staff. View-only access does not export.
 export const ExportButton = ({ roles = [], module, ...props }) => {
   const { isAdmin, roles: mine = [], moduleGrants = {} } = useSchool();
-  const allowed = isAdmin || roles.some((r) => mine.includes(r)) || (!!module && moduleGrants[module] === "edit");
+  // Their own setting for the module wins (supabase/230): Can edit allows
+  // it, View only and No access do not, nothing set leaves it to the role.
+  const setting = module ? moduleGrants[module] : undefined;
+  const allowed = setting === "edit" || (!["read", "none"].includes(setting) && (isAdmin || roles.some((r) => mine.includes(r))));
   if (!allowed) return null;
   return <ExportMenu {...props} />;
 };

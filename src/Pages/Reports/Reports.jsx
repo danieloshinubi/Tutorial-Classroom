@@ -6,6 +6,7 @@ import { useSchool } from "../../context/SchoolContext";
 import { fetchReportOverview } from "../../lib/api";
 import { analyse, bandFor } from "../../lib/analysis";
 import { useActionFeedback } from "../../Components/Toast";
+import { ExportMenu } from "../../Components/ExportButton";
 import {
   Page,
   Button,
@@ -280,6 +281,23 @@ const Reports = () => {
     return scoped.filter(test).sort(compare[sort] || compare.name);
   }, [scoped, filter, sort]);
 
+  // The students on screen (search, class and filter applied), as Excel,
+  // CSV or PDF; a parent's export is their own children.
+  const exportRows = isParent ? children : shown;
+  const exportColumns = [
+    { key: "name", label: "Student" },
+    { key: (s) => s.email || "", label: "Email" },
+    { key: (s) => s.class_name || "", label: "Class" },
+    { key: (s) => s.report.courses.length, label: "Courses", type: "number" },
+    { key: (s) => (s.report.average === null ? "" : `${s.report.average}%`), label: "Average" },
+    { key: (s) => bandFor(s.report.average).label, label: "Standing" },
+    { key: (s) => (s.report.totalSet ? `${s.report.totalDone} of ${s.report.totalSet}` : "Nothing set"), label: "Handed in" },
+    { key: (s) => s.missing, label: "Missing work", type: "number" },
+    { key: (s) => (s.report.punctuality === null ? "" : `${s.report.punctuality}%`), label: "On time" },
+    { key: (s) => s.idle.text, label: "Last active" },
+    { key: (s) => s.report.findings.find((f) => f.kind === "concern")?.title || "", label: "Needs attention" },
+  ];
+
   const nothingAtAll = !loading && students.length === 0;
   const activeFilter = FILTERS.find((f) => f.id === filter) || FILTERS[0];
 
@@ -289,6 +307,17 @@ const Reports = () => {
       <Page
         title="Reports"
         subtitle={isParent ? "How your children are doing" : "How your students are progressing"}
+        action={
+          exportRows.length ? (
+            <ExportMenu
+              filename={`student-reports-${filter}`}
+              sheetName="Students"
+              title={`Student reports — ${activeFilter.label}${klass ? ` · ${klass}` : ""}`}
+              rows={exportRows}
+              columns={exportColumns}
+            />
+          ) : null
+        }
       >
         {loading ? <SkeletonTable rows={5} cols={5} /> : null}
 

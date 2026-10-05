@@ -59,13 +59,24 @@ const PersonModal = ({ person, schoolMembers, onClose }) => {
   useEffect(() => setViewing(person), [person]);
 
   const manager = viewing.manager_id ? schoolMembers.find((m) => m.user_id === viewing.manager_id) : null;
-  const reports = schoolMembers.filter((m) => m.manager_id === viewing.user_id);
+  // One card per person (someone holding two roles has two membership
+  // rows), active people only.
+  const reports = Array.from(
+    new Map(
+      schoolMembers.filter((m) => m.manager_id === viewing.user_id && m.is_active !== false).map((m) => [m.user_id, m])
+    ).values()
+  );
   const top = findTopOfChain(viewing.user_id, schoolMembers);
   const presence = usePresence();
   const presenceState = presence.status(viewing.user_id);
   const presenceOnline = presenceState === "online";
   const presenceText = presenceLabel({ status: presenceState, lastSeen: presence.lastSeen(viewing.user_id) });
   const isTop = !manager;
+  // The head of the organisation: nobody above them, and either the
+  // proprietor or someone others report to. For them "Manager: Not set" is
+  // not missing information, so it is not shown at all.
+  const heldRoles = schoolMembers.filter((m) => m.user_id === viewing.user_id).map((m) => m.role);
+  const headOfOrg = isTop && (heldRoles.includes("owner") || viewing.role === "owner" || reports.length > 0);
 
   return (
     <Modal title="Profile" onClose={onClose}>
@@ -99,14 +110,18 @@ const PersonModal = ({ person, schoolMembers, onClose }) => {
       <div className="tw-mb-4">
         <label className="tw-block tw-text-xs tw-text-ink-3 tw-mb-1.5">{"Organisation"}</label>
         <div className="tw-flex tw-flex-col tw-gap-4">
-          <div>
-            <div className="tw-text-xs tw-text-ink-3 tw-mb-2">{"Manager"}</div>
-            {manager ? (
-              <PersonCard person={manager} onClick={() => setViewing(manager)} />
-            ) : (
-              <div className="tw-text-[13.5px] tw-text-ink-2">{"Not set"}</div>
-            )}
-          </div>
+          {headOfOrg ? (
+            <div className="tw-text-[13.5px] tw-text-ink-2">{"Head of the organisation"}</div>
+          ) : (
+            <div>
+              <div className="tw-text-xs tw-text-ink-3 tw-mb-2">{"Manager"}</div>
+              {manager ? (
+                <PersonCard person={manager} onClick={() => setViewing(manager)} />
+              ) : (
+                <div className="tw-text-[13.5px] tw-text-ink-2">{"Not set"}</div>
+              )}
+            </div>
+          )}
           {reports.length > 0 ? (
             <div>
               <div className="tw-text-xs tw-text-ink-3 tw-mb-2">{`People reporting to ${displayName(viewing.profiles)} (${reports.length})`}</div>

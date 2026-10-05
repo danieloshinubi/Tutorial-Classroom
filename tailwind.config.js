@@ -6,6 +6,8 @@ module.exports = {
   content: [
     "./src/Pages/Chat/**/*.{js,jsx}",
     "./src/Components/PersonModal.jsx",
+    // School admin → People: the list and the person panel (TypeScript).
+    "./src/Pages/SchoolAdmin/people/**/*.{ts,tsx}",
   ],
   // Tailwind decides what to generate by scanning the files above for
   // anything that LOOKS like a class name — which includes ordinary English

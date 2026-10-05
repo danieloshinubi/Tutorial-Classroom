@@ -246,6 +246,16 @@ export const GRANTABLE_MODULES = [
 ];
 export const ACCESS_LABEL = { read: "View only", edit: "Can edit" };
 
+// Every module a person's access can be set for, role or not (supabase/230):
+// narrowed to View only or switched off where their role includes it, opened
+// where it does not (GRANTABLE_MODULES). Everyday modules everyone has
+// (dashboard, news, chat, support) are left alone. School admin can be
+// switched off, but never your own and never for the last owner or admin
+// (supabase/232).
+// Fees is the parents' and pupils' own bills page; staff use Bursary.
+const NOT_SETTABLE = ["dashboard", "news", "chat", "support", "fees"];
+export const SETTABLE_MODULES = () => MODULES.filter((m) => !NOT_SETTABLE.includes(m.id)).map((m) => m.id);
+
 // Does this person's role already cover the module?
 export const roleCovers = (moduleId, roles = []) => {
   const module = BY_ID.get(moduleId);
@@ -253,10 +263,14 @@ export const roleCovers = (moduleId, roles = []) => {
 };
 
 // What this person can do in a module: "edit", "read" or null. The role
-// gives full use; a grant ({ module: "read" | "edit" }) adds to it.
+// gives full use; their own setting ({ module: "none" | "read" | "edit" },
+// supabase/230) wins over it: "none" shuts the module, "read" makes it view
+// only, and either level opens a module the role does not include. This
+// applies to everyone, the proprietor included (supabase/231).
 export const accessFor = (moduleId, roles = [], grants = {}) => {
-  if (roleCovers(moduleId, roles)) return "edit";
   const level = (grants || {})[moduleId];
+  if (level === "none") return null;
+  if (roleCovers(moduleId, roles)) return level === "read" ? "read" : "edit";
   return level === "edit" || level === "read" ? level : null;
 };
 

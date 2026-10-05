@@ -6,8 +6,31 @@ import { lazy } from "react";
 // showing a broken page; if it still fails, the error is real and surfaces.
 const RELOADED_KEY = "schoolivio:chunk-reload";
 
-export const lazyPage = (load) =>
-  lazy(() =>
+// Every screen's loader, so they can all be fetched ahead of time.
+const loaders = [];
+
+// Once the app is up and the browser is idle, fetch every screen's code in
+// the background, one after another. Opening a module then shows it at once
+// instead of a loading screen (which, on a computer, also blanked the menu).
+let preloaded = false;
+export const preloadPages = () => {
+  if (preloaded || typeof window === "undefined") return;
+  preloaded = true;
+  const queue = [...loaders];
+  const idle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 200));
+  const next = () => {
+    const load = queue.shift();
+    if (!load) return;
+    load()
+      .catch(() => {})
+      .finally(() => idle(next));
+  };
+  idle(next);
+};
+
+export const lazyPage = (load) => {
+  loaders.push(load);
+  return lazy(() =>
     load()
       .then((module) => {
         try {
@@ -35,3 +58,4 @@ export const lazyPage = (load) =>
         throw err;
       })
   );
+};

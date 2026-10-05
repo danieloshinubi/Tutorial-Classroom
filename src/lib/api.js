@@ -1625,10 +1625,11 @@ export const fetchMyModuleAccess = async (schoolId, userId) => {
   return Object.fromEntries((data || []).map((r) => [r.module, r.level]));
 };
 
-// Sets one person's extra access to exactly `access` ({ module: "read" |
-// "edit" | "" }). Modules left blank are removed. Owners and admins only.
+// Sets one person's module access to exactly `access` ({ module: "none" |
+// "read" | "edit" | "" }, supabase/230). Blank means "as their role gives
+// it" and is removed. Owners and admins only.
 export const saveModuleAccess = async ({ schoolId, userId, access }) => {
-  const keep = Object.entries(access).filter(([, level]) => level === "read" || level === "edit");
+  const keep = Object.entries(access).filter(([, level]) => level === "none" || level === "read" || level === "edit");
   const drop = Object.entries(access).filter(([, level]) => !level).map(([module]) => module);
   if (keep.length) {
     const { error } = await supabase.from("member_module_access").upsert(

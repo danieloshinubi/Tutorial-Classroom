@@ -61,7 +61,7 @@ interface CellEdit {
 }
 
 const Timetable = () => {
-  const { schoolId, roles } = useSchool();
+  const { schoolId, roles, moduleGrants } = useSchool();
   const { user } = useAuth();
   // The id, not the user object: effects below must not re-run when the
   // object is recreated for the same person.
@@ -69,7 +69,11 @@ const Timetable = () => {
   const { setError, setNotice } = useActionFeedback();
   const confirmAction = useConfirm();
 
-  const canManage = roles.some((r) => MANAGERS.includes(r));
+  // Their Timetable setting first (supabase/234): Can edit sets the
+  // timetable whatever their role; View only and No access never do; nothing
+  // set leaves it to the role (principal, admin, proprietor).
+  const setting = moduleGrants?.timetable;
+  const canManage = setting === "edit" || (!setting && roles.some((r) => MANAGERS.includes(r)));
   const isTeacher = roles.includes("teacher");
   // Students see their own class; parents pick a child and see that child's
   // class. Parents have no class of their own.

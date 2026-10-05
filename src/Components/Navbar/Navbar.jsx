@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { grid } from "react-icons-kit/feather/grid";
@@ -63,9 +63,16 @@ const ICONS = {
   school: settingsIcon,
 };
 
+// Where the menu was scrolled to, kept between pages (each page draws its
+// own menu) so moving to another module leaves it exactly where it was,
+// instead of jumping back to the top. On a computer only; the phone menu is
+// a drawer that opens fresh.
+let menuScroll = 0;
+
 const Navbar = () => {
   const { school, roles, disabledModules, moduleGrants } = useSchool();
   const location = useLocation();
+  const navRef = useRef(null);
 
   // Unread chats and the "waiting for you" dots live in NavDataProvider, so
   // they survive page changes instead of reloading with every Navbar.
@@ -115,6 +122,12 @@ const Navbar = () => {
   // preference is kept but simply not applied while on a phone.
   const showCollapsed = collapsed && !isMobile;
 
+  // Put the menu back where it was before it is painted, so it never flickers
+  // to the top first.
+  useLayoutEffect(() => {
+    if (!isMobile && navRef.current) navRef.current.scrollTop = menuScroll;
+  }, [isMobile]);
+
   // Close the mobile drawer whenever the route changes, so it never covers
   // the page you just navigated to.
   useEffect(() => setOpen(false), [location.pathname]);
@@ -160,7 +173,13 @@ const Navbar = () => {
           </button>
         </div>
 
-        <nav className="side-nav">
+        <nav
+          className="side-nav"
+          ref={navRef}
+          onScroll={(e) => {
+            if (!isMobile) menuScroll = e.currentTarget.scrollTop;
+          }}
+        >
           {groups.map((group) => (
             <div key={group.name} className="side-group">
               {showCollapsed ? <div className="side-rule" /> : (

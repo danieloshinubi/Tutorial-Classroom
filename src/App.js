@@ -33,6 +33,8 @@ import "./styles/theme.css";
 import "./styles/tailwind.css";
 
 // Screens load on demand (lazyPage); see the Suspense around <Routes>.
+import RouteLoading, { PagePreloader } from "./Components/RouteLoading";
+
 const ApplicantLogin = lazyPage(() => import("./Pages/Login/ApplicantLogin"));
 const Signup = lazyPage(() => import("./Pages/Signup/Signup"));
 const SignupTutor = lazyPage(() => import("./Pages/Signup/SignupTutor"));
@@ -134,10 +136,12 @@ function App() {
           <ConfigNotice />
           {/* "Write with AI" on every note and message box (supabase/228). */}
           <ComposeAssist />
+          {/* Every module's code, fetched in the background once signed in. */}
+          <PagePreloader />
         <TrialGate>
         {/* Each module's code downloads the first time it is opened, so the
             first load carries the sign-in and shell, not every screen. */}
-        <Suspense fallback={<AppLoading />}>
+        <Suspense fallback={<RouteLoading />}>
         <Routes>
           <Route path="/" element={<Navigate to="/Dashboard" replace />} />
           <Route path="/Login" element={<Login />} />

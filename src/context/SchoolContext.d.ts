@@ -10,7 +10,7 @@ export interface SchoolValue {
   levels: { year: number; label: string }[];
   labelFor: (year: number | string) => string;
   disabledModules: string[];
-  moduleGrants: Record<string, "read" | "edit">;
+  moduleGrants: Record<string, "none" | "read" | "edit">;
   /** A console account not (yet) let into this school; null otherwise. */
   platformAccess: import("../lib/schoolAccessApi").PlatformAccess | null;
   membership: { id: string; role: string; is_active: boolean; access_expires_at: string | null; granted_via: string | null } | null;

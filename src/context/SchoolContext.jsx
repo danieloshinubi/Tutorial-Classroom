@@ -315,7 +315,12 @@ export const SchoolProvider = ({ children }) => {
       trialExpired,
       planLapsed,
       // Convenience predicates so pages don't repeat role arrays.
-      isAdmin: roles.some((r) => r === "owner" || r === "admin"),
+      // An administrator's powers follow their School admin setting
+      // (supabase/234): Can edit gives them, View only and No access take
+      // them away, nothing set leaves it to the role.
+      isAdmin:
+        moduleGrants.school === "edit" ||
+        (!["read", "none"].includes(moduleGrants.school) && roles.some((r) => r === "owner" || r === "admin")),
       isPrincipal: roles.includes("principal"),
       isBursar: roles.includes("bursar"),
       isStaff: roles.some((r) =>

@@ -950,12 +950,15 @@ const MyAttendance = ({ schoolId }) => {
 
 /* --------------------------------------------------------------------- */
 const Attendance = () => {
-  const { schoolId, isAdmin, isPrincipal, isTeacher, isParent } = useSchool();
+  const { schoolId, isAdmin, isPrincipal, isTeacher, isParent, moduleGrants } = useSchool();
+  // Their Attendance setting first (supabase/234): Can edit marks any class,
+  // View only and No access mark none; nothing set leaves it to the role.
+  const setting = moduleGrants?.attendance;
   // Leadership: the same bar classroom.has_role_in(...'owner','admin',
   // 'principal') sets for school-attendance RLS — mark/records stay open to
   // any teacher too, per classroom.can_mark_attendance.
-  const isLeadership = isAdmin || isPrincipal;
-  const canMark = isLeadership || isTeacher;
+  const isLeadership = setting === "edit" || (!setting && (isAdmin || isPrincipal));
+  const canMark = setting === "edit" || (!setting && (isLeadership || isTeacher));
 
   const tabs = [
     canMark ? { id: "mark", label: "Mark attendance" } : null,
