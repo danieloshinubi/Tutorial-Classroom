@@ -14,6 +14,10 @@ export interface Budget {
 export interface Turn {
   cursor: Record<string, unknown>;
   done: boolean;
+  /** Uploaded files finished with: removed once the turn's progress is saved
+   * (removed earlier, a turn that then failed would start again from files
+   * that are gone). */
+  remove?: string[];
 }
 const timeLeft = (b: Budget) => Date.now() < b.deadline && b.messages > 0;
 
@@ -194,10 +198,9 @@ export async function runFiles(admin: AdminClient, job: Job, t: Tally, b: Budget
         if ((err as Error).message.startsWith("The mailbox is full")) throw err;
         t.failed += 1;
       }
-      await admin.storage.from("mail-imports").remove([path]);
       i += 1;
     }
-    return { cursor: { i }, done: i >= job.file_paths.length };
+    return { cursor: { i }, done: i >= job.file_paths.length, remove: job.file_paths.slice(cursor.i ?? 0, i) };
   }
 
   // .mbox: its parts read as one stream; g is the position in it.
@@ -229,6 +232,8 @@ export async function runFiles(admin: AdminClient, job: Job, t: Tally, b: Budget
       size *= 2;
       win = await read(g, Math.min(total, g + size));
     }
+    // Time ran out while the window was downloading: stop here, nothing skipped.
+    if (!timeLeft(b)) break;
     let pos = 0;
     let progressed = false;
     while (timeLeft(b)) {
@@ -269,19 +274,15 @@ export async function runFiles(admin: AdminClient, job: Job, t: Tally, b: Budget
       pos = skip < 0 ? win.length : win.length - 6 + skip + 1;
     }
     g += pos;
-    // Parts read to the end are deleted.
-    for (let k = 0; k < sizes.length; k += 1) {
-      if (starts[k] + sizes[k] <= g && sizes[k] > 0) {
-        await admin.storage.from("mail-imports").remove([job.file_paths[k]]);
-      }
-    }
   }
+  // Parts read to the end are removed (after the progress is saved).
+  const remove = job.file_paths.filter((_, k) => sizes[k] > 0 && starts[k] + sizes[k] <= g && starts[k] + sizes[k] > (cursor.g ?? 0));
   // An Outlook .pst still being read in someone's browser keeps getting parts
   // (cursor.open); it is done only when the browser says the file is finished.
   if (cursor.open && g >= total && cursor.appended_at && Date.now() - Date.parse(cursor.appended_at) > 2 * 60 * 60 * 1000) {
     throw new Error("The .pst stopped coming in (the page was closed before the end). Start it again: what came across is kept and skipped next time.");
   }
-  return { cursor: { ...cursor, sizes, g }, done: g >= total && !cursor.open };
+  return { cursor: { ...cursor, sizes, g }, done: g >= total && !cursor.open, remove };
 }
 
 // --- Microsoft 365 (Graph, the school's admin approval) ------------------------------------

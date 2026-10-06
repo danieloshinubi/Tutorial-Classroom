@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import Navbar from "../../Components/Navbar/Navbar";
 import { Button, Modal, Select } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
@@ -10,18 +11,21 @@ import {
   deleteForever,
   directory,
   formatBytes,
+  canSend,
   listContacts,
   listFolder,
+  loadMailbox,
   loadMessage,
   mailGroups,
   moveTo,
-  myMailbox,
+  myMailboxes,
   setFlags,
   unreadCounts,
   type Address,
   type DirectoryEntry,
   type Folder,
   type Mailbox,
+  type MailboxChoice,
   type MailMessage,
   type MailSummary,
 } from "../../lib/mailApi";
@@ -82,6 +86,21 @@ const UndoBar = ({ onUndo }: { onUndo: (draftId: string) => void }) => {
 
 type Filter = "all" | "unread" | "flagged";
 
+const SHORTCUTS: [string, string][] = [
+  ["N", "New mail"],
+  ["R", "Reply"],
+  ["A", "Reply all"],
+  ["F", "Forward"],
+  ["E", "Archive"],
+  ["# or Del", "Delete"],
+  ["U", "Mark as unread"],
+  ["J / K", "Next / previous conversation"],
+  ["/", "Search"],
+  ["Esc", "Close the conversation"],
+  ["Ctrl+Enter", "Send (while writing)"],
+  ["?", "Show these shortcuts"],
+];
+
 const FOLDER_ICON: Record<Folder, string> = {
   inbox: ICON.inbox,
   drafts: ICON.drafts,
@@ -109,15 +128,29 @@ const useFullHeight = () => {
     }
     const target = page || (document.scrollingElement as HTMLElement | null) || document.documentElement;
     const before = target.style.overflowY;
+    // The area actually visible: on a phone the browser's bars come and go
+    // and the keyboard covers the bottom, so window.innerHeight is not it.
+    // (On a phone the page is also framed to that area, theme.css "Mail on a
+    // phone", so the top bar and each pane's own header never move.)
     const fit = () => {
       target.scrollTop = 0;
       target.style.overflowY = "hidden";
-      setHeight(Math.max(420, window.innerHeight - el.getBoundingClientRect().top - 12));
+      const vv = window.visualViewport;
+      const bottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const phone = window.matchMedia?.("(max-width: 900px)").matches;
+      setHeight(Math.max(phone ? 200 : 420, Math.floor(bottom - el.getBoundingClientRect().top - (phone ? 0 : 12))));
     };
     fit();
     window.addEventListener("resize", fit);
+    window.visualViewport?.addEventListener("resize", fit);
+    // The top bar stepping aside while typing on a phone resizes the page
+    // area without resizing the window.
+    const observer = typeof ResizeObserver === "undefined" || !el.parentElement ? null : new ResizeObserver(() => fit());
+    if (observer && el.parentElement) observer.observe(el.parentElement);
     return () => {
+      observer?.disconnect();
       window.removeEventListener("resize", fit);
+      window.visualViewport?.removeEventListener("resize", fit);
       target.style.overflowY = before;
     };
   }, []);
@@ -129,6 +162,8 @@ const MailPage = () => {
   const { schoolId } = useSchool();
   const { setError, setNotice } = useActionFeedback();
   const [mailbox, setMailbox] = useState<Mailbox | null>(null);
+  // My own mailbox and the shared ones I can open (supabase/242).
+  const [boxes, setBoxes] = useState<MailboxChoice[]>([]);
   const [people, setPeople] = useState<DirectoryEntry[]>([]);
   const [folder, setFolder] = useState<Folder>("inbox");
   const [items, setItems] = useState<MailSummary[] | null>(null);
@@ -143,13 +178,21 @@ const MailPage = () => {
   const [view, setView] = useState<"mail" | "contacts">("mail");
   const [contactStart, setContactStart] = useState<Address | null>(null);
   const [extra, setExtra] = useState<DirectoryEntry[]>([]);
+  const [keysOpen, setKeysOpen] = useState(false);
+  const searchBox = useRef<HTMLInputElement | null>(null);
   const full = useFullHeight();
 
-  // The mailbox, made the first time it is opened.
+  // The mailbox, made the first time it is opened; a notification link may
+  // name a shared one (&box=…).
   useEffect(() => {
     if (!schoolId) return;
-    myMailbox(schoolId)
-      .then((box) => setMailbox(box))
+    myMailboxes(schoolId)
+      .then(async (list) => {
+        setBoxes(list);
+        const wanted = new URLSearchParams(window.location.search).get("box");
+        const pick = list.find((b) => b.id === wanted) ?? list[0];
+        if (pick) setMailbox(await loadMailbox(pick.id));
+      })
       .catch((err: Error) => setError(err.message));
     directory(schoolId).then(setPeople).catch(() => undefined);
   }, [schoolId, setError]);
@@ -172,19 +215,61 @@ const MailPage = () => {
   }, [loadSuggestions]);
   const suggest = useMemo(() => [...people, ...extra.filter((e) => !people.some((p) => p.address === e.address))], [people, extra]);
 
-  // Opened from a notification: /Mail?thread=…&folder=…
+  // Opened from a notification: /Mail?thread=…&folder=…&box=…, also while
+  // Mail is already open (the "opened" pop-up, the bell).
+  const { search: query } = useLocation();
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
+    const q = new URLSearchParams(query);
     const thread = q.get("thread");
     const f = q.get("folder") as Folder | null;
-    if (f && FOLDERS.some((x) => x.id === f)) setFolder(f);
-    if (thread) setOpenThread(thread);
-  }, []);
+    const box = q.get("box");
+    (async () => {
+      // The first load picks &box itself; later links switch to it here.
+      if (box && mailbox && box !== mailbox.id) {
+        try {
+          setMailbox(await loadMailbox(box));
+        } catch (err) {
+          setError((err as Error).message);
+          return;
+        }
+      }
+      if (f && FOLDERS.some((x) => x.id === f)) setFolder(f);
+      if (thread) {
+        setCompose(null);
+        setView("mail");
+        setOpenThread(thread);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
+  const refreshBoxes = useCallback(() => {
+    if (schoolId) myMailboxes(schoolId).then(setBoxes).catch(() => undefined);
+  }, [schoolId]);
+
+  const switchTo = async (id: string) => {
+    if (id === mailbox?.id) return;
+    try {
+      setMailbox(await loadMailbox(id));
+      setFolder("inbox");
+      setOpenThread(null);
+      setCompose(null);
+      setView("mail");
+      setFilter("all");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
+  // Only the newest load lands: Inbox answering after Sent was picked must
+  // not fill Sent with Inbox mail.
+  const loadSeq = useRef(0);
   const reload = useCallback(async () => {
     if (!mailbox) return;
+    const n = ++loadSeq.current;
     try {
       const [list, c] = await Promise.all([listFolder(mailbox.id, folder, search), unreadCounts(mailbox.id)]);
+      if (n !== loadSeq.current) return;
       setItems(list);
       setCounts(c);
     } catch (err) {
@@ -203,10 +288,16 @@ const MailPage = () => {
     if (!user?.id) return undefined;
     const sub = subscribeToMail(user.id, () => {
       reload();
+      refreshBoxes();
       setLiveTick((n) => n + 1);
     });
     return () => sub.unsubscribe();
-  }, [user?.id, reload]);
+  }, [user?.id, reload, refreshBoxes]);
+
+  const access = boxes.find((b) => b.id === mailbox?.id)?.access;
+  const readOnly = access === "read";
+  // Settings, rules and safe/blocked senders: my own mailbox, or full access.
+  const canManage = !access || access === "own" || access === "full";
 
   // One row per conversation, newest first; pinned ones on top.
   const rows = useMemo(() => {
@@ -250,6 +341,44 @@ const MailPage = () => {
     setOpenThread(r.latest.thread_id);
   };
 
+  // Keyboard shortcuts (supabase/243), as in Outlook and Gmail. Never while
+  // typing, and never with a dialog or a message being written open.
+  const keys = useRef<(e: KeyboardEvent) => void>(() => undefined);
+  keys.current = (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+    const el = e.target as HTMLElement | null;
+    if (el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName))) return;
+    if (keysOpen) {
+      if (e.key === "Escape" || e.key === "?") setKeysOpen(false);
+      return;
+    }
+    if (settingsOpen || importOpen || compose || document.querySelector("[role='dialog']")) return;
+    const step = (by: number) => {
+      if (!rows?.length || view !== "mail") return;
+      const at = rows.findIndex((r) => (folder === "drafts" ? r.latest.id : r.latest.thread_id) === openThread);
+      const next = rows[Math.min(rows.length - 1, Math.max(0, at < 0 ? 0 : at + by))];
+      if (next) openRow(next);
+    };
+    const toReader: Record<string, string> = { r: "reply", a: "replyAll", f: "forward", e: "archive", "#": "delete", Delete: "delete", u: "unread" };
+    let handled = true;
+    if (e.key === "?") setKeysOpen(true);
+    else if (e.key === "n" && mailbox && !readOnly && mailbox.is_active !== false) startCompose({ mode: "new" });
+    else if (e.key === "/") searchBox.current?.focus();
+    else if (e.key === "j") step(1);
+    else if (e.key === "k") step(-1);
+    else if (e.key === "Escape" && (openThread || view === "contacts")) {
+      setOpenThread(null);
+      setView("mail");
+    } else if (toReader[e.key] && openThread) window.dispatchEvent(new CustomEvent("mail:shortcut", { detail: toReader[e.key] }));
+    else handled = false;
+    if (handled) e.preventDefault();
+  };
+  useEffect(() => {
+    const on = (e: KeyboardEvent) => keys.current(e);
+    window.addEventListener("keydown", on);
+    return () => window.removeEventListener("keydown", on);
+  }, []);
+
   const quick = async (work: () => Promise<unknown>) => {
     try {
       await work();
@@ -265,16 +394,37 @@ const MailPage = () => {
   return (
     <div className="shell">
       <Navbar />
-      <div className="tw-px-4 tw-pt-3 mobile:tw-px-0 mobile:tw-pt-0">
+      <div className="page-mail tw-px-4 tw-pt-3 mobile:tw-px-0 mobile:tw-pt-0">
       <div ref={full.ref} className="tw-flex tw-overflow-hidden tw-rounded-2xl tw-border tw-border-solid tw-border-line tw-bg-surface tw-shadow-1 [font-family:inherit] mobile:tw-rounded-none mobile:tw-border-0" style={{ height: full.height || 640 }}>
         {/* Folders */}
         <aside className="tw-flex tw-w-[230px] tw-shrink-0 tw-flex-col tw-border-0 tw-border-r tw-border-solid tw-border-line tw-bg-bg mobile:tw-hidden">
           <div className="tw-p-3">
-            <button type="button" className={`${primaryBtn} tw-w-full tw-justify-center`} disabled={!mailbox} onClick={() => startCompose({ mode: "new" })}>
+            <button type="button" className={`${primaryBtn} tw-w-full tw-justify-center`} disabled={!mailbox || readOnly || mailbox.is_active === false} onClick={() => startCompose({ mode: "new" })}>
               <Svg d={ICON.compose} size={16} />
               {"New mail"}
             </button>
           </div>
+          {boxes.length > 1 ? (
+            <div className="tw-px-2 tw-pb-2">
+              <p className="tw-m-0 tw-px-3 tw-pb-1 tw-text-[11.5px] tw-font-semibold tw-uppercase tw-tracking-wide tw-text-ink-3">{"Mailboxes"}</p>
+              {boxes.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => switchTo(b.id)}
+                  title={b.address}
+                  className={`tw-mb-0.5 tw-flex tw-w-full tw-items-center tw-gap-2 tw-rounded-lg tw-border-0 tw-px-3 tw-py-1.5 tw-text-left tw-text-[13.5px] tw-cursor-pointer [font-family:inherit] ${
+                    b.id === mailbox?.id ? "tw-bg-surface tw-font-semibold tw-text-ink tw-shadow-1" : "tw-bg-transparent tw-text-ink-2 hover:tw-bg-surface"
+                  }`}
+                >
+                  <Svg d={b.kind === "shared" ? ICON.users : ICON.envelope} size={14} />
+                  <span className="tw-min-w-0 tw-flex-1 tw-truncate">{b.kind === "person" ? "My mailbox" : b.display_name}</span>
+                  {b.access === "read" ? <span className="tw-text-[11px] tw-text-ink-3">{"read"}</span> : null}
+                  {b.unread ? <span className="tw-text-[12px] tw-font-bold tw-text-brand">{b.unread}</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <nav className="tw-flex-1 tw-overflow-y-auto tw-px-2">
             {FOLDERS.map((f) => {
               const n = counts[f.id];
@@ -323,13 +473,19 @@ const MailPage = () => {
                 <div className={`tw-h-full tw-rounded-full ${used > 90 ? "tw-bg-danger" : "tw-bg-brand"}`} style={{ width: `${Math.max(used, 1)}%` }} />
               </div>
               <div className="tw-mt-1 tw-text-[11.5px] tw-text-ink-3">{`${formatBytes(mailbox.used_bytes)} of ${formatBytes(mailbox.quota_bytes)} used`}</div>
-              <button type="button" className={`${btn} tw-mt-2 tw--ml-2 tw-text-[13px]`} onClick={() => setSettingsOpen(true)}>
-                <Svg d={ICON.settings} size={14} />
-                {mailbox.autoreply_enabled ? "Settings (away)" : "Settings"}
-              </button>
+              {canManage ? (
+                <button type="button" className={`${btn} tw-mt-2 tw--ml-2 tw-text-[13px]`} onClick={() => setSettingsOpen(true)}>
+                  <Svg d={ICON.settings} size={14} />
+                  {mailbox.autoreply_enabled ? "Settings (away)" : "Settings"}
+                </button>
+              ) : null}
               <button type="button" className={`${btn} tw--ml-2 tw-text-[13px]`} onClick={() => setImportOpen(true)}>
                 <Svg d={ICON.archive} size={14} />
                 {"Import old mail"}
+              </button>
+              <button type="button" className={`${btn} tw--ml-2 tw-text-[13px]`} onClick={() => setKeysOpen(true)}>
+                <Svg d={ICON.keyboard} size={14} />
+                {"Keyboard shortcuts"}
               </button>
             </div>
           ) : null}
@@ -351,7 +507,16 @@ const MailPage = () => {
                   options={FOLDERS.map((f) => ({ value: f.id, label: counts[f.id] ? `${f.label} (${counts[f.id]})` : f.label }))}
                 />
               </div>
-              <button type="button" className={primaryBtn} disabled={!mailbox} onClick={() => startCompose({ mode: "new" })}>
+              {boxes.length > 1 ? (
+                <div className="tw-w-[130px]">
+                  <Select
+                    value={mailbox?.id || ""}
+                    onChange={(v) => switchTo(v)}
+                    options={boxes.map((b) => ({ value: b.id, label: b.kind === "person" ? "My mailbox" : b.display_name }))}
+                  />
+                </div>
+              ) : null}
+              <button type="button" className={primaryBtn} disabled={!mailbox || readOnly} onClick={() => startCompose({ mode: "new" })}>
                 <Svg d={ICON.compose} size={15} />
                 {"New"}
               </button>
@@ -374,6 +539,7 @@ const MailPage = () => {
             <label className="tw-flex tw-h-9 tw-items-center tw-gap-2 tw-rounded-lg tw-border tw-border-solid tw-border-line tw-bg-surface tw-px-3">
               <span className="tw-text-ink-3"><Svg d={ICON.search} size={14} /></span>
               <input
+                ref={searchBox}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={`Search ${FOLDERS.find((f) => f.id === folder)?.label.toLowerCase()}`}
@@ -519,6 +685,7 @@ const MailPage = () => {
             <Compose
               key={compose.key}
               mailbox={mailbox}
+              fromChoices={boxes.filter((b) => canSend(b.access))}
               people={suggest}
               start={compose}
               onClose={() => setCompose(null)}
@@ -535,6 +702,8 @@ const MailPage = () => {
               onChanged={reload}
               onClosed={() => setOpenThread(null)}
               liveTick={liveTick}
+              readOnly={readOnly}
+              canTrust={canManage}
               onAddContact={(a) => {
                 setContactStart(a);
                 setView("contacts");
@@ -545,8 +714,17 @@ const MailPage = () => {
               <span className="tw-inline-flex tw-h-16 tw-w-16 tw-items-center tw-justify-center tw-rounded-full tw-bg-brand-soft tw-text-brand">
                 <Svg d={ICON.envelope} size={28} />
               </span>
-              <p className="tw-m-0 tw-text-[15px] tw-font-semibold tw-text-ink">{"Select a message to read"}</p>
-              <p className="tw-m-0 tw-text-[13.5px]">{mailbox ? `Your address is ${mailbox.address}` : "Opening your mailbox…"}</p>
+              {mailbox && mailbox.is_active === false ? (
+                <>
+                  <p className="tw-m-0 tw-text-[15px] tw-font-semibold tw-text-ink">{"This mailbox is suspended"}</p>
+                  <p className="tw-m-0 tw-max-w-[360px] tw-text-[13.5px]">{"The school admin has paused it: nothing can be sent or received for now. Please speak to them."}</p>
+                </>
+              ) : (
+                <>
+                  <p className="tw-m-0 tw-text-[15px] tw-font-semibold tw-text-ink">{"Select a message to read"}</p>
+                  <p className="tw-m-0 tw-text-[13.5px]">{mailbox ? `${mailbox.kind === "shared" ? "Shared mailbox" : "Your address"}: ${mailbox.address}${readOnly ? " (read only)" : ""}` : "Opening your mailbox…"}</p>
+                </>
+              )}
             </div>
           )}
         </main>
@@ -566,6 +744,19 @@ const MailPage = () => {
           }
         >
           <ImportMail mailboxId={mailbox.id} liveTick={liveTick} />
+        </Modal>
+      ) : null}
+
+      {keysOpen ? (
+        <Modal title="Keyboard shortcuts" onClose={() => setKeysOpen(false)}>
+          <ul className="tw-m-0 tw-grid tw-list-none tw-grid-cols-2 tw-gap-x-6 tw-gap-y-2 tw-p-0 mobile:tw-grid-cols-1">
+            {SHORTCUTS.map(([k, what]) => (
+              <li key={k} className="tw-flex tw-items-center tw-gap-3 tw-text-[13.5px] tw-text-ink">
+                <kbd className="tw-min-w-[64px] tw-rounded-md tw-border tw-border-solid tw-border-line tw-bg-bg tw-px-2 tw-py-0.5 tw-text-center tw-text-[12.5px] tw-font-semibold [font-family:inherit]">{k}</kbd>
+                {what}
+              </li>
+            ))}
+          </ul>
         </Modal>
       ) : null}
 

@@ -3,9 +3,11 @@ import { Button, DateTimePicker, Modal, Select } from "../../Components/UI";
 import { RichTextEditor } from "../../Components/RichTextEditor";
 import { useActionFeedback } from "../../Components/Toast";
 import { saveMailboxSettings, saveSignature, type Mailbox } from "../../lib/mailApi";
+import RulesEditor from "./RulesEditor";
+import SendersEditor from "./SendersEditor";
 
-// Mail → Settings (supabase/241): the signature, automatic replies (out of
-// office) and how sending behaves (seconds to undo a send, and whether new
+// Mail → Settings (supabase/241-243): the signature, automatic replies (out
+// of office), rules for arriving mail, safe and blocked senders, and how sending behaves (seconds to undo a send, and whether new
 // messages tell you when they are opened).
 
 const localInput = (iso: string | null) => {
@@ -17,7 +19,7 @@ const localInput = (iso: string | null) => {
 
 const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; onClose: () => void; onSaved: (m: Mailbox) => void }) => {
   const { setError, setNotice } = useActionFeedback();
-  const [tab, setTab] = useState<"signature" | "away" | "sending">("signature");
+  const [tab, setTab] = useState<"signature" | "away" | "rules" | "junk" | "sending">("signature");
   const [signature, setSignature] = useState(mailbox.signature_html);
   const [away, setAway] = useState({
     on: mailbox.autoreply_enabled,
@@ -28,6 +30,7 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
   });
   const [undo, setUndo] = useState(String(mailbox.undo_seconds ?? 10));
   const [notify, setNotify] = useState(mailbox.notify_opens);
+  const [push, setPush] = useState(mailbox.push_new_mail);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
@@ -43,6 +46,7 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
         autoreply_outside: away.outside,
         undo_seconds: Number(undo),
         notify_opens: notify,
+        push_new_mail: push,
       };
       await saveMailboxSettings(mailbox.id, patch);
       onSaved({ ...mailbox, ...patch, signature_html: signature });
@@ -81,6 +85,8 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
       <div className="tw-mb-4 tw-flex tw-flex-wrap tw-gap-2">
         {tabBtn("signature", "Signature")}
         {tabBtn("away", away.on ? "Automatic replies (on)" : "Automatic replies")}
+        {tabBtn("rules", "Rules")}
+        {tabBtn("junk", "Junk")}
         {tabBtn("sending", "Sending")}
       </div>
 
@@ -116,6 +122,10 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
           </label>
           <p className="tw-m-0 tw-text-[12.5px] tw-text-ink-3">{"Each person gets it once every 4 days at most. Automatic mail (no-reply addresses, newsletters) never gets one."}</p>
         </div>
+      ) : tab === "rules" ? (
+        <RulesEditor mailboxId={mailbox.id} />
+      ) : tab === "junk" ? (
+        <SendersEditor mailboxId={mailbox.id} />
       ) : (
         <div className="tw-flex tw-flex-col tw-gap-4">
           <label className="tw-flex tw-max-w-[320px] tw-flex-col tw-gap-1">
@@ -140,6 +150,16 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
               <br />
               <span className="tw-text-[12.5px] tw-text-ink-3">
                 {"New messages start with this on (you can switch it off on any message). You get a notification the moment each person opens it, on screen and on your phone. Inside Schoolivio it is exact; outside, it works when the recipient's mail app shows pictures (Apple Mail may report an open early)."}
+              </span>
+            </span>
+          </label>
+          <label className="tw-flex tw-items-start tw-gap-2 tw-text-[13.5px] tw-text-ink">
+            <input type="checkbox" className="tw-mt-1" checked={push} onChange={(e) => setPush(e.target.checked)} />
+            <span>
+              <strong>{"Notify my phone about new mail"}</strong>
+              <br />
+              <span className="tw-text-[12.5px] tw-text-ink-3">
+                {"A notification for each new message in your Inbox, on the devices where you turned on Schoolivio notifications. Junk stays quiet."}
               </span>
             </span>
           </label>

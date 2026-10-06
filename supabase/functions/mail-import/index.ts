@@ -79,6 +79,7 @@ async function work() {
   let status: string | null = "running";
   let err: string | null = null;
   let cursor: Record<string, unknown> | null = null;
+  let remove: string[] = [];
   try {
     let turn;
     if (job.source === "imap") turn = await runImap(db, job, t, budget);
@@ -92,6 +93,7 @@ async function work() {
       turn = await runMicrosoft(db, job, t, budget, await microsoftToken(String(tenant), ms.client_id, String(secret)));
     }
     cursor = { ...turn.cursor, errors: 0 };
+    remove = turn.remove ?? [];
     if (turn.done) status = "done";
   } catch (e) {
     err = (e as Error).message || "The import stopped.";
@@ -103,7 +105,8 @@ async function work() {
       /mailbox is full|password|authenticat|login|credentials|not set up|not approved|no microsoft 365 account|invalid_client|AUTHENTICATIONFAILED/i.test(err);
     status = fatal ? "failed" : "running";
   }
-  await db.rpc("mail_import_progress", { target_import: job.id, cursor_in: cursor, status_in: status, add: t, error_in: err });
+  const { error: saved } = await db.rpc("mail_import_progress", { target_import: job.id, cursor_in: cursor, status_in: status, add: t, error_in: err });
+  if (!saved && remove.length) await db.storage.from("mail-imports").remove(remove).catch(() => null);
   return { id: job.id, status, ...t };
 }
 
@@ -117,13 +120,40 @@ Deno.serve(async (req) => {
     const [payload, sig] = state.split(".");
     let back = "https://schoolivio.com";
     try {
-      if (!payload || !sig || sig !== (await sign(payload))) throw new Error("bad state");
-      const s = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { s: string; r: string; t: number };
+      if (!CRON || !payload || !sig || sig !== (await sign(payload))) throw new Error("bad state");
+      const s = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { s: string; u?: string; r: string; t: number };
       if (allowedReturn(s.r)) back = s.r;
       if (Date.now() - s.t > 60 * 60 * 1000) throw new Error("This approval link has expired. Start it again from Mail settings.");
-      const ok = url.searchParams.get("admin_consent")?.toLowerCase() === "true" && url.searchParams.get("tenant");
+      const tenant = url.searchParams.get("tenant") ?? "";
+      const ok = url.searchParams.get("admin_consent")?.toLowerCase() === "true" && /^[0-9a-f-]{36}$|^[a-z0-9.-]+$/i.test(tenant);
       if (!ok) throw new Error(url.searchParams.get("error_description") || "Microsoft 365 was not approved.");
-      const { error } = await admin().rpc("mail_set_microsoft_tenant", { target_school: s.s, tenant_in: url.searchParams.get("tenant") });
+      // The tenant in the address could have been changed by hand: it must be
+      // the Microsoft 365 organisation that owns the school's own domain.
+      const db = admin();
+      const { data: ms } = await db.rpc("platform_microsoft");
+      const { data: secret } = await db.rpc("platform_get_secret", { which: "microsoft" });
+      const { data: st } = await db.rpc("mail_settings_secrets", { target_school: s.s });
+      const domain = String(((st as { domain?: string }[] | null) ?? [])[0]?.domain ?? "").toLowerCase();
+      if (!domain) throw new Error("Add the school's own domain under Mail settings first.");
+      // A fresh approval can take a few seconds to work: tried a few times.
+      let owns = false;
+      for (let attempt = 0; attempt < 4 && !owns; attempt += 1) {
+        if (attempt) await new Promise((r) => setTimeout(r, 3000));
+        try {
+          const token = await microsoftToken(tenant, ms.client_id, String(secret));
+          // (User.Read.All, which the import already has: someone there has an address on it.)
+          const found = await fetch(
+            `https://graph.microsoft.com/v1.0/users?$count=true&$top=1&$select=id&$filter=${encodeURIComponent(`endswith(mail,'@${domain.replace(/'/g, "''")}')`)}`,
+            { headers: { Authorization: `Bearer ${token}`, ConsistencyLevel: "eventual" } },
+          );
+          const users = ((await found.json().catch(() => ({})))?.value ?? []) as unknown[];
+          owns = found.ok && users.length > 0;
+        } catch {
+          owns = false;
+        }
+      }
+      if (!owns) throw new Error(`That Microsoft 365 organisation does not own ${domain}. Sign in with the school's own Microsoft 365 admin account.`);
+      const { error } = await db.rpc("mail_set_microsoft_tenant", { target_school: s.s, tenant_in: tenant, actor: s.u ?? null });
       if (error) throw new Error(error.message);
       const to = new URL(back);
       to.searchParams.set("microsoft", "ok");

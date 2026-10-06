@@ -8333,6 +8333,25 @@ table.data.gd-table td { padding-top: 7px; padding-bottom: 7px; }
   html.kb-open .shell:has(.page-chat) > .topbar { display: none; }
 }
 
+/* Mail on a phone: the same frame as Chat. The top bar, the folder picker
+   and search above the list, and the header of an open message or of a
+   message being written (with Send) stay on screen; only the list, the
+   message and the text being written scroll. */
+@media (max-width: 900px) {
+  html:has(.page-mail),
+  html:has(.page-mail) body { overflow: hidden; overscroll-behavior: none; }
+  .shell:has(.page-mail) {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--vv-top, 0px);
+    height: var(--vv-h, 100dvh);
+  }
+  .shell:has(.page-mail) > .side { height: var(--vv-h, 100dvh); }
+  html.kb-open .shell:has(.page-mail) > .topbar { display: none; }
+  .shell > .page-mail { overscroll-behavior: contain; }
+}
+
 /* Shown on a module someone was given view-only access to (SchoolRoute). */
 .view-only-pill {
   position: fixed;

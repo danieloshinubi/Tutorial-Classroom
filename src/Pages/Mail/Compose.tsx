@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { RichTextEditor, type RichTextEditorHandle } from "../../Components/RichTextEditor";
-import { DateTimePicker } from "../../Components/UI";
+import { DateTimePicker, Select } from "../../Components/UI";
 import { confirmDialog } from "../../Components/Confirm";
 import { useActionFeedback } from "../../Components/Toast";
 import {
@@ -8,7 +8,9 @@ import {
   copyAttachments,
   deleteForever,
   formatBytes,
+  canSend,
   isGroup,
+  moveDraft,
   removeAttachment,
   saveDraft,
   scheduleDraft,
@@ -19,6 +21,7 @@ import {
   type DirectoryEntry,
   type Importance,
   type Mailbox,
+  type MailboxChoice,
   type MailMessage,
 } from "../../lib/mailApi";
 import RecipientField from "./RecipientField";
@@ -86,15 +89,21 @@ const Compose = ({
   start,
   onClose,
   onSaved,
+  fromChoices = [],
 }: {
   mailbox: Mailbox;
   people: DirectoryEntry[];
   start: ComposeStart;
   onClose: () => void;
   onSaved: () => void;
+  /** The mailboxes it can be sent from: your own and shared ones (supabase/242). */
+  fromChoices?: MailboxChoice[];
 }) => {
   const { setError, setNotice } = useActionFeedback();
-  const me = mailbox.address;
+  // Which mailbox it is written in and sent from.
+  const [fromId, setFromId] = useState(start.draft?.mailbox_id ?? mailbox.id);
+  const from = fromChoices.find((b) => b.id === fromId);
+  const me = from?.address ?? mailbox.address;
   const src = start.source;
   const signature = mailbox.signature_html ? `<p></p><p></p>${mailbox.signature_html}` : "";
   const strip = (list: Address[]) => list.filter((a) => a.address !== me);
@@ -153,11 +162,11 @@ const Compose = ({
     if (start.draft) attachmentsFor([start.draft.envelope_id]).then(setAttachments);
   }, [start.draft]);
 
-  const save = useCallback(async () => {
+  const saveNow = useCallback(async () => {
     const result = await saveDraft({
       id: draft.current.id,
       envelopeId: draft.current.envelope_id,
-      mailboxId: mailbox.id,
+      mailboxId: fromId,
       to,
       cc,
       bcc,
@@ -174,7 +183,29 @@ const Compose = ({
     setSavedAt(new Date());
     onSaved();
     return result;
-  }, [mailbox.id, to, cc, bcc, subject, html, importance, src, start.mode, start.draft, onSaved, trackOpens, readReceipt]);
+  }, [fromId, to, cc, bcc, subject, html, importance, src, start.mode, start.draft, onSaved, trackOpens, readReceipt]);
+
+  // Saves run one after another, each with what is on screen when it runs:
+  // two at once (autosave on a slow network while a file is attached, or
+  // Send pressed) would each create a draft.
+  const latestSave = useRef(saveNow);
+  latestSave.current = saveNow;
+  const chain = useRef<Promise<unknown>>(Promise.resolve());
+  const save = useCallback(() => {
+    const run = chain.current.catch(() => undefined).then(() => latestSave.current());
+    chain.current = run;
+    return run;
+  }, []);
+
+  // Leaving with unsaved changes (another message opened, Back, another
+  // mailbox) keeps them in Drafts. Not after Discard or Send.
+  const finished = useRef(false);
+  useEffect(
+    () => () => {
+      if (dirty.current && !finished.current) save().catch(() => undefined);
+    },
+    [save],
+  );
 
   // Forwarding brings the original's files, once the draft exists to hold them.
   const forwarded = useRef(false);
@@ -186,12 +217,12 @@ const Compose = ({
         const files = await attachmentsFor([src.envelope_id]);
         if (!files.length) return;
         const d = draft.current.id ? draft.current : await save();
-        setAttachments(await copyAttachments(files, mailbox.id, d.envelope_id as string));
+        setAttachments(await copyAttachments(files, fromId, d.envelope_id as string));
       } catch (err) {
         setError((err as Error).message);
       }
     })();
-  }, [start.mode, src, mailbox.id, save, setError]);
+  }, [start.mode, src, fromId, save, setError]);
 
   // Saved a moment after each change, as Outlook does.
   useEffect(() => {
@@ -213,7 +244,7 @@ const Compose = ({
       for (const file of files) {
         setUploading((n) => n + 1);
         try {
-          const a = await uploadAttachment(mailbox.id, d.envelope_id as string, file);
+          const a = await uploadAttachment(fromId, d.envelope_id as string, file);
           setAttachments((list) => [...list, a]);
         } catch (err) {
           setError((err as Error).message);
@@ -228,10 +259,13 @@ const Compose = ({
 
   // Pictures go inside the text, made a sensible size first.
   const addPictures = async (files: File[]) => {
+    // Counted as they go in, so a handful picked at once can't pass the limit together.
+    let total = inlineBytes(html);
     for (const f of files) {
       try {
         const url = await pictureForMail(f);
-        if (inlineBytes(html) + url.length * 0.75 > MAX_INLINE_TOTAL) {
+        total += url.length * 0.75;
+        if (total > MAX_INLINE_TOTAL) {
           setError("That is more pictures than one message can carry (about 10 MB). Attach the rest as files instead.");
           return;
         }
@@ -249,16 +283,29 @@ const Compose = ({
     if (rest.length) attach(rest);
   };
 
+  // Set at once, so a double click or a held Ctrl+Enter sends once.
+  const sendingNow = useRef(false);
   const send = async () => {
+    if (sendingNow.current) return;
+    // An address still being typed becomes a recipient first (its field
+    // adds it on blur), then the next render's send carries it.
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active.tagName === "INPUT" && active.closest("[data-recipients]")) {
+      active.blur();
+      window.setTimeout(() => sendRef.current(), 0);
+      return;
+    }
     const everyone = [...to, ...cc, ...bcc];
     if (!everyone.length) return setError("Add at least one recipient.");
     const bad = everyone.filter((a) => !isGroup(a.address) && !EMAIL.test(a.address));
     if (bad.length) return setError(`These addresses are not valid: ${bad.map((a) => a.address).join(", ")}`);
     if (!subject.trim() && !(await confirmDialog("Send this message without a subject?"))) return;
     if (uploading) return setError("Wait for the attachments to finish uploading.");
+    sendingNow.current = true;
     setSending(true);
     try {
       const d = await save();
+      finished.current = true;
       if (scheduledAt) {
         await scheduleDraft(d.id, scheduledAt);
         setNotice(`Scheduled for ${new Date(scheduledAt).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}. It waits in Drafts until then.`);
@@ -275,9 +322,13 @@ const Compose = ({
       onClose();
     } catch (err) {
       setError((err as Error).message);
+      sendingNow.current = false;
+      finished.current = false;
       setSending(false);
     }
   };
+  const sendRef = useRef(send);
+  sendRef.current = send;
 
   const setSchedule = async (at: string | null) => {
     if (at && new Date(at).getTime() < Date.now() + 60000) return setError("Pick a time at least a minute from now.");
@@ -296,7 +347,10 @@ const Compose = ({
   const discard = async () => {
     const hasContent = draft.current.id || to.length || subject.trim() || html.replace(/<[^>]+>/g, "").trim();
     if (hasContent && !(await confirmDialog("Discard this message? The draft is deleted."))) return;
+    finished.current = true;
     try {
+      // A save still running would bring the draft back after it is deleted.
+      await chain.current.catch(() => undefined);
       for (const a of attachments) await removeAttachment(a);
       if (draft.current.id) await deleteForever([draft.current.id]);
       onSaved();
@@ -318,6 +372,14 @@ const Compose = ({
     >
       <div
         className={`tw-relative tw-flex tw-min-h-0 tw-flex-1 tw-flex-col tw-bg-surface ${big ? "tw-max-w-[1000px] tw-rounded-2xl tw-shadow-3 mobile:tw-rounded-none" : ""}`}
+        // Ctrl+Enter sends, caught before the editor would add a line break.
+        onKeyDownCapture={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !sending) {
+            e.preventDefault();
+            e.stopPropagation();
+            send();
+          }
+        }}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) {
             e.preventDefault();
@@ -407,7 +469,7 @@ const Compose = ({
           </button>
           <span className="tw-flex-1" />
           <span className="tw-text-[12px] tw-text-ink-3">{savedAt ? `Draft saved ${savedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : ""}</span>
-          <button type="button" className={btn} title={big ? "Back to the reading pane" : "Open in a larger window"} onClick={() => setBig((v) => !v)}>
+          <button type="button" className={`${btn} mobile:tw-hidden`} title={big ? "Back to the reading pane" : "Open in a larger window"} onClick={() => setBig((v) => !v)}>
             <Svg d={big ? ICON.shrink : ICON.expand} size={15} />
           </button>
           <button type="button" className={`${btn} tw-text-danger`} onClick={discard}>
@@ -441,7 +503,28 @@ const Compose = ({
         <div className="tw-px-5">
           <div className="tw-flex tw-items-center tw-gap-2 tw-border-0 tw-border-b tw-border-solid tw-border-line tw-py-2.5">
             <span className="tw-w-10 tw-shrink-0 tw-text-[13.5px] tw-text-ink-3">{"From"}</span>
-            <span className="tw-truncate tw-text-[14px] tw-text-ink">{`${mailbox.display_name} <${mailbox.address}>`}</span>
+            {fromChoices.filter((b) => canSend(b.access)).length > 1 ? (
+              <div className="tw-min-w-0 tw-flex-1">
+                <Select
+                  value={fromId}
+                  onChange={async (v: string) => {
+                    try {
+                      // A saved draft moves with its files to the mailbox it is now from.
+                      if (draft.current.id) await moveDraft(draft.current.id, v);
+                      setFromId(v);
+                    } catch (err) {
+                      setError((err as Error).message);
+                    }
+                  }}
+                  options={fromChoices.filter((b) => canSend(b.access)).map((b) => ({
+                    value: b.id,
+                    label: `${b.display_name} <${b.address}>${b.access === "on_behalf" ? " (on behalf)" : ""}`,
+                  }))}
+                />
+              </div>
+            ) : (
+              <span className="tw-truncate tw-text-[14px] tw-text-ink">{`${from?.display_name ?? mailbox.display_name} <${me}>`}</span>
+            )}
           </div>
           <RecipientField
             label="To"

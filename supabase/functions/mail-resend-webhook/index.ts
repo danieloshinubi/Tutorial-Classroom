@@ -44,8 +44,49 @@ function detailFor(r: Report): string | null {
   }
 }
 
+const sameSecret = (a: string, b: string) => {
+  if (!a || a.length !== b.length) return false;
+  let d = 0;
+  for (let i = 0; i < a.length; i += 1) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return d === 0;
+};
+
+// deno-lint-ignore no-explicit-any
+type Admin = any;
+// deno-lint-ignore no-explicit-any
+const secretsOf = async (admin: Admin, school: string): Promise<any> => {
+  const { data } = await admin.rpc("mail_settings_secrets", { target_school: school });
+  return ((data as unknown[] | null) ?? [])[0] ?? null;
+};
+
+// Received mail that failed in the background (supabase/244), tried again
+// every few minutes by cron with the shared secret.
+async function retryDue(admin: Admin) {
+  const { data } = await admin.rpc("mail_inbound_retry_due");
+  const due = (data ?? []) as { school_id: string; email_id: string }[];
+  let done = 0;
+  for (const r of due) {
+    const s = await secretsOf(admin, r.school_id);
+    try {
+      if (!s?.api_key) throw new Error("The school's Resend account is not connected");
+      await receive(admin, r.school_id, s.api_key, s.domain, s.sending_enabled, r.email_id);
+      await admin.rpc("mail_inbound_retry_done", { target_school: r.school_id, email_id_in: r.email_id });
+      done += 1;
+    } catch (err) {
+      await admin.rpc("mail_inbound_retry_add", { target_school: r.school_id, email_id_in: r.email_id, error_in: (err as Error).message });
+    }
+  }
+  return { due: due.length, done };
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  if (new URL(req.url).searchParams.get("retry") === "1") {
+    const secret = Deno.env.get("TICKET_MAIL_CRON_SECRET") ?? "";
+    if (!secret || !sameSecret(req.headers.get("x-cron-secret") ?? "", secret)) return json({ error: "Not authorized" }, 401);
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { db: { schema: "classroom" } });
+    return json(await retryDue(admin));
+  }
   const school = new URL(req.url).searchParams.get("school") ?? "";
   if (!UUID.test(school)) return json({ error: "Unknown school" }, 404);
 
@@ -83,7 +124,12 @@ Deno.serve(async (req) => {
     try {
       const r = await Promise.race([work, new Promise((resolve) => setTimeout(() => resolve(slow), 10000))]);
       if (r === slow) {
-        runtime?.waitUntil?.(work.catch((err: Error) => console.error("receive", err.message)));
+        // Resend will not send it again after this answer: a failure from
+        // here is queued and tried again (retryDue).
+        runtime?.waitUntil?.(work.catch(async (err: Error) => {
+          console.error("receive", err.message);
+          await admin.rpc("mail_inbound_retry_add", { target_school: school, email_id_in: emailId, error_in: err.message });
+        }));
         return json({ ok: true, queued: true });
       }
       return json({ ok: true, ...(r as Record<string, unknown>) });

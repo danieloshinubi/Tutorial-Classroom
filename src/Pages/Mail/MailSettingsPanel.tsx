@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Select } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { confirmDialog } from "../../Components/Confirm";
@@ -22,6 +22,7 @@ import {
 import { formatBytes } from "../../lib/mailApi";
 import { ICON, Svg, btn, primaryBtn } from "./mailUi";
 import OldMailAdmin from "./OldMailAdmin";
+import { GroupAddressesCard, PersonManage, SafetyCard, SharedMailboxesCard } from "./MailAdminTools";
 
 // School admin → Mail settings (supabase/236). Mail between staff works
 // from day one. For mail to outside addresses the school connects its own
@@ -88,7 +89,7 @@ const RecordRow = ({ r, domain, recommended }: { r: DnsRecord; domain: string; r
         <code className="tw-truncate tw-text-[13px] tw-text-ink">{r.name || "@"}</code>
         <CopyButton value={r.name || "@"} label="Copy name" />
       </span>
-      <span className="tw-truncate tw-text-[11.5px] tw-text-ink-3">{r.name ? `${r.name}.${domain}` : domain}</span>
+      <span className="tw-truncate tw-text-[11.5px] tw-text-ink-3">{fullName(r.name, domain)}</span>
     </span>
     <span className="tw-flex tw-min-w-0 tw-items-start tw-gap-1">
       <code className="tw-min-w-0 tw-flex-1 tw-break-all tw-rounded-md tw-bg-bg tw-px-2 tw-py-1 tw-text-[12px] tw-leading-snug tw-text-ink">{r.value}</code>
@@ -106,12 +107,16 @@ const PersonRow = ({
   p,
   domains,
   onSave,
+  manage,
 }: {
   p: MailPerson;
   domains: string[];
   onSave: (mailboxId: string, address: string) => Promise<boolean>;
+  /** The admin's tools for this person (supabase/242), shown on Manage. */
+  manage?: React.ReactNode;
 }) => {
   const [editing, setEditing] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [local, setLocal] = useState("");
   const [domain, setDomain] = useState(domains[0]);
   const [busy, setBusy] = useState(false);
@@ -133,8 +138,11 @@ const PersonRow = ({
   return (
     <li className="tw-flex tw-flex-wrap tw-items-center tw-gap-x-4 tw-gap-y-2 tw-border-0 tw-border-t tw-border-solid tw-border-line tw-py-3">
       <span className="tw-flex tw-min-w-[180px] tw-flex-1 tw-flex-col">
-        <span className="tw-text-[14px] tw-font-semibold tw-text-ink">{p.name}</span>
-        <span className="tw-text-[12.5px] tw-text-ink-3">{p.job_title || p.role.replace(/_/g, " ")}</span>
+        <span className="tw-text-[14px] tw-font-semibold tw-text-ink">
+          {p.name}
+          {p.is_active === false ? <span className="tw-ml-2 tw-rounded-full tw-bg-danger-soft tw-px-2 tw-py-0.5 tw-text-[11.5px] tw-font-semibold tw-text-danger">{"Suspended"}</span> : null}
+        </span>
+        <span className="tw-text-[12.5px] tw-text-ink-3">{p.job_title || p.role.replace(/_/g, " ")}{p.aliases?.length ? ` · also ${p.aliases.join(", ")}` : ""}</span>
       </span>
       {editing ? (
         <span className="tw-flex tw-min-w-0 tw-flex-[2] tw-flex-wrap tw-items-center tw-gap-2">
@@ -178,15 +186,38 @@ const PersonRow = ({
             <span className="tw-text-[13.5px] tw-text-ink-3">{"No mailbox yet. One is made the first time they open Mail."}</span>
           )}
           {p.mailbox_id ? (
-            <button type="button" className={btn} onClick={start}>
-              <Svg d={ICON.compose} size={14} />
-              {"Change"}
-            </button>
+            <span className="tw-flex tw-shrink-0 tw-gap-1">
+              <button type="button" className={btn} onClick={start}>
+                <Svg d={ICON.compose} size={14} />
+                {"Change"}
+              </button>
+              {manage ? (
+                <button type="button" className={`${btn} ${managing ? "tw-bg-brand-soft tw-text-brand" : ""}`} onClick={() => setManaging((v) => !v)}>
+                  <Svg d={ICON.settings} size={14} />
+                  {"Manage"}
+                </button>
+              ) : null}
+            </span>
           ) : null}
         </span>
       )}
+      {managing && manage ? manage : null}
     </li>
   );
+};
+
+// A record's full name. Resend gives names relative to the registrable
+// domain, so for a subdomain (slug.schoolivio.com) a name may already end in
+// "slug" ("send.slug"); adding the domain again would double it.
+const fullName = (name: string, domain: string) => {
+  if (!name || name === "@") return domain;
+  const labels = domain.split(".");
+  for (let k = labels.length - 1; k >= 1; k -= 1) {
+    const lead = labels.slice(0, k).join(".");
+    if (name === lead) return domain;
+    if (name.endsWith(`.${lead}`)) return `${name.slice(0, -lead.length - 1)}.${domain}`;
+  }
+  return `${name}.${domain}`;
 };
 
 const MailSettingsPanel = () => {
@@ -195,6 +226,11 @@ const MailSettingsPanel = () => {
   const [s, setS] = useState<MailSettings | null>(null);
   const [people, setPeople] = useState<MailPerson[] | null>(null);
   const [domain, setDomain] = useState("");
+  // Bumped on every reload, so the shared mailbox and group cards reload too.
+  const [version, setVersion] = useState(0);
+  // The form is filled from what is saved once per school, not on every
+  // reload (those run every minute while Resend checks, and after each action).
+  const seeded = useRef<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [region, setRegion] = useState("us-east-1");
   const [busy, setBusy] = useState<string | null>(null);
@@ -205,8 +241,12 @@ const MailSettingsPanel = () => {
       const [settings, list] = await Promise.all([getMailSettings(schoolId), mailPeople(schoolId)]);
       setS(settings);
       setPeople(list);
-      setDomain((d) => d || settings.domain || "");
-      setRegion(settings.region || "us-east-1");
+      if (seeded.current !== schoolId) {
+        seeded.current = schoolId;
+        setDomain(settings.domain || "");
+        setRegion(settings.region || "us-east-1");
+      }
+      setVersion((v) => v + 1);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -244,13 +284,16 @@ const MailSettingsPanel = () => {
     }
   };
 
-  const connect = () =>
-    run("connect", async () => {
+  const connect = async () => {
+    const next = domain.trim().toLowerCase();
+    if (s?.domain && next !== s.domain && !(await confirmDialog(`Change the domain from ${s.domain} to ${next}? Outside mail will go out from ${next} once its DNS records are verified; addresses still on @${s.domain} stop sending outside until they are moved.`))) return;
+    return run("connect", async () => {
       const r = await connectMail({ schoolId, domain: domain.trim(), apiKey: apiKey.trim() || undefined, region });
       setApiKey("");
       if (r.warning) setError(r.warning);
       setNotice(r.status === "verified" ? "Connected. Outside mail is on." : "Connected. Now add the DNS records below, then press Verify.");
     });
+  };
 
   const domains = useMemo(() => (s ? [s.domain, s.fallback_domain].filter((d): d is string => !!d) : []), [s]);
   const missing = (people || []).filter((p) => !p.mailbox_id).length;
@@ -498,6 +541,7 @@ const MailSettingsPanel = () => {
               key={p.user_id}
               p={p}
               domains={domains}
+              manage={p.mailbox_id ? <PersonManage p={p} schoolId={schoolId} people={people || []} domains={domains} onChanged={load} /> : undefined}
               onSave={async (mailboxId, address) => {
                 try {
                   await setMailAddress(mailboxId, address);
@@ -515,6 +559,10 @@ const MailSettingsPanel = () => {
         </ul>
       </Card>
 
+      <SharedMailboxesCard schoolId={schoolId} people={people || []} domains={domains} onChanged={load} version={version} />
+      <GroupAddressesCard schoolId={schoolId} people={people || []} domains={domains} version={version} />
+      <SafetyCard schoolId={schoolId} />
+
       <OldMailAdmin schoolId={schoolId} s={s} people={people || []} onChanged={load} />
 
       {s.has_key ? (
@@ -531,7 +579,7 @@ const MailSettingsPanel = () => {
               className={`${btn} tw-text-danger`}
               disabled={busy !== null}
               onClick={async () => {
-                if (await confirmDialog("Disconnect the school's Resend account? Outside mail stops until it is connected again; mail between staff carries on.")) {
+                if (await confirmDialog(`Disconnect the school's Resend account? Outside mail stops until it is connected again; mail between staff carries on.${s.receiving_enabled ? " Receiving is on: while the MX record still points at Resend, mail sent to the school from outside will be lost. Put the old provider's MX records back first." : ""}`)) {
                   run("disconnect", () => disconnectMail(schoolId), "Disconnected. Outside mail has stopped.");
                 }
               }}

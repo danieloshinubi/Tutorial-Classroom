@@ -25,6 +25,12 @@ export type People = Map<string, string>;
 
 // What each table holds, in everyday words (singular).
 const NOUN: Record<string, string> = {
+  mail_mailboxes: "mailbox",
+  mail_settings: "school mail settings",
+  mail_mailbox_members: "shared mailbox member",
+  mail_lists: "group address",
+  mail_list_members: "group address member",
+  mail_reports: "phishing report",
   account_security: "account security action",
   applications: "admission application",
   admission_offers: "admission offer",
@@ -123,6 +129,14 @@ const ROLE_NAME: Record<string, string> = {
 
 // Field names in words, where a plain prettifying would read oddly.
 const FIELD: Record<string, string> = {
+  max_outside_hour: "Outside recipients an hour",
+  max_outside_day: "Outside recipients a day",
+  deleted_days: "Days Deleted keeps mail",
+  junk_days: "Days Junk keeps mail",
+  blocked_senders: "Senders blocked for the school",
+  quota_bytes: "Mail storage",
+  previous_addresses: "Other addresses",
+  allow_outside: "Takes outside mail",
   is_active: "Active",
   role: "Role",
   name: "Name",
@@ -181,7 +195,7 @@ const pretty = (s: string) => {
 
 export const nounFor = (table: string) => NOUN[table] || pretty(table).toLowerCase().replace(/s$/, "");
 
-const withArticle = (noun: string) => (/^(the |school settings|admissions settings|payroll settings)/.test(noun) ? `the ${noun.replace(/^the /, "")}` : `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`);
+const withArticle = (noun: string) => (/^(the |school settings|school mail settings|admissions settings|payroll settings)/.test(noun) ? `the ${noun.replace(/^the /, "")}` : `${/^[aeiou]/i.test(noun) ? "an" : "a"} ${noun}`);
 
 const fieldLabel = (key: string) => FIELD[key] || pretty(key);
 
@@ -201,6 +215,10 @@ const when = (iso: string, withTime = true) => {
 export const readable = (value: unknown, key: string, people: People): string => {
   if (value === null || value === undefined || value === "") return "empty";
   if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (key.endsWith("_bytes") && (typeof value === "number" || /^\d+$/.test(String(value)))) {
+    const gb = Number(value) / 1073741824;
+    return gb >= 1 ? `${Math.round(gb * 10) / 10} GB` : `${Math.round(Number(value) / 1048576)} MB`;
+  }
   if (typeof value === "number") return value.toLocaleString();
   if (Array.isArray(value)) return value.length ? value.map((v) => readable(v, key, people)).join(", ") : "none";
   if (typeof value === "object") {

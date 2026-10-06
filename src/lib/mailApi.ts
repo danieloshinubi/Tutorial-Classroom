@@ -23,6 +23,10 @@ export interface Mailbox {
   signature_html: string;
   quota_bytes: number;
   used_bytes: number;
+  /** person or shared, and false when suspended (supabase/242). */
+  kind: "person" | "shared";
+  is_active: boolean;
+  push_new_mail: boolean;
   /** Settings (supabase/241). */
   undo_seconds: number;
   notify_opens: boolean;
@@ -59,6 +63,7 @@ export interface MailSummary {
 }
 
 export interface MailMessage extends MailSummary {
+  mailbox_id: string;
   bcc_list: Address[];
   /** Where the sender asked replies to go (received mail, supabase/238). */
   reply_to: Address[];
@@ -69,6 +74,12 @@ export interface MailMessage extends MailSummary {
   track_opens: boolean;
   read_receipt: boolean;
   is_auto: boolean;
+  /** Received from outside (or imported): its Resend id or imp:… (supabase/238, 240). */
+  inbound_id: string | null;
+  /** Junk scoring (supabase/243). */
+  spam_score: number | null;
+  spam_reasons: string[];
+  warning: string | null;
 }
 
 export interface Attachment {
@@ -196,7 +207,15 @@ export interface SendResult {
 
 export const sendDraft = async (draftId: string): Promise<SendResult> => {
   const { data, error } = await db.rpc("mail_send", { target_draft: draftId });
-  if (error) fail(error, "Could not send that message.");
+  if (error) {
+    // Over the school's sending limit: the refusal undid everything the send
+    // did, so the admins' alert is raised separately (supabase/244).
+    if (/reached the school's limit/.test(error.message || "")) {
+      const { data: d } = await db.from("mail_messages").select("mailbox_id").eq("id", draftId).maybeSingle();
+      if (d?.mailbox_id) await (db.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<unknown>)("mail_limit_alert", { target_mailbox: d.mailbox_id });
+    }
+    fail(error, "Could not send that message.");
+  }
   return data as unknown as SendResult;
 };
 
@@ -315,8 +334,10 @@ export const directory = async (schoolId: string): Promise<DirectoryEntry[]> => 
 };
 
 export const saveSignature = async (mailboxId: string, html: string) => {
-  const { error } = await db.from("mail_mailboxes").update({ signature_html: html, updated_at: new Date().toISOString() }).eq("id", mailboxId);
+  const { data, error } = await db.from("mail_mailboxes").update({ signature_html: html, updated_at: new Date().toISOString() }).eq("id", mailboxId).select("id");
   if (error) fail(error, "Could not save your signature.");
+  // Nothing updated: not allowed to change this mailbox's settings.
+  if (!data?.length) throw new Error("Only the mailbox's owner (or someone with full access) can change its settings.");
 };
 
 export const formatBytes = (n: number) =>
@@ -329,11 +350,12 @@ export const addressLabel = (a: Address) => (a.name ? `${a.name} <${a.address}>`
 /* -------------------------------------------------------------------------- */
 
 export type MailSettingsPatch = Partial<Pick<Mailbox,
-  "undo_seconds" | "notify_opens" | "autoreply_enabled" | "autoreply_start" | "autoreply_end" | "autoreply_html" | "autoreply_outside">>;
+  "undo_seconds" | "notify_opens" | "push_new_mail" | "autoreply_enabled" | "autoreply_start" | "autoreply_end" | "autoreply_html" | "autoreply_outside">>;
 
 export const saveMailboxSettings = async (mailboxId: string, patch: MailSettingsPatch) => {
-  const { error } = await db.from("mail_mailboxes").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", mailboxId);
+  const { data, error } = await db.from("mail_mailboxes").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", mailboxId).select("id");
   if (error) fail(error, "Could not save your mail settings.");
+  if (!data?.length) throw new Error("Only the mailbox's owner (or someone with full access) can change its settings.");
 };
 
 /** Send a draft later (null: not any more). */
@@ -428,3 +450,110 @@ export const deleteContactGroup = async (id: string) => {
   const { error } = await db.from("mail_contact_groups").delete().eq("id", id);
   if (error) fail(error, "Could not delete the group.");
 };
+
+/* -------------------------------------------------------------------------- */
+/* Shared mailboxes and rules (supabase/242)                                  */
+/* -------------------------------------------------------------------------- */
+
+export type MailboxAccess = "own" | "full" | "on_behalf" | "read";
+
+export interface MailboxChoice {
+  id: string;
+  kind: "person" | "shared";
+  address: string;
+  display_name: string;
+  access: MailboxAccess;
+  unread: number;
+  is_active: boolean;
+}
+
+/** My mailbox first, then the shared ones I can open. */
+export const myMailboxes = async (schoolId: string): Promise<MailboxChoice[]> => {
+  const { data, error } = await db.rpc("mail_my_mailboxes", { target_school: schoolId });
+  if (error) fail(error, "Could not load your mailboxes.");
+  return (data || []) as unknown as MailboxChoice[];
+};
+
+export const loadMailbox = async (id: string): Promise<Mailbox> => {
+  const { data, error } = await db.from("mail_mailboxes").select("*").eq("id", id).single();
+  if (error) fail(error, "Could not open that mailbox.");
+  return data as unknown as Mailbox;
+};
+
+export const canSend = (access: MailboxAccess | undefined) => access === "own" || access === "full" || access === "on_behalf";
+
+/** A draft sent from a different mailbox ("From" in Compose). */
+export const moveDraft = async (draftId: string, mailboxId: string) => {
+  const { error } = await db.rpc("mail_move_draft", { target_draft: draftId, target_mailbox: mailboxId });
+  if (error) fail(error, "Could not change who it is from.");
+};
+
+export interface MailRule {
+  id: string;
+  mailbox_id: string;
+  name: string;
+  position: number;
+  enabled: boolean;
+  from_contains: string;
+  subject_contains: string;
+  with_attachments: boolean;
+  move_to: "inbox" | "archive" | "junk" | "deleted" | null;
+  mark_read: boolean;
+  flag: boolean;
+  forward_to: string | null;
+  stop: boolean;
+}
+
+export const listRules = async (mailboxId: string): Promise<MailRule[]> => {
+  const { data, error } = await db.from("mail_rules").select("*").eq("mailbox_id", mailboxId).order("position").order("created_at");
+  if (error) fail(error, "Could not load your rules.");
+  return (data || []) as unknown as MailRule[];
+};
+export const saveRule = async (r: Partial<MailRule> & { mailbox_id: string }) => {
+  const row = {
+    mailbox_id: r.mailbox_id, name: (r.name || "").trim(), position: r.position ?? 0, enabled: r.enabled ?? true,
+    from_contains: (r.from_contains || "").trim(), subject_contains: (r.subject_contains || "").trim(), with_attachments: !!r.with_attachments,
+    move_to: r.move_to || null, mark_read: !!r.mark_read, flag: !!r.flag, forward_to: r.forward_to?.trim().toLowerCase() || null, stop: !!r.stop,
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = r.id ? await db.from("mail_rules").update(row).eq("id", r.id) : await db.from("mail_rules").insert(row);
+  if (error) {
+    if (/check/i.test(error.message)) fail(error, "A rule needs at least one condition and one action, and a valid forwarding address.");
+    fail(error, "Could not save the rule.");
+  }
+};
+export const deleteRule = async (id: string) => {
+  const { error } = await db.from("mail_rules").delete().eq("id", id);
+  if (error) fail(error, "Could not delete the rule.");
+};
+
+/* -------------------------------------------------------------------------- */
+/* Safety (supabase/243)                                                      */
+/* -------------------------------------------------------------------------- */
+
+export interface SenderEntry {
+  value: string;      // an address, or @domain.com
+  kind: "safe" | "blocked";
+  created_at: string;
+}
+
+export const senderLists = async (mailboxId: string): Promise<SenderEntry[]> => {
+  const { data, error } = await db.from("mail_sender_lists").select("value, kind, created_at").eq("mailbox_id", mailboxId).order("created_at", { ascending: false });
+  if (error) fail(error, "Could not load your safe and blocked senders.");
+  return (data || []) as unknown as SenderEntry[];
+};
+
+/** Safe, blocked, or (null) neither any more. */
+export const markSender = async (mailboxId: string, sender: string, kind: "safe" | "blocked" | null) => {
+  const { error } = await db.rpc("mail_mark_sender", { target_box: mailboxId, sender, kind_in: kind as string });
+  if (error) fail(error, "Could not change that sender.");
+};
+
+export const reportPhishing = async (messageId: string): Promise<{ copies_moved: number }> => {
+  const { data, error } = await db.rpc("mail_report_phishing", { target_message: messageId });
+  if (error) fail(error, "Could not report it.");
+  return data as unknown as { copies_moved: number };
+};
+
+/** Mail that came from outside Schoolivio (or was imported), whose pictures are held back until allowed. */
+export const fromOutside = (m: { inbound_id?: string | null }) => !!m.inbound_id;

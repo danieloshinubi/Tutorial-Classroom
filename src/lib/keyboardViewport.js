@@ -50,7 +50,7 @@ export function installKeyboardViewport() {
     // Only where the frame exists (Chat on a phone, theme.css). Elsewhere the
     // browser's own scroll is what brings a focused field above the keys,
     // and undoing it would hide the field behind the keyboard.
-    const framed = !!document.querySelector(".page-chat") && (!window.matchMedia || window.matchMedia("(max-width: 900px)").matches);
+    const framed = !!document.querySelector(".page-chat, .page-mail") && (!window.matchMedia || window.matchMedia("(max-width: 900px)").matches);
     const typing = isEditable(document.activeElement);
     const open = touch && framed && !zoomed && (typing || baseline - height > 120);
     root.classList.toggle("kb-open", open);

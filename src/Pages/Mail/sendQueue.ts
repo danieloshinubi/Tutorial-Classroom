@@ -38,6 +38,10 @@ export function queueSend(
     emit();
     sendDraft(draftId).then(done).catch(failed);
   };
+  // The same draft sent again while it waits: one timer, not two (Undo
+  // would only stop the second).
+  const old = timers.get(draftId);
+  if (old !== undefined) window.clearTimeout(old);
   if (seconds <= 0) return go();
   pending = [...pending.filter((p) => p.draftId !== draftId), { draftId, subject, until: Date.now() + seconds * 1000 }];
   timers.set(draftId, window.setTimeout(go, seconds * 1000));

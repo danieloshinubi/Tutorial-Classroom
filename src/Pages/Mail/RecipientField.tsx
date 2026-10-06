@@ -64,7 +64,7 @@ const RecipientField = ({
   };
 
   return (
-    <div className="tw-relative tw-flex tw-items-start tw-gap-2 tw-border-0 tw-border-b tw-border-solid tw-border-line tw-py-1.5">
+    <div data-recipients className="tw-relative tw-flex tw-items-start tw-gap-2 tw-border-0 tw-border-b tw-border-solid tw-border-line tw-py-1.5">
       <span className="tw-w-10 tw-shrink-0 tw-pt-1.5 tw-text-[13.5px] tw-text-ink-3">{label}</span>
       <div className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-wrap tw-items-center tw-gap-1.5" onClick={() => inputRef.current?.focus()}>
         {value.map((a) => {

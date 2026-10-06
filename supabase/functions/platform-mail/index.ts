@@ -178,7 +178,9 @@ Deno.serve(async (req) => {
       // 2. The mail records, under <slug>.
       let added = 0;
       for (const r of wanted) {
-        const name = r.name ? `${r.name}.${slug}` : slug;
+        // Resend's names are relative to schoolivio.com and may already end in
+        // the slug ("send.slug"); otherwise they are relative to the subdomain.
+        const name = !r.name || r.name === "@" || r.name === slug ? slug : r.name.endsWith(`.${slug}`) ? r.name : `${r.name}.${slug}`;
         if (has(name, r.type, r.value)) continue;
         const rec: Record<string, unknown> = { name, type: r.type, value: r.value };
         if (r.type === "MX") rec.mxPriority = r.priority ?? 10;

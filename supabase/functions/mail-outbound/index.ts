@@ -109,7 +109,25 @@ function withPicture(html: string, token: string | null) {
   return /<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${img}</body>`) : `${html}${img}`;
 }
 
-const quoteName = (name: string) => (/[",<>@()]/.test(name) ? `"${name.replace(/"/g, "'")}"` : name);
+// Always quoted, so a name like "Admissions: Head" or "St. Mary's" never
+// breaks the From line.
+const quoteName = (name: string) => `"${name.replace(/[\r\n]+/g, " ").replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+
+// The same recipients of the same message always get the same key, so a
+// unit Resend took before a run was cut short is not sent again.
+async function unitKey(messageId: string, ids: string[]) {
+  const bytes = new TextEncoder().encode([...ids].sort().join(","));
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))).slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return `mail-${messageId}-${hash}`;
+}
+
+// Midnight UTC, when a Resend plan's daily allowance starts again.
+const nextUtcMidnight = () => {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1, 0, 5)).toISOString();
+};
+// Edge functions stop after a few minutes; stop well before.
+const HARD_STOP_MS = 110000;
 
 Deno.serve(async (req) => {
   const cronSecret = Deno.env.get("TICKET_MAIL_CRON_SECRET");
@@ -146,6 +164,10 @@ Deno.serve(async (req) => {
     if (!batch.length) break;
 
     for (const m of batch) {
+      if (Date.now() - started > HARD_STOP_MS) {
+        await admin.rpc("mail_outbound_release", { recipient_ids: m.recipients.map((r) => r.id), retry_at: null, detail_in: null });
+        continue;
+      }
       if (!secrets.has(m.school_id)) {
         const { data: s } = await admin.rpc("mail_settings_secrets", { target_school: m.school_id });
         secrets.set(m.school_id, ((s as Secrets[] | null) ?? [])[0] ?? null);
@@ -207,6 +229,19 @@ Deno.serve(async (req) => {
       const units = split(m.recipients);
       for (let i = 0; i < units.length; i += 1) {
         const u = units[i];
+        // Out of time: the rest go back in the queue untouched, for the next run.
+        if (Date.now() - started > HARD_STOP_MS) {
+          const rest = units.slice(i).flatMap((x) => x.rows.map((r) => r.id));
+          await admin.rpc("mail_outbound_release", { recipient_ids: rest, retry_at: null, detail_in: null });
+          break;
+        }
+        // Several recipients in one email share one "opened" token, so an open
+        // is never credited to whoever happened to be first.
+        let token = u.rows.find((r) => r.open_token)?.open_token ?? null;
+        if (token && u.rows.length > 1) {
+          const { data: shared } = await admin.rpc("mail_outbound_share_token", { recipient_ids: u.rows.map((r) => r.id) });
+          token = (shared as string | null) ?? token;
+        }
         // Resend allows about two calls a second per account.
         const wait = 600 - (Date.now() - (lastCall.get(m.school_id) ?? 0));
         if (wait > 0) await sleep(wait);
@@ -216,7 +251,7 @@ Deno.serve(async (req) => {
           from: m.from_name ? `${quoteName(m.from_name)} <${m.from_address}>` : m.from_address,
           to: u.to,
           subject: m.subject || "(no subject)",
-          html: withPicture(inline.html || "<p></p>", u.rows.find((r) => r.open_token)?.open_token ?? null),
+          html: withPicture(inline.html || "<p></p>", token),
           headers,
           tags: [{ name: "schoolivio_message", value: m.message_id }],
         };
@@ -227,13 +262,28 @@ Deno.serve(async (req) => {
         const r = await resend<{ id: string }>(s.api_key, "/emails", {
           method: "POST",
           body: payload,
-          // Per try: a retry carries fresh attachment links, which Resend would
-          // refuse under an earlier key.
-          idempotencyKey: `mail-${m.message_id}-${i}-${m.attempts}`,
+          idempotencyKey: await unitKey(m.message_id, u.rows.map((r) => r.id)),
         });
         if (r.ok && r.data?.id) {
           await record(u.rows, true, r.data.id, null, false);
           sent += u.rows.length;
+          continue;
+        }
+        // The same key with a different body (fresh attachment links on a
+        // retry): Resend already took this email under that key.
+        if (r.status === 409 && /idempot/i.test(`${r.code ?? ""} ${r.message ?? ""}`)) {
+          await record(u.rows, true, null, null, false);
+          sent += u.rows.length;
+          continue;
+        }
+        // Today's allowance on the school's Resend plan is used up: back in
+        // the queue for just after midnight UTC, not counted as a failed try.
+        if (r.code === "daily_quota_exceeded") {
+          await admin.rpc("mail_outbound_release", {
+            recipient_ids: u.rows.map((r2) => r2.id),
+            retry_at: nextUtcMidnight(),
+            detail_in: "The school has reached today's sending limit on its Resend plan. It goes again after midnight (UTC).",
+          });
           continue;
         }
         // Try again later: too many at once, today's limit, Resend down, or

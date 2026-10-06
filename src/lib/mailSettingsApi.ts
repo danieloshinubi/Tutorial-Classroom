@@ -50,6 +50,10 @@ export interface MailPerson {
   address: string | null;
   used_bytes: number | null;
   quota_bytes: number | null;
+  /** Suspended when false (supabase/242). */
+  is_active: boolean | null;
+  /** Other addresses that reach this person. */
+  aliases: string[] | null;
 }
 
 export const getMailSettings = async (schoolId: string): Promise<MailSettings> => {
@@ -108,3 +112,73 @@ export const moveAllToDomain = async (schoolId: string): Promise<number> => {
   if (error) fail(error, "Could not move the addresses.");
   return Number(data) || 0;
 };
+
+/* -------------------------------------------------------------------------- */
+/* The admin's tools (supabase/242)                                           */
+/* -------------------------------------------------------------------------- */
+
+export type SharedAccess = "full" | "on_behalf" | "read";
+
+export interface SharedMailbox {
+  id: string;
+  name: string;
+  address: string;
+  aliases: string[];
+  is_active: boolean;
+  used_bytes: number;
+  quota_bytes: number;
+  members: { user_id: string; access: SharedAccess; name: string }[];
+}
+
+export interface GroupAddress {
+  id: string;
+  name: string;
+  address: string;
+  allow_outside: boolean;
+  members: { mailbox_id: string; name: string; address: string }[];
+}
+
+const rpc = async <T,>(fn: string, args: Record<string, unknown>, fallback: string): Promise<T> => {
+  const { data, error } = await (db.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(fn, args);
+  if (error) fail(error, fallback);
+  return data as T;
+};
+
+export const sharedMailboxes = (schoolId: string) => rpc<SharedMailbox[]>("mail_admin_shared", { target_school: schoolId }, "Could not load the shared mailboxes.").then((d) => d || []);
+export const saveSharedMailbox = (p: { schoolId: string; id?: string | null; name: string; address: string; members: { user_id: string; access: SharedAccess }[] }) =>
+  rpc("mail_admin_save_shared", { target_school: p.schoolId, target_mailbox: p.id ?? null, name_in: p.name, address_in: p.address, members: p.members }, "Could not save the shared mailbox.");
+
+export const groupAddresses = (schoolId: string) => rpc<GroupAddress[]>("mail_admin_lists", { target_school: schoolId }, "Could not load the group addresses.").then((d) => d || []);
+export const saveGroupAddress = (p: { schoolId: string; id?: string | null; name: string; address: string; allowOutside: boolean; members: string[] }) =>
+  rpc<string>("mail_admin_save_list", { target_school: p.schoolId, target_list: p.id ?? null, name_in: p.name, address_in: p.address, allow_outside_in: p.allowOutside, member_mailboxes: p.members }, "Could not save the group address.");
+export const deleteGroupAddress = (id: string) => rpc("mail_admin_delete_list", { target_list: id }, "Could not delete the group address.");
+
+export const setMailAliases = (mailboxId: string, aliases: string[]) => rpc("mail_admin_set_aliases", { target_mailbox: mailboxId, aliases }, "Could not save the other addresses.");
+export const setMailQuota = (mailboxId: string, gigabytes: number) => rpc("mail_admin_set_quota", { target_mailbox: mailboxId, gigabytes }, "Could not change the storage.");
+export const setMailboxActive = (mailboxId: string, active: boolean) => rpc("mail_admin_set_active", { target_mailbox: mailboxId, active }, active ? "Could not resume it." : "Could not suspend it.");
+export const convertToShared = (mailboxId: string, members: { user_id: string; access: SharedAccess }[]) =>
+  rpc("mail_admin_convert_to_shared", { target_mailbox: mailboxId, members }, "Could not convert it.");
+export const deleteMailbox = (schoolId: string, mailboxId: string, confirm: string) =>
+  call({ action: "delete_mailbox", schoolId, mailboxId, confirm }, "Could not delete the mailbox.");
+
+/** Safety (supabase/243): sending limits, how long Deleted and Junk keep
+ * mail, senders blocked for the whole school, and phishing reports. */
+export interface PhishingReport {
+  id: string;
+  sender: string;
+  subject: string;
+  copies_moved: number;
+  created_at: string;
+  reported_by: string | null;
+}
+export interface MailSafety {
+  max_outside_hour: number;
+  max_outside_day: number;
+  deleted_days: number;
+  junk_days: number;
+  blocked_senders: string[];
+  reports: PhishingReport[];
+}
+export type MailSafetyPatch = Partial<Omit<MailSafety, "reports">>;
+export const mailSafety = (schoolId: string, patch: MailSafetyPatch | null = null) =>
+  rpc<MailSafety>("mail_admin_safety", { target_school: schoolId, patch: patch ?? {} }, "Could not load the mail safety settings.");

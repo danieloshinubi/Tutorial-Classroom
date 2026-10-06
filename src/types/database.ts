@@ -3367,6 +3367,144 @@ export type Database = {
           },
         ]
       }
+      mail_inbound_retry: {
+        Row: {
+          attempts: number
+          created_at: string
+          email_id: string
+          last_error: string | null
+          next_at: string
+          school_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          email_id: string
+          last_error?: string | null
+          next_at?: string
+          school_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          email_id?: string
+          last_error?: string | null
+          next_at?: string
+          school_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_inbound_retry_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mail_list_members: {
+        Row: {
+          list_id: string
+          mailbox_id: string
+        }
+        Insert: {
+          list_id: string
+          mailbox_id: string
+        }
+        Update: {
+          list_id?: string
+          mailbox_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_list_members_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "mail_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mail_list_members_mailbox_id_fkey"
+            columns: ["mailbox_id"]
+            isOneToOne: false
+            referencedRelation: "mail_mailboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mail_lists: {
+        Row: {
+          address: string
+          allow_outside: boolean
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          school_id: string
+          updated_at: string
+        }
+        Insert: {
+          address: string
+          allow_outside?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          school_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string
+          allow_outside?: boolean
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          school_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_lists_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mail_mailbox_members: {
+        Row: {
+          access: string
+          added_by: string | null
+          created_at: string
+          mailbox_id: string
+          user_id: string
+        }
+        Insert: {
+          access?: string
+          added_by?: string | null
+          created_at?: string
+          mailbox_id: string
+          user_id: string
+        }
+        Update: {
+          access?: string
+          added_by?: string | null
+          created_at?: string
+          mailbox_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_mailbox_members_mailbox_id_fkey"
+            columns: ["mailbox_id"]
+            isOneToOne: false
+            referencedRelation: "mail_mailboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mail_mailboxes: {
         Row: {
           address: string
@@ -3379,15 +3517,17 @@ export type Database = {
           display_name: string
           id: string
           is_active: boolean
+          kind: string
           notify_opens: boolean
           previous_addresses: string[]
+          push_new_mail: boolean
           quota_bytes: number
           school_id: string
           signature_html: string
           undo_seconds: number
           updated_at: string
           used_bytes: number
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           address: string
@@ -3400,15 +3540,17 @@ export type Database = {
           display_name?: string
           id?: string
           is_active?: boolean
+          kind?: string
           notify_opens?: boolean
           previous_addresses?: string[]
+          push_new_mail?: boolean
           quota_bytes?: number
           school_id: string
           signature_html?: string
           undo_seconds?: number
           updated_at?: string
           used_bytes?: number
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           address?: string
@@ -3421,15 +3563,17 @@ export type Database = {
           display_name?: string
           id?: string
           is_active?: boolean
+          kind?: string
           notify_opens?: boolean
           previous_addresses?: string[]
+          push_new_mail?: boolean
           quota_bytes?: number
           school_id?: string
           signature_html?: string
           undo_seconds?: number
           updated_at?: string
           used_bytes?: number
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -3468,14 +3612,18 @@ export type Database = {
           recalled_at: string | null
           reply_to: Json
           scheduled_at: string | null
+          scheduled_by: string | null
           sent_at: string | null
           size_bytes: number
           snippet: string
+          spam_reasons: string[]
+          spam_score: number | null
           subject: string
           thread_id: string
           to_list: Json
           track_opens: boolean
           updated_at: string
+          warning: string | null
         }
         Insert: {
           bcc_list?: Json
@@ -3503,14 +3651,18 @@ export type Database = {
           recalled_at?: string | null
           reply_to?: Json
           scheduled_at?: string | null
+          scheduled_by?: string | null
           sent_at?: string | null
           size_bytes?: number
           snippet?: string
+          spam_reasons?: string[]
+          spam_score?: number | null
           subject?: string
           thread_id?: string
           to_list?: Json
           track_opens?: boolean
           updated_at?: string
+          warning?: string | null
         }
         Update: {
           bcc_list?: Json
@@ -3538,14 +3690,18 @@ export type Database = {
           recalled_at?: string | null
           reply_to?: Json
           scheduled_at?: string | null
+          scheduled_by?: string | null
           sent_at?: string | null
           size_bytes?: number
           snippet?: string
+          spam_reasons?: string[]
+          spam_score?: number | null
           subject?: string
           thread_id?: string
           to_list?: Json
           track_opens?: boolean
           updated_at?: string
+          warning?: string | null
         }
         Relationships: [
           {
@@ -3654,17 +3810,161 @@ export type Database = {
           },
         ]
       }
+      mail_reports: {
+        Row: {
+          copies_moved: number
+          created_at: string
+          id: string
+          mailbox_id: string | null
+          reported_by: string | null
+          school_id: string
+          sender: string
+          subject: string
+        }
+        Insert: {
+          copies_moved?: number
+          created_at?: string
+          id?: string
+          mailbox_id?: string | null
+          reported_by?: string | null
+          school_id: string
+          sender: string
+          subject?: string
+        }
+        Update: {
+          copies_moved?: number
+          created_at?: string
+          id?: string
+          mailbox_id?: string | null
+          reported_by?: string | null
+          school_id?: string
+          sender?: string
+          subject?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_reports_mailbox_id_fkey"
+            columns: ["mailbox_id"]
+            isOneToOne: false
+            referencedRelation: "mail_mailboxes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mail_reports_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mail_rules: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          flag: boolean
+          forward_to: string | null
+          from_contains: string
+          id: string
+          mailbox_id: string
+          mark_read: boolean
+          move_to: string | null
+          name: string
+          position: number
+          stop: boolean
+          subject_contains: string
+          updated_at: string
+          with_attachments: boolean
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          flag?: boolean
+          forward_to?: string | null
+          from_contains?: string
+          id?: string
+          mailbox_id: string
+          mark_read?: boolean
+          move_to?: string | null
+          name?: string
+          position?: number
+          stop?: boolean
+          subject_contains?: string
+          updated_at?: string
+          with_attachments?: boolean
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          flag?: boolean
+          forward_to?: string | null
+          from_contains?: string
+          id?: string
+          mailbox_id?: string
+          mark_read?: boolean
+          move_to?: string | null
+          name?: string
+          position?: number
+          stop?: boolean
+          subject_contains?: string
+          updated_at?: string
+          with_attachments?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_rules_mailbox_id_fkey"
+            columns: ["mailbox_id"]
+            isOneToOne: false
+            referencedRelation: "mail_mailboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mail_sender_lists: {
+        Row: {
+          created_at: string
+          kind: string
+          mailbox_id: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          kind: string
+          mailbox_id: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          kind?: string
+          mailbox_id?: string
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mail_sender_lists_mailbox_id_fkey"
+            columns: ["mailbox_id"]
+            isOneToOne: false
+            referencedRelation: "mail_mailboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       mail_settings: {
         Row: {
+          blocked_senders: string[]
           checked_at: string | null
           connected_at: string | null
           connected_by: string | null
+          deleted_days: number
           dns_records: Json
           domain: string | null
           domain_status: string
+          junk_days: number
           key_hint: string | null
           key_vault_id: string | null
           last_error: string | null
+          max_outside_day: number
+          max_outside_hour: number
           microsoft_consent_at: string | null
           microsoft_tenant: string | null
           platform_dns_at: string | null
@@ -3679,15 +3979,20 @@ export type Database = {
           webhook_vault_id: string | null
         }
         Insert: {
+          blocked_senders?: string[]
           checked_at?: string | null
           connected_at?: string | null
           connected_by?: string | null
+          deleted_days?: number
           dns_records?: Json
           domain?: string | null
           domain_status?: string
+          junk_days?: number
           key_hint?: string | null
           key_vault_id?: string | null
           last_error?: string | null
+          max_outside_day?: number
+          max_outside_hour?: number
           microsoft_consent_at?: string | null
           microsoft_tenant?: string | null
           platform_dns_at?: string | null
@@ -3702,15 +4007,20 @@ export type Database = {
           webhook_vault_id?: string | null
         }
         Update: {
+          blocked_senders?: string[]
           checked_at?: string | null
           connected_at?: string | null
           connected_by?: string | null
+          deleted_days?: number
           dns_records?: Json
           domain?: string | null
           domain_status?: string
+          junk_days?: number
           key_hint?: string | null
           key_vault_id?: string | null
           last_error?: string | null
+          max_outside_day?: number
+          max_outside_hour?: number
           microsoft_consent_at?: string | null
           microsoft_tenant?: string | null
           platform_dns_at?: string | null
@@ -8416,6 +8726,7 @@ export type Database = {
       generate_due_reminders: { Args: never; Returns: number }
       get_chat_push_context: { Args: { target_message: string }; Returns: Json }
       get_gateway_secret: { Args: { target_gateway: string }; Returns: Json }
+      get_mail_push_context: { Args: { target_message: string }; Returns: Json }
       get_mailbox_secret: {
         Args: { target_mailbox: string; which: string }
         Returns: string
@@ -8672,9 +8983,95 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      mail_access: {
+        Args: { target_mailbox: string; who: string }
+        Returns: string
+      }
+      mail_address_taken: {
+        Args: { addr: string; except_list?: string; except_mailbox?: string }
+        Returns: boolean
+      }
+      mail_admin_box: {
+        Args: { target_mailbox: string }
+        Returns: {
+          address: string
+          autoreply_enabled: boolean
+          autoreply_end: string | null
+          autoreply_html: string
+          autoreply_outside: boolean
+          autoreply_start: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          kind: string
+          notify_opens: boolean
+          previous_addresses: string[]
+          push_new_mail: boolean
+          quota_bytes: number
+          school_id: string
+          signature_html: string
+          undo_seconds: number
+          updated_at: string
+          used_bytes: number
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "mail_mailboxes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mail_admin_convert_to_shared: {
+        Args: { members: Json; target_mailbox: string }
+        Returns: {
+          address: string
+          autoreply_enabled: boolean
+          autoreply_end: string | null
+          autoreply_html: string
+          autoreply_outside: boolean
+          autoreply_start: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          kind: string
+          notify_opens: boolean
+          previous_addresses: string[]
+          push_new_mail: boolean
+          quota_bytes: number
+          school_id: string
+          signature_html: string
+          undo_seconds: number
+          updated_at: string
+          used_bytes: number
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "mail_mailboxes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       mail_admin_create_all: {
         Args: { target_school: string }
         Returns: number
+      }
+      mail_admin_delete_list: {
+        Args: { target_list: string }
+        Returns: undefined
+      }
+      mail_admin_lists: {
+        Args: { target_school: string }
+        Returns: {
+          address: string
+          allow_outside: boolean
+          id: string
+          members: Json
+          name: string
+        }[]
       }
       mail_admin_move_to_domain: {
         Args: { target_school: string }
@@ -8684,6 +9081,8 @@ export type Database = {
         Args: { target_school: string }
         Returns: {
           address: string
+          aliases: string[]
+          is_active: boolean
           job_title: string
           mailbox_id: string
           name: string
@@ -8692,6 +9091,91 @@ export type Database = {
           used_bytes: number
           user_id: string
         }[]
+      }
+      mail_admin_safety: {
+        Args: { patch: Json; target_school: string }
+        Returns: Json
+      }
+      mail_admin_save_list: {
+        Args: {
+          address_in: string
+          allow_outside_in: boolean
+          member_mailboxes: string[]
+          name_in: string
+          target_list: string
+          target_school: string
+        }
+        Returns: string
+      }
+      mail_admin_save_shared: {
+        Args: {
+          address_in: string
+          members: Json
+          name_in: string
+          target_mailbox: string
+          target_school: string
+        }
+        Returns: {
+          address: string
+          autoreply_enabled: boolean
+          autoreply_end: string | null
+          autoreply_html: string
+          autoreply_outside: boolean
+          autoreply_start: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          kind: string
+          notify_opens: boolean
+          previous_addresses: string[]
+          push_new_mail: boolean
+          quota_bytes: number
+          school_id: string
+          signature_html: string
+          undo_seconds: number
+          updated_at: string
+          used_bytes: number
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "mail_mailboxes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mail_admin_set_active: {
+        Args: { active: boolean; target_mailbox: string }
+        Returns: {
+          address: string
+          autoreply_enabled: boolean
+          autoreply_end: string | null
+          autoreply_html: string
+          autoreply_outside: boolean
+          autoreply_start: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          kind: string
+          notify_opens: boolean
+          previous_addresses: string[]
+          push_new_mail: boolean
+          quota_bytes: number
+          school_id: string
+          signature_html: string
+          undo_seconds: number
+          updated_at: string
+          used_bytes: number
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "mail_mailboxes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       mail_admin_set_address: {
         Args: { new_address: string; target_mailbox: string }
@@ -8706,15 +9190,17 @@ export type Database = {
           display_name: string
           id: string
           is_active: boolean
+          kind: string
           notify_opens: boolean
           previous_addresses: string[]
+          push_new_mail: boolean
           quota_bytes: number
           school_id: string
           signature_html: string
           undo_seconds: number
           updated_at: string
           used_bytes: number
-          user_id: string
+          user_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -8722,6 +9208,87 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mail_admin_set_aliases: {
+        Args: { aliases: string[]; target_mailbox: string }
+        Returns: {
+          address: string
+          autoreply_enabled: boolean
+          autoreply_end: string | null
+          autoreply_html: string
+          autoreply_outside: boolean
+          autoreply_start: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          kind: string
+          notify_opens: boolean
+          previous_addresses: string[]
+          push_new_mail: boolean
+          quota_bytes: number
+          school_id: string
+          signature_html: string
+          undo_seconds: number
+          updated_at: string
+          used_bytes: number
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "mail_mailboxes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mail_admin_set_members: {
+        Args: { members: Json; target_mailbox: string }
+        Returns: undefined
+      }
+      mail_admin_set_quota: {
+        Args: { gigabytes: number; target_mailbox: string }
+        Returns: {
+          address: string
+          autoreply_enabled: boolean
+          autoreply_end: string | null
+          autoreply_html: string
+          autoreply_outside: boolean
+          autoreply_start: string | null
+          created_at: string
+          display_name: string
+          id: string
+          is_active: boolean
+          kind: string
+          notify_opens: boolean
+          previous_addresses: string[]
+          push_new_mail: boolean
+          quota_bytes: number
+          school_id: string
+          signature_html: string
+          undo_seconds: number
+          updated_at: string
+          used_bytes: number
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "mail_mailboxes"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      mail_admin_shared: {
+        Args: { target_school: string }
+        Returns: {
+          address: string
+          aliases: string[]
+          id: string
+          is_active: boolean
+          members: Json
+          name: string
+          quota_bytes: number
+          used_bytes: number
+        }[]
       }
       mail_autoreply: {
         Args: {
@@ -8736,6 +9303,17 @@ export type Database = {
         Returns: undefined
       }
       mail_can_import: { Args: { target_mailbox: string }; Returns: boolean }
+      mail_check_address: {
+        Args: { addr: string; target_school: string }
+        Returns: string
+      }
+      mail_check_limits: {
+        Args: {
+          box: Database["classroom"]["Tables"]["mail_mailboxes"]["Row"]
+          wanted: number
+        }
+        Returns: undefined
+      }
       mail_create_mailbox: {
         Args: { target_school: string; target_user: string }
         Returns: {
@@ -8749,15 +9327,17 @@ export type Database = {
           display_name: string
           id: string
           is_active: boolean
+          kind: string
           notify_opens: boolean
           previous_addresses: string[]
+          push_new_mail: boolean
           quota_bytes: number
           school_id: string
           signature_html: string
           undo_seconds: number
           updated_at: string
           used_bytes: number
-          user_id: string
+          user_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -8765,6 +9345,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mail_delete_mailbox: {
+        Args: { target_mailbox: string }
+        Returns: string[]
+      }
+      mail_delete_mailbox_by: {
+        Args: { actor: string; target_mailbox: string }
+        Returns: string[]
       }
       mail_delivery_event: {
         Args: {
@@ -8786,6 +9374,10 @@ export type Database = {
         }[]
       }
       mail_domain: { Args: { target_school: string }; Returns: string }
+      mail_domain_taken: {
+        Args: { domain_in: string; target_school: string }
+        Returns: boolean
+      }
       mail_group_members: {
         Args: { sender_box: string; token: string }
         Returns: {
@@ -8920,6 +9512,21 @@ export type Database = {
         Args: { keys: string[]; target_mailbox: string }
         Returns: string[]
       }
+      mail_inbound_retry_add: {
+        Args: { email_id_in: string; error_in: string; target_school: string }
+        Returns: undefined
+      }
+      mail_inbound_retry_done: {
+        Args: { email_id_in: string; target_school: string }
+        Returns: undefined
+      }
+      mail_inbound_retry_due: {
+        Args: never
+        Returns: {
+          email_id: string
+          school_id: string
+        }[]
+      }
       mail_inbound_seen: {
         Args: { inbound_id_in: string; target_school: string }
         Returns: boolean
@@ -8932,11 +9539,24 @@ export type Database = {
           outcome: string
         }[]
       }
+      mail_junk_verdict: {
+        Args: { msg: Json; target_box: string }
+        Returns: Json
+      }
       mail_kick: { Args: { target_message?: string }; Returns: undefined }
+      mail_limit_alert: { Args: { target_mailbox: string }; Returns: undefined }
+      mail_mark_sender: {
+        Args: { kind_in: string; sender: string; target_box: string }
+        Returns: undefined
+      }
       mail_message_status: { Args: { target_message: string }; Returns: Json }
       mail_microsoft_tenant: {
         Args: { target_school: string }
         Returns: string
+      }
+      mail_move_draft: {
+        Args: { target_draft: string; target_mailbox: string }
+        Returns: undefined
       }
       mail_my_mailbox: {
         Args: { target_school: string }
@@ -8951,15 +9571,17 @@ export type Database = {
           display_name: string
           id: string
           is_active: boolean
+          kind: string
           notify_opens: boolean
           previous_addresses: string[]
+          push_new_mail: boolean
           quota_bytes: number
           school_id: string
           signature_html: string
           undo_seconds: number
           updated_at: string
           used_bytes: number
-          user_id: string
+          user_id: string | null
         }
         SetofOptions: {
           from: "*"
@@ -8967,6 +9589,18 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      mail_my_mailboxes: {
+        Args: { target_school: string }
+        Returns: {
+          access: string
+          address: string
+          display_name: string
+          id: string
+          is_active: boolean
+          kind: string
+          unread: number
+        }[]
       }
       mail_notice: {
         Args: { html_in: string; subject_in: string; target_mailbox: string }
@@ -8976,6 +9610,10 @@ export type Database = {
       mail_outbound_claim: {
         Args: { max_messages?: number; only_message?: string }
         Returns: Json
+      }
+      mail_outbound_release: {
+        Args: { detail_in?: string; recipient_ids: string[]; retry_at?: string }
+        Returns: undefined
       }
       mail_outbound_result: {
         Args: {
@@ -8990,6 +9628,10 @@ export type Database = {
       mail_outbound_settle: {
         Args: { target_message: string }
         Returns: undefined
+      }
+      mail_outbound_share_token: {
+        Args: { recipient_ids: string[] }
+        Returns: string
       }
       mail_platform_dns_done: {
         Args: { target_school: string }
@@ -9011,6 +9653,15 @@ export type Database = {
         Args: { recipient_in: string; sender_copy: string; via_in: string }
         Returns: boolean
       }
+      mail_report_phishing: { Args: { target_message: string }; Returns: Json }
+      mail_retention_run: { Args: never; Returns: Json }
+      mail_rule_forward: {
+        Args: {
+          src: Database["classroom"]["Tables"]["mail_messages"]["Row"]
+          target: string
+        }
+        Returns: undefined
+      }
       mail_schedule: {
         Args: { at_in: string; target_draft: string }
         Returns: undefined
@@ -9022,17 +9673,26 @@ export type Database = {
         Returns: Json
       }
       mail_send_due: { Args: never; Returns: number }
+      mail_sender_standing: {
+        Args: { sender: string; target_box: string }
+        Returns: string
+      }
       mail_set_microsoft_tenant: {
-        Args: { target_school: string; tenant_in: string }
+        Args: { actor?: string; target_school: string; tenant_in: string }
         Returns: undefined
       }
       mail_settings_clear: {
-        Args: { target_school: string }
+        Args: { actor?: string; target_school: string }
         Returns: undefined
       }
       mail_settings_get: { Args: { target_school: string }; Returns: Json }
       mail_settings_receiving: {
-        Args: { enabled_in: boolean; status_in: string; target_school: string }
+        Args: {
+          actor?: string
+          enabled_in: boolean
+          status_in: string
+          target_school: string
+        }
         Returns: undefined
       }
       mail_settings_save: {

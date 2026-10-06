@@ -41,14 +41,17 @@ interface Secrets {
 }
 
 // Delivery reports: a webhook in the school's Resend pointing at
-// mail-resend-webhook for this school. Any earlier one to the same address
-// is removed first so reports never arrive twice.
-async function turnOnReports(key: string, schoolId: string, oldId: string | null) {
+// mail-resend-webhook for this school. The new one is made first and the
+// earlier ones to the same address are removed only once its secret is
+// saved (settleReports): removing first, then failing to make or save the
+// new one, left Resend signing with a secret Schoolivio did not have, and
+// every report and received message was refused.
+type Reports = { id: string | null; secret: string | null; error: string | null; stale: string[] };
+async function turnOnReports(key: string, schoolId: string, oldId: string | null): Promise<Reports> {
   const endpoint = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mail-resend-webhook?school=${schoolId}`;
   const existing = await resend<{ data?: { id: string; endpoint: string }[] }>(key, "/webhooks");
   const stale = new Set<string>(oldId ? [oldId] : []);
   (existing.data?.data ?? []).forEach((w) => w.endpoint === endpoint && stale.add(w.id));
-  for (const id of stale) await resend(key, `/webhooks/${id}`, { method: "DELETE" });
 
   let made = await resend<{ id: string; signing_secret: string }>(key, "/webhooks", {
     method: "POST",
@@ -61,10 +64,19 @@ async function turnOnReports(key: string, schoolId: string, oldId: string | null
     });
   }
   if (!made.ok || !made.data?.id || !made.data?.signing_secret) {
-    return { id: null, secret: null, error: `Mail will send, but delivery reports could not be switched on: ${made.message || "Resend refused"}.` };
+    // The earlier webhook (if any) is left as it is: it still works.
+    return { id: null, secret: null, error: `Mail will send, but delivery reports could not be switched on: ${made.message || "Resend refused"}.`, stale: [] };
   }
-  return { id: made.data.id, secret: made.data.signing_secret, error: null };
+  stale.delete(made.data.id);
+  return { id: made.data.id, secret: made.data.signing_secret, error: null, stale: [...stale] };
 }
+
+// Saved: the earlier webhooks go. Not saved: the new one goes.
+async function settleReports(key: string, reports: Reports, saved: boolean) {
+  const drop = saved ? reports.stale : reports.id ? [reports.id] : [];
+  for (const id of drop) await resend(key, `/webhooks/${id}`, { method: "DELETE" }).catch(() => null);
+}
+const noReports: Reports = { id: null, secret: null, error: null, stale: [] };
 
 // Waiting outside mail goes as soon as the domain is verified.
 const kickOutbound = () =>
@@ -133,7 +145,7 @@ Deno.serve(async (req) => {
     };
     const saveReceiving = async (d: ResendDomain | null) => {
       const st = statuses(d);
-      const { error } = await admin.rpc("mail_settings_receiving", { target_school: schoolId, enabled_in: st.receivingOn, status_in: st.receiving });
+      const { error } = await admin.rpc("mail_settings_receiving", { target_school: schoolId, enabled_in: st.receivingOn, status_in: st.receiving, actor: authUser.user.id });
       if (error) throw new Error(error.message);
     };
 
@@ -150,31 +162,55 @@ Deno.serve(async (req) => {
       if (!patched.ok) {
         return json({ error: patched.status === 401 || patched.status === 403 ? keyProblem(patched) : `Resend could not change receiving: ${patched.message || "unknown error"}` }, 400);
       }
-      const reports = enable ? await turnOnReports(current.api_key, schoolId, current.webhook_id) : { id: null, secret: null, error: null };
+      const reports = enable ? await turnOnReports(current.api_key, schoolId, current.webhook_id) : noReports;
       const full = await resend<ResendDomain>(current.api_key, `/domains/${current.resend_domain_id}`);
       const d = full.ok && full.data ? full.data : null;
-      await save({
-        domain: current.domain,
-        region: current.region,
-        domainId: current.resend_domain_id,
-        status: d ? statuses(d).sending : current.domain_status ?? "not_started",
-        records: d ? records(d) : [],
-        webhookId: reports.id,
-        webhookSecret: reports.secret,
-        error: reports.error,
-      });
+      try {
+        await save({
+          domain: current.domain,
+          region: current.region,
+          domainId: current.resend_domain_id,
+          status: d ? statuses(d).sending : current.domain_status ?? "not_started",
+          records: d ? records(d) : [],
+          webhookId: reports.id,
+          webhookSecret: reports.secret,
+          error: reports.error,
+        });
+      } catch (err) {
+        await settleReports(current.api_key, reports, false);
+        throw err;
+      }
+      await settleReports(current.api_key, reports, true);
       // Resend may take a moment to show the switch; what was asked for is recorded.
       const st = d ? statuses(d) : { receiving: "not_started" };
-      const { error } = await admin.rpc("mail_settings_receiving", { target_school: schoolId, enabled_in: enable, status_in: st.receiving });
+      const { error } = await admin.rpc("mail_settings_receiving", { target_school: schoolId, enabled_in: enable, status_in: st.receiving, actor: authUser.user.id });
       if (error) throw new Error(error.message);
       return json({ ok: true, warning: reports.error });
+    }
+
+    // Deleting a suspended mailbox for good (supabase/242): the address typed
+    // must match. Files only it held are removed from storage; files of mail
+    // others still hold stay, moved to one of them.
+    if (action === "delete_mailbox") {
+      const mailboxId = String(body.mailboxId ?? "");
+      const { data: box, error: boxError } = await caller.rpc("mail_admin_box", { target_mailbox: mailboxId });
+      if (boxError || !box) return json({ error: boxError?.message || "That mailbox no longer exists." }, 400);
+      const b = box as { school_id: string; address: string; is_active: boolean };
+      if (b.school_id !== schoolId) return json({ error: "That mailbox is not at this school." }, 400);
+      if (b.is_active) return json({ error: "Suspend the mailbox before deleting it." }, 400);
+      if (String(body.confirm ?? "").trim().toLowerCase() !== b.address) return json({ error: `Type ${b.address} to confirm.` }, 400);
+      const { data: paths, error } = await admin.rpc("mail_delete_mailbox_by", { target_mailbox: mailboxId, actor: authUser.user.id });
+      if (error) return json({ error: error.message }, 400);
+      const files = (paths as string[] | null) ?? [];
+      for (let i = 0; i < files.length; i += 100) await admin.storage.from("mail").remove(files.slice(i, i + 100));
+      return json({ ok: true, removedFiles: files.length });
     }
 
     if (action === "disconnect") {
       if (current?.api_key && current.webhook_id) {
         await resend(current.api_key, `/webhooks/${current.webhook_id}`, { method: "DELETE" });
       }
-      const { error } = await admin.rpc("mail_settings_clear", { target_school: schoolId });
+      const { error } = await admin.rpc("mail_settings_clear", { target_school: schoolId, actor: authUser.user.id });
       if (error) return json({ error: error.message }, 400);
       return json({ ok: true });
     }
@@ -193,6 +229,9 @@ Deno.serve(async (req) => {
         return json({ error: `Of schoolivio.com, this school can use ${fallback} only.` }, 400);
       }
       if (!key) return json({ error: "Paste the school's Resend API key." }, 400);
+      // One school per domain: checked before anything is changed in Resend.
+      const { data: taken } = await admin.rpc("mail_domain_taken", { domain_in: domain, target_school: schoolId });
+      if (taken) return json({ error: `${domain} is already used by another school on Schoolivio.` }, 400);
       if (pasted && !pasted.startsWith("re_")) return json({ error: "A Resend API key starts with re_. Copy it again from Resend." }, 400);
 
       // The key must be able to manage domains, not only send.
@@ -213,19 +252,25 @@ Deno.serve(async (req) => {
       const keyChanged = !!pasted && pasted !== current?.api_key;
       const reports = keyChanged || !current?.webhook_id
         ? await turnOnReports(key, schoolId, current?.webhook_id ?? null)
-        : { id: null, secret: null, error: null };
+        : noReports;
 
-      await save({
-        domain,
-        region: d.region ?? region,
-        domainId: d.id,
-        status: statuses(d).sending,
-        records: records(d),
-        apiKey: pasted || null,
-        webhookId: reports.id,
-        webhookSecret: reports.secret,
-        error: reports.error,
-      });
+      try {
+        await save({
+          domain,
+          region: d.region ?? region,
+          domainId: d.id,
+          status: statuses(d).sending,
+          records: records(d),
+          apiKey: pasted || null,
+          webhookId: reports.id,
+          webhookSecret: reports.secret,
+          error: reports.error,
+        });
+      } catch (err) {
+        await settleReports(key, reports, false);
+        throw err;
+      }
+      await settleReports(key, reports, true);
       await saveReceiving(d);
       if (statuses(d).sending === "verified") await kickOutbound();
       return json({ ok: true, status: statuses(d).sending, warning: reports.error });

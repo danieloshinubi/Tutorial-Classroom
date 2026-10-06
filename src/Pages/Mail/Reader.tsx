@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import EmailFrame from "../../Components/EmailFrame";
 import { Select } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
@@ -10,6 +10,10 @@ import {
   deliveriesFor,
   messageStatus,
   recallMessage,
+  fromOutside,
+  markSender,
+  reportPhishing,
+  senderLists,
   type Address,
   type MessageStatus,
   formatBytes,
@@ -116,6 +120,8 @@ const Reader = ({
   onClosed,
   liveTick = 0,
   onAddContact,
+  readOnly = false,
+  canTrust = true,
 }: {
   mailboxId: string;
   myAddress: string;
@@ -128,6 +134,10 @@ const Reader = ({
   liveTick?: number;
   /** "Add to contacts" for the sender (supabase/241). */
   onAddContact?: (a: Address) => void;
+  /** A shared mailbox I may only read (supabase/242): no reply, forward or recall. */
+  readOnly?: boolean;
+  /** May mark senders safe or blocked: my own mailbox, or full access to a shared one. */
+  canTrust?: boolean;
 }) => {
   const { setError, setNotice } = useActionFeedback();
   const [messages, setMessages] = useState<MailMessage[] | null>(null);
@@ -135,6 +145,20 @@ const Reader = ({
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [statuses, setStatuses] = useState<Record<string, MessageStatus>>({});
+  // Outside pictures (supabase/243): held back unless the sender is trusted
+  // or the reader asks to see them.
+  const [safe, setSafe] = useState<Set<string>>(new Set());
+  const [shown, setShown] = useState<Set<string>>(new Set());
+  const [blocked, setBlocked] = useState<Record<string, number>>({});
+  useEffect(() => {
+    senderLists(mailboxId)
+      .then((list) => setSafe(new Set(list.filter((x) => x.kind === "safe").map((x) => x.value))))
+      .catch(() => null);
+  }, [mailboxId]);
+  const isSafe = (address: string) => {
+    const a = address.toLowerCase();
+    return safe.has(a) || safe.has(`@${a.split("@")[1]}`);
+  };
 
   useEffect(() => {
     let live = true;
@@ -195,6 +219,24 @@ const Reader = ({
   const inFolder = useMemo(() => (messages || []).filter((m) => m.folder === folder), [messages, folder]);
   const targets = inFolder.length ? inFolder : latest ? [latest] : [];
 
+  // Keyboard shortcuts (supabase/243): the Mail page hands over the ones that
+  // act on the open conversation.
+  const shortcut = useRef<(action: string) => void>(() => undefined);
+  shortcut.current = (action: string) => {
+    if (!latest || folder === "deleted") return;
+    if (!readOnly && action === "reply" && answerable) onCompose("reply", answerable);
+    else if (!readOnly && action === "replyAll" && answerable) onCompose("replyAll", answerable);
+    else if (!readOnly && action === "forward") onCompose("forward", latest);
+    else if (action === "archive" && folder !== "archive") act(() => moveTo(targets, "archive"), "Archived.");
+    else if (action === "delete") act(() => moveTo(targets, "deleted"), "Moved to Deleted.");
+    else if (action === "unread") act(() => setFlags(targets.map((m) => m.id), { is_read: false }), "Marked as unread.");
+  };
+  useEffect(() => {
+    const on = (e: Event) => shortcut.current((e as CustomEvent<string>).detail);
+    window.addEventListener("mail:shortcut", on);
+    return () => window.removeEventListener("mail:shortcut", on);
+  }, []);
+
   const act = async (work: () => Promise<unknown>, done?: string, close = true) => {
     try {
       await work();
@@ -218,6 +260,8 @@ const Reader = ({
       <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-1 tw-border-0 tw-border-b tw-border-solid tw-border-line tw-px-3 tw-py-2">
         {folder !== "deleted" ? (
           <>
+            {!readOnly ? (
+              <>
             <button type="button" className={btn} onClick={() => answerable && onCompose("reply", answerable)}>
               <Svg d={ICON.reply} size={15} />
               {"Reply"}
@@ -243,6 +287,8 @@ const Reader = ({
               </button>
             ) : null}
             <span className="tw-mx-1 tw-h-5 tw-w-px tw-bg-line" />
+              </>
+            ) : null}
             {folder !== "archive" ? (
               <button type="button" className={btn} onClick={() => act(() => moveTo(targets, "archive"), "Archived.")}>
                 <Svg d={ICON.archive} size={15} />
@@ -256,11 +302,52 @@ const Reader = ({
             <button
               type="button"
               className={btn}
-              onClick={() => act(() => moveTo(targets, folder === "junk" ? "inbox" : "junk"), folder === "junk" ? "Moved to Inbox: not junk." : "Moved to Junk.")}
+              onClick={() =>
+                act(async () => {
+                  // "Not junk" also trusts the sender from now on (Outlook does the same).
+                  if (canTrust && folder === "junk" && answerable && answerable.from_address !== myAddress) await markSender(mailboxId, answerable.from_address, "safe").catch(() => null);
+                  await moveTo(targets, folder === "junk" ? "inbox" : "junk");
+                }, folder === "junk" ? (canTrust ? "Moved to Inbox, and the sender is now trusted." : "Moved to Inbox.") : "Moved to Junk.")
+              }
             >
               <Svg d={ICON.junk} size={15} />
               {folder === "junk" ? "Not junk" : "Junk"}
             </button>
+            {canTrust && answerable && answerable.from_address !== myAddress ? (
+              <>
+                <button
+                  type="button"
+                  className={btn}
+                  title="Their mail goes to Junk from now on"
+                  onClick={async () => {
+                    if (await confirmDialog(`Block ${answerable.from_address}? Their mail goes straight to Junk from now on.`)) {
+                      act(async () => {
+                        await markSender(mailboxId, answerable.from_address, "blocked");
+                        await moveTo(targets, "junk");
+                      }, "Sender blocked.");
+                    }
+                  }}
+                >
+                  <Svg d={ICON.block} size={15} />
+                  {"Block sender"}
+                </button>
+                <button
+                  type="button"
+                  className={`${btn} tw-text-danger`}
+                  title="A scam or a fake message"
+                  onClick={async () => {
+                    if (!(await confirmDialog({ title: "Report phishing?", body: "The sender is blocked and the message goes to Junk. Unopened copies in your colleagues' mailboxes go to Junk too, and the school admins are told.", confirmLabel: "Report", tone: "danger" }))) return;
+                    act(async () => {
+                      const r = await reportPhishing(answerable.id);
+                      setNotice(`Reported. Thank you.${r.copies_moved ? ` ${r.copies_moved} colleague${r.copies_moved === 1 ? "'s copy was" : "s' copies were"} moved to Junk too.` : ""}`);
+                    });
+                  }}
+                >
+                  <Svg d={ICON.shield} size={15} />
+                  {"Report phishing"}
+                </button>
+              </>
+            ) : null}
           </>
         ) : (
           <>
@@ -276,6 +363,7 @@ const Reader = ({
               <Svg d={ICON.restore} size={15} />
               {"Restore"}
             </button>
+            {!readOnly ? (
             <button
               type="button"
               className={`${btn} tw-text-danger`}
@@ -286,6 +374,7 @@ const Reader = ({
               <Svg d={ICON.deleted} size={15} />
               {"Delete forever"}
             </button>
+            ) : null}
           </>
         )}
         <span className="tw-mx-1 tw-h-5 tw-w-px tw-bg-line" />
@@ -377,7 +466,46 @@ const Reader = ({
                         ))}
                       </div>
                     ) : null}
-                    <EmailFrame html={m.body_html} title={m.subject} />
+                    {m.warning ? (
+                      <div className="tw-mb-3 tw-flex tw-items-start tw-gap-2 tw-rounded-lg tw-border tw-border-solid tw-border-danger tw-bg-danger-soft tw-px-3 tw-py-2 tw-text-[13px] tw-text-danger">
+                        <Svg d={ICON.shield} size={16} />
+                        <span className="tw-flex tw-flex-col tw-gap-0.5">
+                          <strong>{"Be careful with this message"}</strong>
+                          <span className="tw-text-ink-2">{m.warning}</span>
+                        </span>
+                      </div>
+                    ) : null}
+                    {blocked[m.id] && !shown.has(m.id) ? (
+                      <div className="tw-mb-3 tw-flex tw-flex-wrap tw-items-center tw-gap-2 tw-rounded-lg tw-bg-bg tw-px-3 tw-py-2 tw-text-[13px] tw-text-ink-2">
+                        <Svg d={ICON.picture} size={15} />
+                        <span className="tw-flex-1">{"Pictures from outside are hidden, so the sender cannot tell you opened this."}</span>
+                        <button type="button" className={`${btn} tw-py-1 tw-text-[12.5px]`} onClick={() => setShown((s) => new Set(s).add(m.id))}>{"Show pictures"}</button>
+                        {canTrust ? (
+                        <button
+                          type="button"
+                          className={`${btn} tw-py-1 tw-text-[12.5px]`}
+                          onClick={async () => {
+                            try {
+                              await markSender(mailboxId, m.from_address, "safe");
+                              setSafe((s) => new Set(s).add(m.from_address.toLowerCase()));
+                              setNotice(`Pictures from ${m.from_address} will always show.`);
+                            } catch (err) {
+                              setError((err as Error).message);
+                            }
+                          }}
+                        >
+                          {"Always show from this sender"}
+                        </button>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    <EmailFrame
+                      html={m.body_html}
+                      title={m.subject}
+                      blockRemote={fromOutside(m) && !shown.has(m.id) && !isSafe(m.from_address)}
+                      onBlocked={(n) => setBlocked((b) => (b[m.id] === n ? b : { ...b, [m.id]: n }))}
+                      warnLinks={fromOutside(m) || folder === "junk"}
+                    />
                   </div>
                 ) : null}
               </article>

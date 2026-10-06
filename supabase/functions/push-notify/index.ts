@@ -175,6 +175,21 @@ Deno.serve(async (req) => {
       return json(res);
     }
 
+    // New mail in someone's Inbox (supabase/243), if they want it pushed.
+    if (payload.type === "mail" && payload.message_id) {
+      const { data: ctx, error } = await admin.rpc("get_mail_push_context", { target_message: payload.message_id });
+      if (error || !ctx) return json({ skipped: "Not pushed" });
+      if (!ctx.subscriptions?.length) return json({ skipped: "No devices" });
+      const res = await pushTo(ctx.subscriptions, {
+        title: ctx.title || "New mail",
+        body: ctx.body || "",
+        url: ctx.link || "/Mail",
+        tag: `mail-${payload.message_id}`,
+        icon: ctx.school?.logo_url || undefined,
+      });
+      return json(res);
+    }
+
     return json({ error: "Unknown event" }, 400);
   } catch (err) {
     console.error("push-notify failed", payload, (err as Error).message);

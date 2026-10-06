@@ -11,6 +11,20 @@ import { addSchoolDns, mailOverview, microsoftApp, saveMicrosoftApp, saveVercelT
 // records in schoolivio.com's DNS (Vercel): "Add DNS records" does it in one
 // click with the token saved here, keeping the school's website where it is.
 
+// A record's full name. Resend gives names relative to the registrable
+// domain, so for a subdomain (slug.schoolivio.com) a name may already end in
+// "slug" ("send.slug"); adding the domain again would double it.
+const fullName = (name: string, domain: string) => {
+  if (!name || name === "@") return domain;
+  const labels = domain.split(".");
+  for (let k = labels.length - 1; k >= 1; k -= 1) {
+    const lead = labels.slice(0, k).join(".");
+    if (name === lead) return domain;
+    if (name.endsWith(`.${lead}`)) return `${name.slice(0, -lead.length - 1)}.${domain}`;
+  }
+  return `${name}.${domain}`;
+};
+
 const input =
   "tw-w-full tw-rounded-lg tw-border tw-border-solid tw-border-line tw-bg-surface tw-px-3 tw-py-2 tw-text-[14px] tw-text-ink tw-outline-none focus:tw-border-brand [font-family:inherit]";
 const btn =
@@ -96,7 +110,7 @@ const SchoolRow = ({ s, canDns, busy, onDns }: { s: SchoolMail; canDns: boolean;
               {s.dns_records.map((r, i) => (
                 <tr key={i} className="tw-align-top">
                   <td className="tw-py-1 tw-pr-3 tw-font-semibold tw-text-ink">{r.type}</td>
-                  <td className="tw-py-1 tw-pr-3 tw-text-ink">{r.name ? `${r.name}.${s.slug}` : s.slug}</td>
+                  <td className="tw-py-1 tw-pr-3 tw-text-ink">{fullName(r.name, `${s.slug}.schoolivio.com`).replace(/\.schoolivio\.com$/, "")}</td>
                   <td className="tw-break-all tw-py-1 tw-pr-3 tw-text-ink-2">{r.value}</td>
                   <td className="tw-py-1"><Pill tone={r.status === "verified" ? "ok" : r.status === "failed" ? "bad" : "warn"}>{r.status === "verified" ? "Found" : r.status === "failed" ? "Not found" : "Pending"}</Pill></td>
                 </tr>

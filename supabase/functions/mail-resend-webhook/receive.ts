@@ -41,7 +41,7 @@ interface ReceivedFile {
 interface Target {
   address: string;
   mailbox_id: string | null;
-  outcome: "ok" | "unknown" | "full";
+  outcome: "ok" | "unknown" | "full" | "closed";
 }
 
 const MAX_FILE = 25 * 1024 * 1024;
@@ -98,6 +98,12 @@ export async function receive(admin: AdminClient, school: string, key: string, d
   const mailboxes = Array.from(new Set(targets.filter((x) => x.outcome === "ok").map((x) => x.mailbox_id as string)));
   const refused = targets.filter((x) => x.outcome !== "ok");
 
+  // Automatic mail (no-reply senders, mailing lists, auto-replies): never
+  // answered, neither with an out-of-office nor a "not delivered".
+  const robot = /^(no-?reply|mailer-daemon|postmaster|bounce)/i.test(from.address) ||
+    (!!headers["auto-submitted"] && headers["auto-submitted"] !== "no") || /bulk|list|junk/i.test(headers["precedence"] ?? "") ||
+    !!headers["list-id"] || !!headers["list-unsubscribe"];
+
   let delivered = 0;
   const skipped: string[] = [];
   if (mailboxes.length) {
@@ -150,21 +156,30 @@ export async function receive(admin: AdminClient, school: string, key: string, d
         sent_at: e.created_at ?? null,
         size,
         importance,
-        // Mail that fails its own domain's DMARC check is most likely forged.
+        // The sender checks, for the junk score (supabase/243).
+        spf: result(e.authentication, "spf"),
+        dkim: result(e.authentication, "dkim"),
+        dmarc: result(e.authentication, "dmarc"),
         junk: result(e.authentication, "dmarc") === "fail",
+        auto: robot,
       },
       files: stored,
     });
-    if (error) throw new Error(error.message);
     delivered = Number(n) || 0;
+    // Nothing kept it (an error, or another delivery of the same message got
+    // there first): its files would be left with nothing pointing at them.
+    if ((error || !delivered) && stored.length) {
+      await admin.storage.from("mail").remove(stored.map((f) => f.file_path as string)).catch(() => null);
+    }
+    if (error) throw new Error(error.message);
   }
 
-  // Tell a real sender about addresses that could not take it.
-  const proven = result(e.authentication, "spf") === "pass" || result(e.authentication, "dkim") === "pass";
-  const robot = /^(no-?reply|mailer-daemon|postmaster|bounce)/i.test(from.address) ||
-    (headers["auto-submitted"] && headers["auto-submitted"] !== "no") || /bulk|list|junk/i.test(headers["precedence"] ?? "");
+  // Tell a real sender about addresses that could not take it. Only when
+  // DMARC passes: SPF or DKIM alone can pass for an attacker's own domain
+  // while the From line names someone else, who would get the reply.
+  const proven = result(e.authentication, "dmarc") === "pass";
   if (refused.length && proven && !robot && sendingOn && domain && from.address) {
-    const lines = refused.map((r) => `<li>${escapeHtml(r.address)}: ${r.outcome === "full" ? "this mailbox is full" : "there is no such address"}</li>`).join("");
+    const lines = refused.map((r) => `<li>${escapeHtml(r.address)}: ${r.outcome === "full" ? "this mailbox is full" : r.outcome === "closed" ? "this group address only takes mail from inside the school" : "there is no such address"}</li>`).join("");
     await resend(key, "/emails", {
       method: "POST",
       body: {
