@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { createRoot } from "react-dom/client";
 import { Modal, Button, Field } from "./UI";
 
 // In-app replacements for window.confirm and window.prompt.
@@ -71,6 +72,8 @@ export const ConfirmProvider = ({ children }) => {
   // Registered on mount so the module-level helpers below reach this instance.
   useEffect(() => {
     live = { confirm, prompt };
+    // Anyone who asked before a provider was ready.
+    waiting.splice(0).forEach((resolve) => resolve(live));
     return () => {
       if (live?.confirm === confirm) live = null;
     };
@@ -126,16 +129,25 @@ export const ConfirmProvider = ({ children }) => {
   );
 };
 
-// Outside the provider, fall back to the native dialog rather than a no-op.
-// A destructive action guarded by a confirmation that silently returns true
-// would delete without asking; one that returns false would break the flow.
-// The ugly dialog is the least bad of the three.
+// Asked where no provider is mounted (the platform console, the marketing
+// site, anything added later): the app's own dialog is mounted on demand,
+// once, on its own root. Never the browser's native confirm/prompt, which
+// say "admin.schoolivio.com says" and break out of the product.
+let host = null;
+const waiting = [];
+const ensureHost = () => {
+  if (live) return Promise.resolve(live);
+  if (!host) {
+    host = document.createElement("div");
+    host.setAttribute("data-confirm-host", "");
+    document.body.appendChild(host);
+    createRoot(host).render(<ConfirmProvider />);
+  }
+  return new Promise((resolve) => waiting.push(resolve));
+};
 const FALLBACK = {
-  confirm: (input) => Promise.resolve(window.confirm(normalise(input).body || "Are you sure?")),
-  prompt: async (input) => {
-    const o = normalise(input);
-    return Promise.resolve(window.prompt(o.body || o.label || "", o.defaultValue ?? ""));
-  },
+  confirm: async (input) => (await ensureHost()).confirm(input),
+  prompt: async (input) => (await ensureHost()).prompt(input),
 };
 
 export const useConfirm = () => (useContext(ConfirmContext) || FALLBACK).confirm;

@@ -27,6 +27,7 @@ import { AuthProvider, useAuth } from "../context/AuthContext";
 import { amIPlatformAdmin, platformSearch } from "../lib/platformApi";
 import ConfigNotice from "../Components/ConfigNotice";
 import { ToastProvider } from "../Components/Toast";
+import { ConfirmProvider } from "../Components/Confirm";
 import PlatformLogin from "./PlatformLogin";
 import PlatformSetPassword from "./PlatformSetPassword";
 import Overview from "./Overview";
@@ -290,6 +291,8 @@ const SignOutButton = () => {
 
 const PlatformApp = () => (
   <ToastProvider>
+    {/* The app's own confirm and prompt dialogs, never the browser's. */}
+    <ConfirmProvider>
     <Router>
       <AuthProvider>
         <ConfigNotice />
@@ -314,6 +317,7 @@ const PlatformApp = () => (
         </PlatformGate>
       </AuthProvider>
     </Router>
+    </ConfirmProvider>
   </ToastProvider>
 );
 

@@ -30,6 +30,13 @@ import { messageCircle } from "react-icons-kit/feather/messageCircle";
 import { download } from "react-icons-kit/feather/download";
 import { smartphone } from "react-icons-kit/feather/smartphone";
 import { percent } from "react-icons-kit/feather/percent";
+import { mail } from "react-icons-kit/feather/mail";
+import { inbox } from "react-icons-kit/feather/inbox";
+import { calendar } from "react-icons-kit/feather/calendar";
+import { userCheck } from "react-icons-kit/feather/userCheck";
+import { globe } from "react-icons-kit/feather/globe";
+import { shield } from "react-icons-kit/feather/shield";
+import { users } from "react-icons-kit/feather/users";
 import { supabase } from "../lib/supabaseClient";
 import { Mark } from "../Components/Logo";
 
@@ -101,6 +108,24 @@ const MODULES = [
       { text: "Term 2 report cards — approval pending", tone: "y", badge: "Review" },
       { text: "New staff invite accepted — B. Oni",     tone: "g", badge: "Done" },
       { text: "Library clearance backlog — 2 pupils",   tone: "p", badge: "Attention" },
+    ],
+  },
+  {
+    key: "mail",
+    label: "Mail",
+    icon: mail,
+    eyebrow: "bursar@janenathcollege.edu.ng",
+    title: "School mail",
+    stats: [
+      { value: "14",  label: "Unread" },
+      { value: "3",   label: "Shared mailboxes" },
+      { value: "212", label: "Sent this week" },
+      { value: "6",   label: "Scams stopped" },
+    ],
+    rows: [
+      { text: "Mrs Adeyemi opened “Second term fees” — just now", tone: "g", badge: "Opened" },
+      { text: "admissions@ — 4 new enquiries for the team",      tone: "y", badge: "Shared" },
+      { text: "“Urgent: the Principal needs gift cards” — Junk",  tone: "p", badge: "Blocked" },
     ],
   },
   {
@@ -227,7 +252,7 @@ const SCHOOL_NAMES = [
 const STATS = [
   { value: "3 min", label: "Average offer turnaround" },
   { value: "100%",  label: "Actions logged to audit trail" },
-  { value: "18",    label: "Modules in one workspace" },
+  { value: "20+",   label: "Modules in one workspace" },
   { value: "21d",   label: "Free trial, no card needed" },
 ];
 
@@ -283,8 +308,8 @@ const FEATURES = [
   {
     icon: briefcase,
     accent: "c",
-    title: "Payroll with Nigerian tax built in",
-    body: "PAYE under the Nigeria Tax Act 2025, pension, NHF and withholding tax worked out for you, owner approval before pay, and payslips staff open themselves.",
+    title: "Payroll with the tax worked out",
+    body: "PAYE under the Nigeria Tax Act 2025, pension, NHF and withholding tax calculated for you, owner approval before pay, and payslips staff open themselves.",
   },
   {
     icon: bookOpen,
@@ -296,7 +321,7 @@ const FEATURES = [
     icon: messageCircle,
     accent: "b",
     title: "Chat, news and a help desk",
-    body: "Message staff and parents directly or in groups, post school news, and handle requests and email in one queue — alerts reach their phone.",
+    body: "Message staff and parents directly or in groups, post school news, and handle requests in one help desk queue — alerts reach their phone.",
   },
   {
     icon: download,
@@ -304,9 +329,95 @@ const FEATURES = [
     title: "Export any list, your way",
     body: "Download debtors, bills, applicants or staff as Excel, CSV or PDF from any list, in one click.",
   },
+  {
+    icon: mail,
+    accent: "a",
+    title: "School email on your own domain",
+    body: "Every staff member gets a mailbox like bursar@yourschool.org, with shared inboxes for admissions and the front office, group addresses, and old mail brought across from Gmail, Outlook or a .pst file.",
+  },
+  {
+    icon: inbox,
+    accent: "b",
+    title: "Know the moment it's read",
+    body: "An instant alert when each recipient opens your email, read receipts, undo send, scheduled sending, recall, automatic replies and rules — the Outlook essentials, built in.",
+  },
+  {
+    icon: shield,
+    accent: "c",
+    title: "Mail that guards the school",
+    body: "Forged senders and “message from the Principal” scams go to Junk with a warning, outside pictures stay hidden until allowed, risky links ask first, and a hacked account can't spam the world.",
+  },
+  {
+    icon: calendar,
+    accent: "a",
+    title: "A timetable that can't clash",
+    body: "Build each class's week one period at a time. A teacher can never be in two rooms at once and a room can never be double-booked — teachers, students and parents each see their own week.",
+  },
+  {
+    icon: userCheck,
+    accent: "b",
+    title: "Attendance in a few taps",
+    body: "Mark a class with a Present / Absent switch per pupil and a live tally, and pick up any session from the last fortnight to correct it.",
+  },
+  {
+    icon: bookOpen,
+    accent: "c",
+    title: "Courses, lessons and assignments",
+    body: "Every course in one place, materials for each class, assignments students hand in online, and grades that reach them the moment a teacher marks the work.",
+  },
+  {
+    icon: users,
+    accent: "a",
+    title: "Families, not just students",
+    body: "One parent account for every child at the school, family billing with sibling discounts, and a portal where parents see bills, results and news.",
+  },
+  {
+    icon: globe,
+    accent: "b",
+    title: "Ready for any country",
+    body: "Your school's own currency, country and plan prices — naira, cedis, shillings, rand or dollars — with payments through Paystack, Sznd or the desk.",
+  },
+  {
+    icon: lock,
+    accent: "c",
+    title: "Access that fits each job",
+    body: "Roles for owners, principals, bursars, teachers, parents and students, extra modules or view-only access per person, and automatic sign-out after a period of inactivity.",
+  },
 ];
 
 const CAPABILITIES = [
+  {
+    key: "mail",
+    icon: mail,
+    tab: "School email",
+    title: "Professional email, part of the school system",
+    body: "Staff mailboxes on the school's own domain, shared inboxes and group addresses, mail between staff delivered instantly — and an alert the moment each recipient opens what you sent.",
+    checks: ["Your domain, your addresses", "Shared and group mailboxes", "Bring old mail across, even .pst"],
+  },
+  {
+    key: "mailsafety",
+    icon: shield,
+    tab: "Mail safety",
+    title: "Scams stopped before anyone falls for them",
+    body: "Every message from outside is checked for forged senders, someone using a staff member's name, phishing wording and look-alike links. One click reports phishing and pulls it from colleagues' inboxes.",
+    checks: ["Junk filtering with clear warnings", "Pictures blocked until allowed", "Sending limits against hacked accounts"],
+  },
+  {
+    key: "timetable",
+    icon: calendar,
+    tab: "Clash-free timetable",
+    title: "Nobody double-booked, ever",
+    body: "The timetable refuses a clash outright and says who is already where, so a teacher is never in two classes at once and a room is never booked twice.",
+    checks: ["Periods and days you define", "Each person sees their own week", "Clashes refused, not just warned"],
+  },
+  {
+    key: "global",
+    icon: globe,
+    tab: "Any country",
+    title: "Built in Nigeria, ready for anywhere",
+    body: "Each school sets its own country and currency; bills and plan prices follow. Payments through Paystack, Sznd, or recorded by hand.",
+    checks: ["Per-school currency", "Local plan prices", "Several payment gateways"],
+  },
   {
     key: "multitenant",
     icon: layers,
@@ -320,8 +431,8 @@ const CAPABILITIES = [
     icon: lock,
     tab: "Role-based access",
     title: "Everyone sees exactly their own job",
-    body: "Owners, principals, bursars, admissions officers, teachers, parents and students each get their own view. Access is enforced at the database layer.",
-    checks: ["Eight built-in roles", "Enforced by row-level security", "One person can hold more than one"],
+    body: "Owners, principals, bursars, admissions officers, teachers, parents and students each get their own view, with extra modules or view-only access per person. Access is enforced at the database layer.",
+    checks: ["Eight built-in roles", "Per-person module access", "Enforced by row-level security"],
   },
   {
     key: "notifications",
@@ -376,8 +487,8 @@ const CAPABILITIES = [
     icon: search,
     tab: "Audit trail",
     title: "Every action, accounted for",
-    body: "Who did what, when, and from where — a full audit trail across admissions, bursary, teaching and every role in between.",
-    checks: ["Every change logged automatically", "Actor, time and detail attached", "On from day one"],
+    body: "Who did what, when, and from where — a full audit trail across admissions, bursary, teaching, every role in between, and every email sent and received.",
+    checks: ["Every change logged automatically", "Mail traced, never read", "On from day one"],
   },
   {
     key: "payments",
@@ -606,7 +717,7 @@ const Hero = () => {
           </h1>
 
           <p className="mkt-hero-sub">
-            {"Admissions, fees, exams, results, payroll and accounts in one place — with an AI assistant that does the busywork. Built for how your school actually runs."}
+            {"Admissions, fees, exams, results, timetable, attendance, school email, payroll and accounts in one place — with an AI assistant that does the busywork. Built for how your school actually runs."}
           </p>
 
           <div className="mkt-hero-ctas">
