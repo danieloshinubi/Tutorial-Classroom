@@ -1064,8 +1064,34 @@ const ChatPage = () => {
   const [membersById, setMembersById] = useState({});
   const membersByIdRef = useRef({});
   membersByIdRef.current = membersById;
-  const [messages, setMessages] = useState([]);
+  // Every change to the thread goes through here, and a message is only ever
+  // listed once. A message reaches this screen several ways (the send call's
+  // answer, the live insert, a reload, a forward) and in no fixed order: the
+  // live insert of your own message can arrive before the send call returns,
+  // which used to show it twice. Same id = same message: the later copy's
+  // fields are merged into the first one, in its place.
+  const [messages, setRawMessages] = useState([]);
+  const setMessages = useCallback((update) => {
+    setRawMessages((current) => {
+      const next = typeof update === "function" ? update(current) : update;
+      const at = new Map();
+      const out = [];
+      for (const m of next || []) {
+        if (!m?.id) continue;
+        const i = at.get(m.id);
+        if (i === undefined) {
+          at.set(m.id, out.length);
+          out.push(m);
+        } else {
+          out[i] = { ...out[i], ...m, author: m.author || out[i].author, reply_to: m.reply_to || out[i].reply_to, reactions: m.reactions?.length ? m.reactions : out[i].reactions };
+        }
+      }
+      return out.length === (next || []).length && out.every((m, k) => m === next[k]) ? next : out;
+    });
+  }, []);
   const messagesRef = useRef([]);
+  const sendingNow = useRef(false);
+  const outgoingId = useRef(null);
   messagesRef.current = messages;
   const [composeBody, setComposeBody] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -1157,15 +1183,25 @@ const ChatPage = () => {
   useEffect(() => {
     if (!channelId) { setMessages([]); setChannelMembers([]); return; }
     setLoading(true);
+    outgoingId.current = null;
+    let live = true;
+    setMessages((current) => current.filter((m) => m.channel_id === channelId));
     fetchChatMessages(channelId)
-      .then(setMessages)
-      .catch((err) => setError(err.message || "Could not load this chat."))
-      .finally(() => setLoading(false));
+      .then((loaded) => {
+        // A late answer for a chat already left is dropped; anything that
+        // arrived live while loading is kept (once).
+        if (live) setMessages((current) => [...loaded, ...current.filter((m) => m.channel_id === channelId)]);
+      })
+      .catch((err) => live && setError(err.message || "Could not load this chat."))
+      .finally(() => live && setLoading(false));
     if (user?.id) markChannelRead({ channelId, userId: user.id }).catch(() => {});
     loadChannelMembers();
     setTypingUserIds([]);
     setReplyingTo(null);
     clearPendingFile();
+    return () => {
+      live = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channelId, user?.id, loadChannelMembers]);
 
@@ -1226,7 +1262,7 @@ const ChatPage = () => {
       );
     });
     return () => channel.unsubscribe();
-  }, [channelId]);
+  }, [channelId, setMessages]);
 
   // Typing — a pure ephemeral broadcast (see sendTyping/subscribeToTyping in
   // api.js), never written to the database. Each incoming ping refreshes a
@@ -1305,9 +1341,14 @@ const ChatPage = () => {
     }
   };
 
+  // One id per message being written: a double tap, or Send pressed again
+  // after a dropped connection, saves it once (sendChatMessage). A new id
+  // only once it has gone.
   const send = async (e) => {
     e?.preventDefault();
-    if ((isHtmlEmpty(composeBody) && !pendingFile) || sending) return;
+    if ((isHtmlEmpty(composeBody) && !pendingFile) || sending || sendingNow.current) return;
+    sendingNow.current = true;
+    if (!outgoingId.current) outgoingId.current = crypto.randomUUID();
     setSending(true);
     setError("");
     try {
@@ -1317,6 +1358,7 @@ const ChatPage = () => {
       // never sent.
       const attachment = pendingFile ? await uploadChatAttachment({ channelId, file: pendingFile.file }) : null;
       const message = await sendChatMessage({
+        id: outgoingId.current,
         channelId,
         authorId: user.id,
         body: isHtmlEmpty(composeBody) ? "" : composeBody,
@@ -1328,6 +1370,7 @@ const ChatPage = () => {
       // straight from state instead of asking the server to resolve its own
       // self-join (see CHAT_MESSAGE_SELECT's comment in api.js).
       setMessages((current) => [...current, { ...message, reply_to: replyingTo || null }]);
+      outgoingId.current = null;
       setComposeBody("");
       setReplyingTo(null);
       clearPendingFile();
@@ -1335,6 +1378,7 @@ const ChatPage = () => {
     } catch (err) {
       setError(err.message || "Could not send that message.");
     } finally {
+      sendingNow.current = false;
       setSending(false);
     }
   };

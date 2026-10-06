@@ -1156,10 +1156,14 @@ export const copyChatAttachment = async ({ fromPath, toChannelId, fileName }) =>
   return toPath;
 };
 
-export const sendChatMessage = async ({ channelId, authorId, body, replyToId, attachment }) => {
+// id: chosen by the sender's screen once per message, so the same message
+// sent twice (a double tap, a retry after a dropped connection) is saved
+// once: the second insert finds the first and returns it.
+export const sendChatMessage = async ({ id, channelId, authorId, body, replyToId, attachment }) => {
   const { data, error } = await supabase
     .from("chat_messages")
     .insert({
+      ...(id ? { id } : {}),
       channel_id: channelId,
       author_id: authorId,
       body,
@@ -1171,6 +1175,11 @@ export const sendChatMessage = async ({ channelId, authorId, body, replyToId, at
     })
     .select(CHAT_MESSAGE_SELECT)
     .single();
+  if (error?.code === "23505" && id) {
+    const { data: saved, error: again } = await supabase.from("chat_messages").select(CHAT_MESSAGE_SELECT).eq("id", id).single();
+    if (again) throw again;
+    return saved;
+  }
   if (error) throw error;
   return data;
 };
@@ -4916,13 +4925,11 @@ export const fetchAuditLog = async ({ schoolId, filters = {}, page = 0 } = {}) =
 // straight off the data rather than a hard-coded list, so it's never stale
 // against whatever's really been logged.
 export const fetchAuditLogTables = async (schoolId) => {
-  const { data, error } = await supabase
-    .from("audit_log")
-    .select("table_name")
-    .eq("school_id", schoolId)
-    .limit(5000);
+  // Every kind the school has (supabase/245), not a sample of rows that
+  // busy mail would fill.
+  const { data, error } = await supabase.rpc("audit_log_tables", { target_school: schoolId });
   if (error) throw error;
-  return [...new Set((data || []).map((r) => r.table_name))].sort();
+  return (data || []).map((r) => (typeof r === "string" ? r : r.audit_log_tables)).filter(Boolean);
 };
 
 /* -------------------------------------------------------------------------- */

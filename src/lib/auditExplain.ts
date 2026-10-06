@@ -25,6 +25,7 @@ export type People = Map<string, string>;
 
 // What each table holds, in everyday words (singular).
 const NOUN: Record<string, string> = {
+  mail_messages: "email",
   mail_mailboxes: "mailbox",
   mail_settings: "school mail settings",
   mail_mailbox_members: "shared mailbox member",
@@ -129,6 +130,18 @@ const ROLE_NAME: Record<string, string> = {
 
 // Field names in words, where a plain prettifying would read oddly.
 const FIELD: Record<string, string> = {
+  // Mail (supabase/245): the trace only, never the content.
+  from: "From",
+  from_name: "Sender's name",
+  mailbox: "Mailbox",
+  to: "To",
+  cc: "Cc",
+  bcc: "Bcc",
+  attachments: "Had attachments",
+  scheduled: "Scheduled send",
+  automatic: "Sent automatically",
+  folder: "Delivered to folder",
+  warning: "Warning shown",
   max_outside_hour: "Outside recipients an hour",
   max_outside_day: "Outside recipients a day",
   deleted_days: "Days Deleted keeps mail",
@@ -253,7 +266,28 @@ export const recordName = (row: AuditRow, people: People): string => {
   return "";
 };
 
-const VERB: Record<string, string> = { INSERT: "created", UPDATE: "changed", DELETE: "deleted" };
+const VERB: Record<string, string> = { INSERT: "created", UPDATE: "changed", DELETE: "deleted", SENT: "sent", RECEIVED: "received" };
+
+// "a@x.com, b@y.com and 3 more"
+const someAddresses = (v: unknown) => {
+  const list = Array.isArray(v) ? (v as unknown[]).map(String) : [];
+  if (!list.length) return "";
+  return list.length <= 2 ? list.join(" and ") : `${list.slice(0, 2).join(", ")} and ${list.length - 2} more`;
+};
+
+// Mail entries read as what happened, not as a record being created.
+const messageLine = (row: AuditRow) => {
+  const d = (row.new_data || {}) as Record<string, unknown>;
+  const subject = typeof d.subject === "string" && d.subject.trim() ? `“${d.subject}”` : "(no subject)";
+  if (row.table_name === "mail_messages" && row.action === "SENT") {
+    const to = someAddresses([...((d.to as unknown[]) || []), ...((d.cc as unknown[]) || []), ...((d.bcc as unknown[]) || [])]);
+    return `${actorName(row)} sent the email ${subject}${d.from ? ` from ${d.from}` : ""}${to ? ` to ${to}` : ""}`;
+  }
+  if (row.table_name === "mail_messages" && row.action === "RECEIVED") {
+    return `${d.mailbox || "A mailbox"} received the email ${subject} from ${d.from || "outside the school"}${d.folder === "junk" ? " (put in Junk)" : ""}`;
+  }
+  return null;
+};
 
 const isSystem = (row: AuditRow) => !row.actor_id;
 export const actorName = (row: AuditRow) =>
@@ -284,6 +318,8 @@ const device = (ua: string | null) => {
 
 /** One line for the list: "Prop Mighty changed the help desk ticket #5". */
 export const headline = (row: AuditRow, people: People) => {
+  const message = messageLine(row);
+  if (message) return message;
   const noun = nounFor(row.table_name);
   const name = recordName(row, people);
   const verb = VERB[row.action] || row.action.toLowerCase();
@@ -308,8 +344,10 @@ export const explain = (row: AuditRow, people: People) => {
   ].filter(Boolean).join(" ");
   const noun = nounFor(row.table_name);
   const name = recordName(row, people);
-  const what =
-    row.action === "INSERT"
+  const message = messageLine(row);
+  const what = message
+    ? `${message}. The log keeps who, when and where it went, never what it said.`
+    : row.action === "INSERT"
       ? `A new ${noun}${name ? ` ${name}` : ""} was created.`
       : row.action === "DELETE"
         ? `The ${noun}${name ? ` ${name}` : ""} was deleted. What it held is listed below.`

@@ -13,8 +13,8 @@ import { actorName, actorRole, explain, headline, nounFor, type AuditRow, type P
 // The raw record is still there under "Technical detail" for anyone who
 // needs it.
 
-const ACTION_WORD: Record<string, string> = { INSERT: "Created", UPDATE: "Changed", DELETE: "Deleted" };
-const ACTION_TONE: Record<string, string> = { INSERT: "success", UPDATE: "brand", DELETE: "danger" };
+const ACTION_WORD: Record<string, string> = { INSERT: "Created", UPDATE: "Changed", DELETE: "Deleted", SENT: "Sent", RECEIVED: "Received" };
+const ACTION_TONE: Record<string, string> = { INSERT: "success", UPDATE: "brand", DELETE: "danger", SENT: "brand", RECEIVED: "success" };
 
 const Row = ({ row, people }: { row: AuditRow; people: People }) => {
   const [open, setOpen] = useState(false);
@@ -88,7 +88,7 @@ const Row = ({ row, people }: { row: AuditRow; people: People }) => {
 
           {detail.facts.length ? (
             <div className="audit-record">
-              <div className="audit-record-title">{row.action === "DELETE" ? "What was deleted" : `The new ${nounFor(row.table_name)}`}</div>
+              <div className="audit-record-title">{row.action === "DELETE" ? "What was deleted" : row.action === "SENT" || row.action === "RECEIVED" ? `The ${nounFor(row.table_name)}` : `The new ${nounFor(row.table_name)}`}</div>
               <dl>
                 {detail.facts.map((f) => (
                   <div key={f.field}>
@@ -237,6 +237,8 @@ const AuditLog = () => {
                   { value: "INSERT", label: "Created" },
                   { value: "UPDATE", label: "Changed" },
                   { value: "DELETE", label: "Deleted" },
+                  { value: "SENT", label: "Sent (mail)" },
+                  { value: "RECEIVED", label: "Received (mail from outside)" },
                 ]}
               />
             </Field>

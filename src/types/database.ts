@@ -7807,6 +7807,7 @@ export type Database = {
       }
       attempt_deadline: { Args: { target_attempt: string }; Returns: string }
       attempt_is_open: { Args: { target_attempt: string }; Returns: boolean }
+      audit_addresses: { Args: { list: Json }; Returns: Json }
       audit_archive_remove: {
         Args: { archived_ids: string[] }
         Returns: number
@@ -7836,6 +7837,18 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      audit_log_tables: { Args: { target_school: string }; Returns: string[] }
+      audit_write: {
+        Args: {
+          act: string
+          actor: string
+          data: Json
+          rec: string
+          school: string
+          tbl: string
+        }
+        Returns: undefined
       }
       can_access_ticket: { Args: { target_ticket: string }; Returns: boolean }
       can_do_accounts: { Args: { target_school: string }; Returns: boolean }
