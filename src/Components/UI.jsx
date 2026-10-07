@@ -634,15 +634,76 @@ const BaseDatePicker = ({
   const wrapRef = useRef(null);
   const gridRef = useRef(null);
   const triggerRef = useRef(null);
+  const panelRef = useRef(null);
 
   useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = (event) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target)) setOpen(false);
+      const inside = wrapRef.current?.contains(event.target) || panelRef.current?.contains(event.target);
+      if (!inside) setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
+
+  // The calendar floats above the whole page, as Select's list does (a
+  // portal on document.body, fixed beside its button), so a dialog or a card
+  // that scrolls can never cut it off: in "Add an arrival" the calendar
+  // opened inside the dialog's scrolling body and was clipped halfway. It
+  // opens below, or above when there is more room there, shrinks to the
+  // room it has (scrolling inside) on a short screen, stays on the screen
+  // sideways, and follows its button while anything scrolls.
+  const [placement, setPlacement] = useState(null);
+  const place = useCallback(() => {
+    const t = triggerRef.current?.getBoundingClientRect();
+    const panel = panelRef.current;
+    if (!t || !panel) return;
+    const viewH = window.visualViewport?.height || window.innerHeight || document.documentElement.clientHeight;
+    const viewW = document.documentElement.clientWidth || window.innerWidth;
+    const below = viewH - t.bottom - 10;
+    const above = t.top - 10;
+    const up = panel.scrollHeight > below && above > below;
+    const room = Math.max(160, Math.floor(up ? above : below));
+    const width = Math.min(panel.offsetWidth || 280, viewW - 16);
+    const next = { position: "fixed", maxHeight: room, overflowY: "auto", maxWidth: viewW - 16, right: "auto" };
+    if (up) {
+      next.top = "auto";
+      next.bottom = viewH - t.top + 6;
+    } else {
+      next.top = t.bottom + 6;
+      next.bottom = "auto";
+    }
+    next.left = t.left + width <= viewW - 8 ? Math.max(8, t.left) : Math.max(8, Math.min(t.right, viewW - 8) - width);
+    setPlacement(next);
+  }, []);
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement(null);
+      return;
+    }
+    place();
+  }, [open, place, pickerMode, withTime]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const follow = (event) => {
+      if (event?.type === "scroll" && panelRef.current && event.target instanceof Node && panelRef.current.contains(event.target)) return;
+      const r = triggerRef.current?.getBoundingClientRect();
+      const viewH = window.visualViewport?.height || window.innerHeight;
+      if (!r || r.bottom <= 0 || r.top >= viewH) {
+        setOpen(false);
+        return;
+      }
+      place();
+    };
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    window.visualViewport?.addEventListener("resize", follow);
+    return () => {
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+      window.visualViewport?.removeEventListener("resize", follow);
+    };
+  }, [open, place]);
 
   // Keeps real DOM focus following the roving tabIndex day cell, so arrow-
   // key navigation and Tab both land in the same place a mouse click would.
@@ -814,8 +875,15 @@ const BaseDatePicker = ({
         <Icon icon={calendarIcon} size={15} className="uidate-icon" />
       </button>
 
-      {open ? (
-        <div className="uidate-panel" role="dialog" aria-label={withTime ? "Choose a date and time" : "Choose a date"}>
+      {open ? createPortal(
+        <div
+          ref={panelRef}
+          className="uidate-panel is-floating"
+          role="dialog"
+          aria-label={withTime ? "Choose a date and time" : "Choose a date"}
+          // Measured hidden first, then placed, all before it is painted.
+          style={placement || { position: "fixed", top: 0, left: 0, visibility: "hidden" }}
+        >
           <div className="uidate-nav">
             <button
               type="button"
@@ -939,7 +1007,8 @@ const BaseDatePicker = ({
             )}
           </div>
           ) : null}
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );

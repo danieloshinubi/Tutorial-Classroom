@@ -8593,6 +8593,8 @@ button.tt-cell:hover .tt-add, button.tt-cell:focus-visible .tt-add { border-colo
 /* A dropdown's open list floats above everything (UI.jsx Select portal),
    including dialogs, so nothing can clip it. */
 .uiselect-panel.is-floating { z-index: 1100; margin: 0; }
+/* The calendar, floating above dialogs too (BaseDatePicker in UI.jsx). */
+.uidate-panel.is-floating { z-index: 1100; margin: 0; }
 
 /* School admin → Plan & billing, and the closed-school screen (supabase/225). */
 .plan-pay { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }

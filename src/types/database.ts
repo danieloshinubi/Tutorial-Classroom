@@ -12449,6 +12449,10 @@ export type Database = {
         }[]
       }
       tidy_spaces: { Args: { value: string }; Returns: string }
+      timetable_class_subject: {
+        Args: { target_class: string; target_subject: string }
+        Returns: string
+      }
       touch_presence: { Args: never; Returns: undefined }
       track_application: {
         Args: { target_email: string; target_reference: string }

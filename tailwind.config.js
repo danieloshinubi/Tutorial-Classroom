@@ -12,6 +12,8 @@ module.exports = {
     "./src/Pages/Mail/**/*.{ts,tsx}",
     // Console → Mail (TypeScript).
     "./src/platform/PlatformMail.tsx",
+    // Attendance (TypeScript).
+    "./src/Pages/Attendance/**/*.{ts,tsx}",
   ],
   // Tailwind decides what to generate by scanning the files above for
   // anything that LOOKS like a class name — which includes ordinary English

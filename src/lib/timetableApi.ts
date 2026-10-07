@@ -20,19 +20,27 @@ export interface ClassSubject {
   teacher: { id: string; first_name: string | null; surname: string | null; email: string | null } | null;
 }
 
+export interface SchoolSubject {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
 export interface TimetableSetup {
   days: number[];
   periods: Period[];
   terms: Term[];
   classes: SchoolClass[];
   classSubjects: ClassSubject[];
+  /** Every subject the school teaches (supabase/246): any can go in a period. */
+  subjects: SchoolSubject[];
 }
 
 export const DAY_NAMES = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 export const DAY_SHORT = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 export const fetchTimetableSetup = async (schoolId: string): Promise<TimetableSetup> => {
-  const [settings, periods, terms, classes, classSubjects] = await Promise.all([
+  const [settings, periods, terms, classes, classSubjects, subjects] = await Promise.all([
     db.from("timetable_settings").select("days").eq("school_id", schoolId).maybeSingle(),
     db.from("timetable_periods").select("*").eq("school_id", schoolId).order("starts_at").order("position"),
     db
@@ -47,15 +55,27 @@ export const fetchTimetableSetup = async (schoolId: string): Promise<TimetableSe
         "id, class_id, teacher_id, subject:subjects ( id, name, code ), teacher:profiles!class_subjects_teacher_id_fkey ( id, first_name, surname, email )"
       )
       .eq("school_id", schoolId),
+    db.from("subjects").select("id, name, code").eq("school_id", schoolId).order("name"),
   ]);
-  for (const r of [settings, periods, terms, classes, classSubjects]) if (r.error) fail(r.error, "Could not load the timetable.");
+  for (const r of [settings, periods, terms, classes, classSubjects, subjects]) if (r.error) fail(r.error, "Could not load the timetable.");
   return {
     days: (settings.data?.days as number[] | undefined)?.slice().sort((a, b) => a - b) || [1, 2, 3, 4, 5],
     periods: periods.data || [],
     terms: (terms.data || []) as unknown as Term[],
     classes: classes.data || [],
     classSubjects: (classSubjects.data || []) as unknown as ClassSubject[],
+    subjects: (subjects.data || []) as SchoolSubject[],
   };
+};
+
+/** Gives a school subject to a class (if it hasn't got it) and returns the class's subject id (supabase/246). */
+export const classSubjectFor = async (classId: string, subjectId: string): Promise<string> => {
+  const { data, error } = await (db.rpc as unknown as (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>)(
+    "timetable_class_subject",
+    { target_class: classId, target_subject: subjectId },
+  );
+  if (error) fail(error as never, "Could not add that subject to the class.");
+  return data as string;
 };
 
 export const fetchSlots = async (schoolId: string, termId: string): Promise<Slot[]> => {

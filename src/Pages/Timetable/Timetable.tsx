@@ -15,6 +15,8 @@ import {
   fetchFamilyTimetables,
   fetchSlots,
   fetchTimetableSetup,
+  classSubjectFor,
+  type SchoolSubject,
   saveDays,
   savePeriod,
   setSlot,
@@ -38,6 +40,8 @@ type View = { kind: "class"; id: string } | { kind: "teacher"; id: string };
 
 const MANAGERS = ["owner", "admin", "principal"];
 const OTHER = "__other";
+// A school subject this class does not have yet: "sub:<subject id>".
+const NEW_SUBJECT = "sub:";
 
 const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : "");
 
@@ -378,7 +382,7 @@ const Timetable = () => {
               ) : view ? (
                 <>
                 {canManage && view.kind === "class" ? (
-                  <p className="tt-hint">{"Tap any period to choose its subject from this class's subjects. To see a teacher's week, choose them under Show."}</p>
+                  <p className="tt-hint">{"Tap any period to choose its subject from the school's subjects. To see a teacher's week, choose them under Show."}</p>
                 ) : null}
                 <div className="table-wrap tt-wrap">
                   <table className="tt-grid">
@@ -465,12 +469,15 @@ const Timetable = () => {
           className={classById.get(view.id)?.name || "Class"}
           termId={termId}
           options={(setup?.classSubjects || []).filter((cs) => cs.class_id === view.id)}
+          schoolSubjects={setup?.subjects || []}
           busy={busyAt(editing.day, editing.period.id, view.id)}
           onClose={() => setEditing(null)}
-          onSaved={(msg) => {
+          onSaved={(msg, addedSubject) => {
             setEditing(null);
             if (msg) setNotice(msg);
             loadSlots();
+            // A subject new to this class: the class's subjects changed too.
+            if (addedSubject) loadSetup();
           }}
         />
       ) : null}
@@ -486,6 +493,7 @@ const CellEditor = ({
   className,
   termId,
   options,
+  schoolSubjects,
   busy,
   onClose,
   onSaved,
@@ -495,9 +503,10 @@ const CellEditor = ({
   className: string;
   termId: string;
   options: ClassSubject[];
+  schoolSubjects: SchoolSubject[];
   busy: { teachersBusy: Map<string, string>; roomsBusy: Map<string, string> };
   onClose: () => void;
-  onSaved: (message?: string) => void;
+  onSaved: (message?: string, addedSubject?: boolean) => void;
 }) => {
   const [choice, setChoice] = useState<string>(cell.slot?.class_subject_id || (cell.slot?.label ? OTHER : ""));
   const [label, setLabel] = useState(cell.slot?.label || "");
@@ -520,8 +529,14 @@ const CellEditor = ({
         label: `${subjectName(o)}${who ? ` · ${who}` : ""}${where ? ` (busy: ${where})` : ""}`,
       };
     }),
+    // The rest of the school's subjects: picking one gives it to this class
+    // (supabase/246), with no teacher until one is set in Classes & subjects.
+    ...schoolSubjects
+      .filter((sub) => !options.some((o) => o.subject?.id === sub.id))
+      .map((sub) => ({ value: `${NEW_SUBJECT}${sub.id}`, label: `${sub.name} · new for ${className}, no teacher yet` })),
     { value: OTHER, label: "Something else (Assembly, Games, Library…)" },
   ];
+  const addsSubject = choice.startsWith(NEW_SUBJECT);
 
   const save = async () => {
     setError("");
@@ -529,16 +544,17 @@ const CellEditor = ({
     if (choice === OTHER && !label.trim()) return setError("Write what happens then, for example Assembly.");
     setSaving(true);
     try {
+      const classSubjectId = choice === OTHER ? null : addsSubject ? await classSubjectFor(classId, choice.slice(NEW_SUBJECT.length)) : choice;
       await setSlot({
         termId,
         classId,
         day: cell.day,
         periodId: cell.period.id,
-        classSubjectId: choice === OTHER ? null : choice,
+        classSubjectId,
         label: choice === OTHER ? label.trim() : null,
         room: room.trim() || null,
       });
-      onSaved();
+      onSaved(addsSubject ? `Saved. ${schoolSubjects.find((x) => `${NEW_SUBJECT}${x.id}` === choice)?.name} is now one of ${className}'s subjects; set its teacher under School admin → Classes & subjects.` : undefined, addsSubject);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -584,12 +600,15 @@ const CellEditor = ({
       }
     >
       <Notice tone="error">{error}</Notice>
-      {!options.length ? (
-        <Notice tone="muted">{"No subjects are set for this class yet. Add them under School admin → Classes & subjects; you can still put in something else."}</Notice>
+      {!options.length && !schoolSubjects.length ? (
+        <Notice tone="muted">{"The school has no subjects yet. Add them under School admin → Classes & subjects; you can still put in something else."}</Notice>
       ) : null}
       <Field label="Subject">
         <Select value={choice} onChange={(v: string) => setChoice(v)} options={selectOptions} searchable />
       </Field>
+      {addsSubject ? (
+        <Notice tone="muted">{`${className} doesn't have this subject yet. Saving adds it to the class; give it a teacher later under School admin → Classes & subjects.`}</Notice>
+      ) : null}
       {teacherClash ? <Notice tone="warn">{`${teacherName(chosen)} is already teaching ${teacherClash} at this time.`}</Notice> : null}
       {choice === OTHER ? (
         <Field label="What happens then">
