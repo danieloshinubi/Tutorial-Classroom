@@ -172,7 +172,7 @@ const StartTrial = () => {
         <form onSubmit={submit}>
           <div className="mkt-field">
             <label>{"School name"}</label>
-            <input value={form.schoolName} onChange={update("schoolName")} placeholder="Jane-Nath College" />
+            <input value={form.schoolName} onChange={update("schoolName")} placeholder="Your school's name" />
           </div>
 
           <div className="mkt-field">
@@ -181,7 +181,7 @@ const StartTrial = () => {
               <input
                 value={form.slug}
                 onChange={(e) => { setSlugTouched(true); setForm((f) => ({ ...f, slug: slugify(e.target.value) })); }}
-                placeholder="jane-nath"
+                placeholder="your-school"
               />
               <span className="mkt-slug-suffix">{".schoolivio.com"}</span>
             </div>

@@ -83,7 +83,7 @@ const ApplicationStatus = () => {
             <input
               className="input"
               autoFocus
-              placeholder="JNC/2026/0007"
+              placeholder="e.g. ADM/2026/0007"
               value={reference}
               onChange={(e) => setReference(e.target.value)}
             />

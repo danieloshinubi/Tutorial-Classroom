@@ -333,13 +333,13 @@ const MailSettingsPanel = () => {
             <a href="https://resend.com/signup" target="_blank" rel="noreferrer" className="tw-font-semibold tw-text-brand">{"resend.com"}</a>
             {" with the school's email (free: 3,000 emails a month, 100 a day)."}
           </li>
-          <li>{"In Resend, open API Keys → Create API key, choose Full access, and copy the key."}</li>
+          <li>{"In Resend, open API Keys → Create API key. Name it “Schoolivio – <your school name>”, choose Full access, and copy the key."}</li>
           <li>{"Paste it below with the school's domain, and press Connect."}</li>
         </ol>
         <div className="tw-grid tw-grid-cols-2 tw-gap-3 mobile:tw-grid-cols-1">
           <label className="tw-flex tw-flex-col tw-gap-1">
             <span className="tw-text-[13px] tw-font-semibold tw-text-ink-2">{"School's domain"}</span>
-            <input className={input} value={domain} placeholder="charismartinschools.org" onChange={(e) => setDomain(e.target.value)} autoComplete="off" />
+            <input className={input} value={domain} placeholder="your-school-domain.com" onChange={(e) => setDomain(e.target.value)} autoComplete="off" />
             {domain.trim().toLowerCase() !== s.fallback_domain ? (
               <button
                 type="button"

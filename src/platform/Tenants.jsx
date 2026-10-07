@@ -175,7 +175,7 @@ const Tenants = () => {
                   className="input"
                   autoFocus
                   value={name}
-                  placeholder="Jane-Nath College"
+                  placeholder="School name"
                   onChange={(e) => setName(e.target.value)}
                 />
               </Field>

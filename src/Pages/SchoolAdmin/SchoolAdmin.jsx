@@ -545,7 +545,7 @@ const ConnectMailboxForm = ({ schoolId, onConnected, onCancel }) => {
         ) : null}
 
         <Field label="Display name" hint="How the school's name shows up in a recipient's inbox.">
-          <input className="input" placeholder="Jane-Nath College Support" value={form.displayName} onChange={set("displayName")} />
+          <input className="input" placeholder="Your School Support" value={form.displayName} onChange={set("displayName")} />
         </Field>
 
         {method === "smtp" ? (

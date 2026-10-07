@@ -97,7 +97,7 @@ const MODULES = [
     label: "Dashboard",
     icon: home,
     eyebrow: "Friday, 20 September",
-    title: "Good morning, Jane-Nath College",
+    title: "Good morning, Principal",
     stats: [
       { value: "612", label: "Students enrolled" },
       { value: "38",  label: "Staff on roster" },
@@ -114,7 +114,7 @@ const MODULES = [
     key: "mail",
     label: "Mail",
     icon: mail,
-    eyebrow: "bursar@janenathcollege.edu.ng",
+    eyebrow: "bursar@your-school-domain.com",
     title: "School mail",
     stats: [
       { value: "14",  label: "Unread" },
@@ -141,9 +141,9 @@ const MODULES = [
       { value: "4",   label: "New today" },
     ],
     rows: [
-      { text: "JAN/2026/0041 — offer accepted",          tone: "g", badge: "Cleared" },
-      { text: "JAN/2026/0039 — awaiting acceptance fee", tone: "y", badge: "Pending" },
-      { text: "JAN/2026/0037 — screening complete",      tone: "p", badge: "In review" },
+      { text: "ADM/2026/0041 — offer accepted",          tone: "g", badge: "Cleared" },
+      { text: "ADM/2026/0039 — awaiting acceptance fee", tone: "y", badge: "Pending" },
+      { text: "ADM/2026/0037 — screening complete",      tone: "p", badge: "In review" },
     ],
   },
   {
@@ -159,9 +159,9 @@ const MODULES = [
       { value: "9",      label: "Overdue" },
     ],
     rows: [
-      { text: "JNC/INV/0182 — payment confirmed", tone: "g", badge: "Paid" },
-      { text: "JNC/INV/0179 — reminder sent",    tone: "y", badge: "Due soon" },
-      { text: "JNC/INV/0175 — 14 days overdue",  tone: "p", badge: "Overdue" },
+      { text: "INV/0182 — payment confirmed", tone: "g", badge: "Paid" },
+      { text: "INV/0179 — reminder sent",    tone: "y", badge: "Due soon" },
+      { text: "INV/0175 — 14 days overdue",  tone: "p", badge: "Overdue" },
     ],
   },
   {
@@ -236,17 +236,6 @@ const MODULES = [
       { text: "Academic calendar updated 2026/2027",  tone: "p", badge: "Saved" },
     ],
   },
-];
-
-const SCHOOL_NAMES = [
-  { name: "Jane-Nath College",        style: "serif lg" },
-  { name: "Sunshine Academy",         style: "lg" },
-  { name: "Greenfield Schools",       style: "sm" },
-  { name: "Horizon International",    style: "serif lg" },
-  { name: "TechBridge Academy",       style: "sm" },
-  { name: "Bright Futures College",   style: "lg" },
-  { name: "Crown Heights School",     style: "serif sm" },
-  { name: "New Covenant College",     style: "sm" },
 ];
 
 const STATS = [
@@ -754,7 +743,7 @@ const Hero = () => {
               }} />
             </div>
             <div className="mkt-stat-card-value" style={{ fontSize: 15 }}>{"Offer accepted"}</div>
-            <div className="mkt-stat-card-label">{"JAN/2026/0041 · just now"}</div>
+            <div className="mkt-stat-card-label">{"ADM/2026/0041 · just now"}</div>
           </div>
 
           <div className="mkt-notif-card mkt-sc-3 mkt-reveal" style={{ animationPlayState: "running" }}>
@@ -822,30 +811,6 @@ const Hero = () => {
     </section>
   );
 };
-
-/* ── Customer Strip ─────────────────────────────────────────────────────── */
-// eslint-disable-next-line no-unused-vars
-const CustomerStrip = () => (
-  <section className="mkt-strip">
-    <div className="mkt-wrap">
-      <p className="mkt-strip-eyebrow mkt-reveal">{"Trusted by ambitious schools"}</p>
-      <div className="mkt-strip-logos">
-        {SCHOOL_NAMES.map(({ name, style }, i) => (
-          <span
-            key={name}
-            className={`mkt-strip-name mkt-reveal d${Math.min(i + 1, 5)} ${style.split(" ").map(s => `mkt-strip-name--${s}`).join(" ")}`}
-            style={{
-              fontStyle: style.includes("serif") ? "italic" : "normal",
-              fontSize: style.includes("lg") ? 15 : 13,
-            }}
-          >
-            {name}
-          </span>
-        ))}
-      </div>
-    </div>
-  </section>
-);
 
 /* ── Stats ──────────────────────────────────────────────────────────────── */
 const Stats = () => (
@@ -1213,7 +1178,6 @@ const Landing = () => {
   <div className="mkt">
     <Nav />
     <Hero />
-    {/* <CustomerStrip /> */}
     <Stats />
     <Features />
     <Capabilities />

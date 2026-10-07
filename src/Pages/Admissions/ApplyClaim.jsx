@@ -251,7 +251,7 @@ const ApplyClaim = () => {
           <Field label="Reference">
             <input
               className="input"
-              placeholder="JNC/2026/0007"
+              placeholder="e.g. ADM/2026/0007"
               value={claimRef}
               onChange={(e) => setClaimRef(e.target.value)}
             />

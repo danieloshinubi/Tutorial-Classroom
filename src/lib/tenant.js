@@ -1,8 +1,10 @@
 // Which school is this browser tab looking at?
 //
-// Production:  jane-nath.schoolivio.com     → "jane-nath"
-// Local dev:   jane-nath.localhost:3000     → "jane-nath"   (Chrome resolves this)
-//              localhost:3000               → falls back to REACT_APP_DEFAULT_SCHOOL
+// Production:  your-school.schoolivio.com   → "your-school"
+// Local dev:   your-school.localhost:3000   → "your-school"   (Chrome resolves this)
+//              localhost:3000 or an IP      → falls back to REACT_APP_DEFAULT_SCHOOL
+//              (a reserved name such as app.schoolivio.com is the marketing
+//              site instead: isMarketingHost)
 //
 // Reserved names are the platform's own hosts, not tenants.
 const RESERVED = new Set(["www", "app", "api", "admin", "static", "cdn", "mail"]);
@@ -86,5 +88,8 @@ export const isMarketingHost = (hostname = window.location.hostname) => {
   const parts = host.split(".");
   if (parts.length === 2 && parts[1] !== "localhost") return true; // schoolivio.com
   if (parts[0] === "www" && parts.length > 2) return true; // www.schoolivio.com
+  // app., api., mail.schoolivio.com and the other reserved names are no
+  // school: the site, not whichever school a developer set as the default.
+  if (parts.length > 2 && parts[parts.length - 1] !== "localhost" && RESERVED.has(parts[0]) && parts[0] !== "admin") return true;
   return false;
 };

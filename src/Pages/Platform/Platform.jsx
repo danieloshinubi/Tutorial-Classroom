@@ -157,7 +157,7 @@ const Platform = () => {
                 <input
                   className="input"
                   value={form.name}
-                  placeholder="Greenfield Academy"
+                  placeholder="School name"
                   onChange={(e) => setName(e.target.value)}
                 />
               </Field>
@@ -168,7 +168,7 @@ const Platform = () => {
                 <input
                   className="input"
                   value={form.slug}
-                  placeholder="greenfield"
+                  placeholder="your-school"
                   onChange={(e) => {
                     setSlugTouched(true);
                     setForm((c) => ({ ...c, slug: e.target.value }));
@@ -183,7 +183,7 @@ const Platform = () => {
                   type="email"
                   className="input"
                   value={form.ownerEmail}
-                  placeholder="head@greenfield.com"
+                  placeholder="head@your-school-domain.com"
                   onChange={(e) => setForm((c) => ({ ...c, ownerEmail: e.target.value }))}
                 />
               </Field>
