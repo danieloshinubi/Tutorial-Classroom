@@ -20,14 +20,28 @@
 //                  400s without both first_name and last_name — not just
 //                  email. See CheckoutContext.firstName/lastName.
 //
+//   reference cap  `reference` has an UNDOCUMENTED 50-character limit.
+//                  Confirmed live 2026-10-10 by binary search (50 passes,
+//                  51 fails, independent of content/shape). Over the limit,
+//                  Sznd doesn't reject it cleanly — it 500s with
+//                  {"error":"cannot create quote"}, a misleading message
+//                  that reads like an FX/currency failure and cost real
+//                  debugging time to trace back to this. Keep `reference`
+//                  short (see below); the invoice id travels in `metadata`
+//                  instead, which has no such limit.
+//
 // STATUS as of 2026-10-10, tested live against staging
 // (https://transfaar-test-a8d2cb980af2.herokuapp.com) with real
 // tf_dev_biz_.../sk_dev_biz_... credentials:
 //   confirmed    request signing, checkout/initialize (incl. its real
 //                nested-under-`data` response shape), payment/verify, and
-//                that the hosted checkout page actually redirects back to
-//                our redirectUrl with a `status` query param on completion.
-//   unconfirmed  a real completed-payment webhook delivery. Both of Sznd's
+//                that the hosted checkout page redirects back to our
+//                redirectUrl with a `status` query param on completion.
+//                The 50-char reference cap above was found and fixed by
+//                tracing a real failure from this app's own pay-init call
+//                through to Sznd's staging — not yet re-confirmed as fully
+//                resolved end to end since the fix.
+//   unconfirmed  a real completed-payment webhook delivery. Sznd's
 //                documented "always approved" staging test cards
 //                (5111 1111 1111 1118 no-3DS, and the Visa 3DS one) failed
 //                with a generic "something went wrong while trying to
@@ -101,7 +115,16 @@ export const szndAdapter: PaymentGatewayAdapter = {
     // never kobo/cents — ctx.amount is already naira-shaped (see pay-init).
     // first_name/last_name are required — confirmed against staging
     // 2026-10-10 (omitting them 400s with "missing required fields").
-    const reference = `sznd-${ctx.metadata.invoiceId}-${crypto.randomUUID()}`;
+    //
+    // `reference` has an UNDOCUMENTED 50-char limit — confirmed live
+    // 2026-10-10 by binary search: 50 chars succeeds, 51 fails. Over the
+    // limit, Sznd's backend doesn't reject it cleanly; it 500s with
+    // {"error":"cannot create quote"} instead, which reads like a currency/
+    // FX failure and has nothing to do with the real cause. The invoice id
+    // is already in `metadata.invoice_id` below, so the reference itself
+    // only needs to be unique, not descriptive — a bare UUID (36 chars)
+    // with a 2-char prefix stays safely under the limit.
+    const reference = `sz${crypto.randomUUID()}`;
     const body = JSON.stringify({
       email: ctx.email,
       first_name: ctx.firstName,
