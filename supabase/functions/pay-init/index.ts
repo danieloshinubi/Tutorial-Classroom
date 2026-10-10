@@ -78,6 +78,16 @@ Deno.serve(async (req) => {
     const email = invoice.payer_email || user.user.email;
     if (!email) return json({ error: "Your account has no email address to bill." }, 400);
 
+    // Only Sznd's checkout actually requires these (see types.ts), but every
+    // adapter gets them so that stays true without this function knowing
+    // which provider it's calling. user_metadata.first_name/last_name is the
+    // same field ai-assistant/index.ts already reads for a person's name;
+    // payer_email's local part is a better last resort than a literal
+    // "Customer", since it at least varies per family.
+    const meta = (user.user.user_metadata || {}) as Record<string, string>;
+    const firstName = meta.first_name || email.split("@")[0] || "Parent";
+    const lastName = meta.last_name || "Guardian";
+
     const gateway = gatewayError ? null : (Array.isArray(gatewayData) ? gatewayData[0] : gatewayData);
     // A row exists for every school (116's seed trigger), but provider/mode
     // are null until an owner/admin actually picks one (121) — that's the
@@ -115,6 +125,8 @@ Deno.serve(async (req) => {
       amount: balance,
       currency: invoice.currency || "NGN",
       email,
+      firstName,
+      lastName,
       callbackUrl,
       metadata: {
         invoiceId: invoice.invoice_id,

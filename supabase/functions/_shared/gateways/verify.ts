@@ -62,7 +62,7 @@ const probeSznd = async (secrets: Secrets): Promise<ProbeResult> => {
     ["sign"],
   );
   const signature = hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`|${timestamp}`)));
-  const szndBaseUrl = Deno.env.get("SZND_BASE_URL") || "https://api.sznd.app";
+  const szndBaseUrl = Deno.env.get("SZND_BASE_URL") || "https://transfaar-test-a8d2cb980af2.herokuapp.com";
   const res = await fetch(`${szndBaseUrl}/api/v1/client/currencies`, {
     headers: {
       "X-Api-Key": secrets.api_key,

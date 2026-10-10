@@ -8,6 +8,12 @@ export interface CheckoutContext {
   amount: number;
   currency: string;
   email: string;
+  // Sznd is the only adapter that needs a split name today (its checkout
+  // API 400s without both fields — confirmed against staging 2026-10-10);
+  // Paystack/Flutterwave/Stripe ignore it. Always populated by pay-init so
+  // a future adapter needing it doesn't have to touch the caller too.
+  firstName: string;
+  lastName: string;
   callbackUrl?: string;
   metadata: {
     invoiceId: string;
