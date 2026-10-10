@@ -5,7 +5,7 @@
 -- BYO credentials. Schema-only change: the provider check constraint
 -- (nullable since 121) is the only thing naming providers by value.
 --
--- Run after 222. Safe to re-run.
+-- Run after 246. Safe to re-run.
 -- =============================================================================
 
 alter table classroom.payment_gateways drop constraint payment_gateways_provider_check;

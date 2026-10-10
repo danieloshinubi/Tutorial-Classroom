@@ -4,7 +4,7 @@
 // Function, and one entry in PaymentGatewaySettingsPanel.jsx's provider
 // list — plus, the first time, one migration extending payment_gateways'
 // provider check constraint (116_payment_gateways_schema.sql /
-// 223_sznd_gateway.sql) — never touching the confirmation-queue logic.
+// 247_sznd_gateway.sql) — never touching the confirmation-queue logic.
 //
 // A provider a school picks that ISN'T here — "Other / not listed" in the
 // admin UI — never actually reaches this registry: payment-gateway-connect
