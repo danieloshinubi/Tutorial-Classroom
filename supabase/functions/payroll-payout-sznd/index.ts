@@ -18,13 +18,20 @@
 // payroll_payout skips anything already pending/processing/paid, so a
 // retry only ever picks up what's still outstanding).
 //
-// STATUS: the payout API calls here (sznd-payout.ts) are UNVERIFIED against
-// Sznd's live API — see that file's header. Test with a small real run
-// before trusting this for a real payroll.
+// STATUS: confirmed live 2026-10-12 — beneficiary creation, a WITHDRAWAL
+// quote, accepting it, and the webhook settling payroll_payouts to 'paid'
+// all tested end to end against a real staging transaction
+// (ref 80C13FA161EB1E40). One real bug found and fixed in that pass: a
+// quote's total_payable includes Sznd's fees on top of the amount the
+// beneficiary actually receives (₦120 on a ₦5,000 test) — start_sznd_
+// payroll_payout's balance check only knows about the net amount, so this
+// function re-checks the LIVE balance against each quote's real
+// total_payable before ever accepting it (below), rather than trusting the
+// coarser reservation made before any quotes existed.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { resolvePlatformSecrets } from "../_shared/gateways/platformCredentials.ts";
-import { createBeneficiary, payOutToBeneficiary } from "../_shared/gateways/sznd-payout.ts";
+import { createBeneficiary, createWithdrawalQuote, acceptQuote } from "../_shared/gateways/sznd-payout.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -131,12 +138,27 @@ Deno.serve(async (req) => {
           }
         }
 
-        await payOutToBeneficiary(szndSecrets, {
+        const quote = await createWithdrawalQuote(szndSecrets, {
           beneficiaryId,
           amount: Number(payout.amount),
           narration: `Salary — ${slip.full_name}`,
           reference: payout.gateway_ref,
         });
+
+        // Re-check against the real, fee-inclusive cost right before
+        // committing — start_sznd_payroll_payout's reservation only knew
+        // about the net amount, not Sznd's fees on top of it (see this
+        // file's header). Other payouts already accepted in this same
+        // batch loop reduce what's actually still available, so this has
+        // to be a fresh read each time, not the balance from batch start.
+        const { data: stillAvailable } = await admin.rpc("sznd_school_balance", { target_school: run.school_id });
+        if (Number(stillAvailable) < quote.totalPayable) {
+          throw new Error(
+            `This payout needs ₦${quote.totalPayable.toLocaleString()} including fees, only ₦${Number(stillAvailable).toLocaleString()} is available.`,
+          );
+        }
+
+        await acceptQuote(szndSecrets, quote.quoteId);
 
         await admin
           .from("payroll_payouts")

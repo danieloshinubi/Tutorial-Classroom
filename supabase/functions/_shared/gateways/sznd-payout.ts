@@ -54,6 +54,10 @@ export async function createBeneficiary(
   const lastName = names.slice(1).join(" ") || "Member";
 
   const result = await sznd(secrets, "POST", "/api/v1/client/beneficiaries", {
+    // "self" — Schoolivio's own business account, not a sub-customer. Every
+    // documented example sends this; omitting it was an early mistake,
+    // caught before any live call was made.
+    user_id: "self",
     first_name: firstName,
     last_name: lastName,
     account_name: details.accountName || details.fullName,
@@ -61,6 +65,7 @@ export async function createBeneficiary(
     account_number: details.accountNumber,
     country_code: "NG",
     currency_code: "NGN",
+    recipient_type: "individual",
     email: details.email || undefined,
   });
 
@@ -69,26 +74,44 @@ export async function createBeneficiary(
   return beneficiaryId;
 }
 
-// Withdrawal quote + accept, in one call — a quote has to be accepted
-// within its validity window, and nothing in this codebase holds a quote
-// open for later, so there is no reason to split these into two exported
-// functions the caller has to remember to chain correctly.
-export async function payOutToBeneficiary(
+// Confirmed live 2026-10-12: a WITHDRAWAL quote carries real fees on top of
+// the amount a beneficiary receives — a ₦5,000 test quote's total_payable
+// was ₦5,120 (₦100 payout fee + ₦20 processing fee). classroom.
+// sznd_school_balance() only knows about payroll_payouts.amount (the net
+// pay, not the fee), so the balance it reports is an UNDER-estimate of what
+// actually gets debited — exactly backwards from the direction that would
+// be safe to ignore. payroll-payout-sznd/index.ts re-checks the balance
+// against this quote's real total_payable before ever accepting it; see
+// that file for the enforcement, this function only reports the number.
+export async function createWithdrawalQuote(
   secrets: SzndSecrets,
   params: { beneficiaryId: string; amount: number; narration: string; reference: string },
-): Promise<{ transactionId: string | null; transactionReference: string | null }> {
+): Promise<{ quoteId: string; totalPayable: number }> {
+  // origin_reference is capped at 40 chars per Sznd's own docs (even
+  // tighter than checkout/initialize's 50 — see sznd.ts's STATUS comment
+  // for how that one was found the hard way). "szp" + a bare UUID is 39,
+  // which fits with one char to spare — do not lengthen this prefix.
   const quote = await sznd(secrets, "POST", "/api/v1/client/quotes", {
     source_currency: "NGN",
     target_currency: "NGN",
     source_amount: params.amount.toFixed(2),
     quote_type: "WITHDRAWAL",
     beneficiary_id: params.beneficiaryId,
+    on_behalf_of: "self",
     narration: params.narration,
     origin_reference: params.reference,
+    tz: "Africa/Lagos",
   });
-  const quoteId = quote?.id || quote?.quote_id || quote?.data?.id || quote?.data?.quote_id;
+  const quoteId = quote?.quote_id || quote?.id || quote?.data?.quote_id || quote?.data?.id;
   if (!quoteId) throw new Error("Sznd did not return a quote id");
+  const totalPayable = Number(quote?.total_payable ?? quote?.data?.total_payable ?? params.amount);
+  return { quoteId, totalPayable };
+}
 
+export async function acceptQuote(
+  secrets: SzndSecrets,
+  quoteId: string,
+): Promise<{ transactionId: string | null; transactionReference: string | null }> {
   const accepted = await sznd(secrets, "POST", `/api/v1/client/quotes/${quoteId}/accept`, {});
   return {
     transactionId: accepted?.transaction_id ?? accepted?.data?.transaction_id ?? null,
