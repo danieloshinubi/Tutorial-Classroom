@@ -31,7 +31,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { resolvePlatformSecrets } from "../_shared/gateways/platformCredentials.ts";
-import { createBeneficiary, createWithdrawalQuote, acceptQuote } from "../_shared/gateways/sznd-payout.ts";
+import { createBeneficiary, createWithdrawalQuote, acceptQuote, getAvailableBalance } from "../_shared/gateways/sznd-payout.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -151,10 +151,23 @@ Deno.serve(async (req) => {
         // file's header). Other payouts already accepted in this same
         // batch loop reduce what's actually still available, so this has
         // to be a fresh read each time, not the balance from batch start.
-        const { data: stillAvailable } = await admin.rpc("sznd_school_balance", { target_school: run.school_id });
-        if (Number(stillAvailable) < quote.totalPayable) {
+        //
+        // Two independent numbers, both checked — the lower one wins:
+        //   our ledger       what THIS school has collected vs. already
+        //                     paid out (the pooled-wallet protection —
+        //                     see 250's header for why that exists at all)
+        //   Sznd's real wallet  what's actually spendable RIGHT NOW. A
+        //                     card deposit can sit for a long time before
+        //                     becoming available even once our ledger
+        //                     already counts it (confirmed live — see
+        //                     sznd-payout.ts's header). Our ledger alone
+        //                     would have waved this payout through.
+        const { data: ourLedger } = await admin.rpc("sznd_school_balance", { target_school: run.school_id });
+        const szndAvailable = await getAvailableBalance(szndSecrets);
+        const trueAvailable = Math.min(Number(ourLedger), szndAvailable);
+        if (trueAvailable < quote.totalPayable) {
           throw new Error(
-            `This payout needs ₦${quote.totalPayable.toLocaleString()} including fees, only ₦${Number(stillAvailable).toLocaleString()} is available.`,
+            `This payout needs ₦${quote.totalPayable.toLocaleString()} including fees — this school's ledger shows ₦${Number(ourLedger).toLocaleString()}, but only ₦${szndAvailable.toLocaleString()} is actually available on Sznd right now.`,
           );
         }
 

@@ -1,17 +1,25 @@
-// Sznd payout primitives — beneficiaries, withdrawal quotes, and accepting
-// one to actually move money. Used by payroll-payout-sznd/index.ts.
+// Sznd payout primitives — beneficiaries, withdrawal quotes, accepting one
+// to actually move money, and reading the real wallet balance. Used by
+// payroll-payout-sznd/index.ts.
 //
-// UNVERIFIED against Sznd's live API as of 2026-10-12 — unlike
-// checkout/initialize and payment/verify in sznd.ts (both confirmed live,
-// repeatedly, against real staging transactions), nothing here has been
-// test-run yet: the staging business account used so far has no beneficiary
-// or payout permission tested. Field names below follow Sznd's documented
-// shape (docs.sznd.app/customers/beneficiaries) plus the nested-under-`data`
-// response convention checkout/initialize turned out to actually use — but
-// that convention is confirmed for ONE endpoint, not assumed safe here.
-// Before any real payout runs, re-verify this file the same way sznd.ts's
-// checkout path was verified: real staging call, read the actual response
-// shape, fix whatever's wrong.
+// CONFIRMED live 2026-10-12 against Sznd staging, full chain: beneficiary
+// created, WITHDRAWAL quote created and accepted, webhook settled the
+// payout. Three real bugs found and fixed in that pass — see git history
+// on this file and payroll-payout-sznd/index.ts for specifics (user_id:
+// "self" required on beneficiary creation, tz required on quote creation,
+// fees on top of the net amount not originally accounted for in the
+// balance check).
+//
+// IMPORTANT, also confirmed live: Sznd's wallet has TWO numbers —
+// ledger_balance (everything ever deposited) and available_balance (what's
+// actually spendable right now). A card deposit sat in ledger_balance for
+// over 20 minutes without becoming available; a bank-transfer deposit to
+// the same wallet became available within seconds. classroom.
+// sznd_school_balance() has no way to know about this hold — it only sums
+// our own payments/payouts records — so getAvailableBalance() below exists
+// to cross-check against Sznd's real number before any quote is accepted,
+// not just our own derived one. See payroll-payout-sznd/index.ts for the
+// enforcement.
 
 import { SZND_BASE_URL, signedHeaders } from "./sznd.ts";
 
@@ -32,6 +40,16 @@ const sznd = async (secrets: SzndSecrets, method: string, path: string, body?: u
   }
   return json;
 };
+
+// Confirmed live 2026-10-12: GET /client/wallets returns { wallets: [{
+// currency, available_balance, ledger_balance, ... }] }. NGN is what this
+// codebase only ever uses — see sznd.ts's amount-unit note.
+export async function getAvailableBalance(secrets: SzndSecrets): Promise<number> {
+  const result = await sznd(secrets, "GET", "/api/v1/client/wallets");
+  const wallets: Array<{ currency: string; available_balance: string }> = result?.wallets ?? [];
+  const ngn = wallets.find((w) => w.currency === "NGN");
+  return ngn ? Number(ngn.available_balance) : 0;
+}
 
 export type BeneficiaryDetails = {
   fullName: string;
