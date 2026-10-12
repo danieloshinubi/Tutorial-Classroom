@@ -5549,6 +5549,27 @@ export const recallPayroll = (runId) => rpc("payroll_recall", { target_run: runI
 export const returnPayroll = (runId, reason) => rpc("payroll_return", { target_run: runId, reason });
 export const markPayrollPaid = (runId, paidOn) => rpc("payroll_mark_paid", { target_run: runId, paid_on_in: paidOn });
 
+// Real bank transfers through Sznd, one per payslip — only available once a
+// school has Sznd connected (Settings → Payment gateway). Returns a summary
+// ({ queued, processing, failed, results }); a partial failure is not an
+// error here, it's a normal result the caller shows the bursar.
+export const runSznpPayrollPayout = async (runId) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) throw new Error("Sign in first.");
+
+  const { data, error } = await supabase.functions.invoke("payroll-payout-sznd", {
+    body: { runId },
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+  if (error) {
+    let detail = "";
+    try { detail = (await error.context?.json())?.error || ""; } catch { detail = ""; }
+    throw new Error(detail || error.message || "Could not run that payout.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return data;
+};
+
 export const fetchPayees = async (schoolId) => {
   const { data, error } = await supabase
     .from("payroll_payees")

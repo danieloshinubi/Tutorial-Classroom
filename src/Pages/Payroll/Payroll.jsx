@@ -27,6 +27,8 @@ import {
   recallPayroll,
   returnPayroll,
   markPayrollPaid,
+  fetchPaymentGateway,
+  runSznpPayrollPayout,
   fetchPayees,
   savePayee,
   deletePayee,
@@ -75,7 +77,7 @@ const monthLabel = (iso) =>
 const dayLabel = (iso) =>
   iso ? new Date(`${String(iso).slice(0, 10)}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 
-const STATUS = { draft: ["Draft", undefined], submitted: ["Awaiting approval", "warn"], approved: ["Approved", "warn"], paid: ["Paid", "success"] };
+const STATUS = { draft: ["Draft", undefined], submitted: ["Awaiting approval", "warn"], approved: ["Approved", "warn"], disbursing: ["Paying out...", "warn"], paid: ["Paid", "success"] };
 
 const num = (v) => Number(v || 0);
 const sum = (rows, f) => rows.reduce((t, r) => t + num(f(r)), 0);
@@ -202,11 +204,21 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(false);
   const [paidOn, setPaidOn] = useState(todayISO());
+  const [gateway, setGateway] = useState(null);
   const run = runs.find((r) => r.id === selected) || null;
 
   useEffect(() => {
     if (!selected && runs[0]) setSelected(runs[0].id);
   }, [runs, selected]);
+
+  // Automated payout is only offered once this school has Sznd connected
+  // (Settings → Payment gateway) — same rollout scope as fee collection,
+  // nothing extra to opt into.
+  useEffect(() => {
+    if (!schoolId) return;
+    fetchPaymentGateway(schoolId).then(setGateway).catch(() => setGateway(null));
+  }, [schoolId]);
+  const szndReady = gateway?.provider === "sznd" && gateway?.is_active;
 
   const loadSlips = useCallback(() => {
     if (!selected) return setSlips([]);
@@ -272,6 +284,37 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
   const remove = async () => {
     const ok = await confirmAction({ title: "Delete this draft?", body: "The draft and its payslips are removed. You can prepare the month again.", confirmLabel: "Delete" });
     if (ok) act(async () => { await deletePayrollDraft(run.id); setSelected(null); }, "Draft deleted.");
+  };
+
+  // Real bank transfers, one per payslip, through this school's connected
+  // Sznd account — the explicit second step after approval (not automatic
+  // on approve) so a bad bank detail or a surprise balance issue can still
+  // be caught before anything is actually sent. A partial result (some
+  // paid, some failed) is normal, not an error — the run stays visible as
+  // "Paying out..." with any failed payslips retryable by running this
+  // again, picking up only what's still outstanding.
+  const payViaSznd = async () => {
+    const ok = await confirmAction({
+      title: `Pay ${slips.length} staff via Sznd?`,
+      body: `${money(sum(slips, (s) => s.net))} total, sent as real bank transfers to each person's account on file. This cannot be undone once started.`,
+      confirmLabel: "Pay now",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      const result = await runSznpPayrollPayout(run.id);
+      setNotice(
+        result.failed > 0
+          ? `${result.processing} payment${result.processing === 1 ? "" : "s"} sent, ${result.failed} failed — check them below and retry.`
+          : `${result.processing} payment${result.processing === 1 ? "" : "s"} sent. They'll show as paid once each one confirms.`
+      );
+      await onChanged();
+      if (run.id) setSlips(await fetchPayslips(run.id));
+    } catch (err) {
+      setError(err.message || "Could not run that payout.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const totals = {
@@ -368,6 +411,7 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
                     {run.status === "draft" ? (!canEdit ? "Draft — still being prepared." : canApprove ? "Draft — check it, then approve." : `Draft — check it, then send it to ${approverName} for approval.`) : null}
                     {run.status === "submitted" ? `Sent for approval ${formatDate(run.submitted_at)}. Waiting for ${approverName}.` : null}
                     {run.status === "approved" ? `Approved ${formatDate(run.approved_at)}. Not yet marked as paid.` : null}
+                    {run.status === "disbursing" ? "Payouts are in progress — this updates automatically as each one confirms." : null}
                     {run.status === "paid" ? `Paid ${dayLabel(run.paid_on)}.` : null}
                   </p>
                 </div>
@@ -394,8 +438,11 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
                   ) : null}
                   {run.status === "approved" && canEdit ? (
                     <>
+                      {szndReady ? (
+                        <Button size="sm" disabled={busy || !slips.length} onClick={payViaSznd}>{"Pay via Sznd"}</Button>
+                      ) : null}
                       <DatePicker value={paidOn} onChange={setPaidOn} />
-                      <Button size="sm" disabled={busy} onClick={() => act(() => markPayrollPaid(run.id, paidOn), "Marked as paid.")}>{"Mark as paid"}</Button>
+                      <Button size="sm" variant={szndReady ? "secondary" : undefined} disabled={busy} onClick={() => act(() => markPayrollPaid(run.id, paidOn), "Marked as paid.")}>{"Mark as paid"}</Button>
                     </>
                   ) : null}
                 </div>

@@ -62,7 +62,7 @@ import type { CheckoutContext, CheckoutResult, PaymentGatewayAdapter, WebhookEve
 // record of its own. Production gets its own base URL from Sznd's
 // integration team and MUST be set via this env var before going live;
 // this default is staging-only.
-const SZND_BASE_URL = Deno.env.get("SZND_BASE_URL") || "https://transfaar-test-a8d2cb980af2.herokuapp.com";
+export const SZND_BASE_URL = Deno.env.get("SZND_BASE_URL") || "https://transfaar-test-a8d2cb980af2.herokuapp.com";
 
 const hex = (buffer: ArrayBuffer) =>
   Array.from(new Uint8Array(buffer))
@@ -91,8 +91,9 @@ const sameDigest = (a: string, b: string) => {
 
 // Every /client call needs this same three-header signature, keyed off the
 // exact body bytes sent — computed fresh per request rather than shared,
-// since the timestamp has to be current.
-const signedHeaders = async (apiKey: string, secretKey: string, body: string) => {
+// since the timestamp has to be current. Exported for sznd-payout.ts, which
+// signs its own set of /client calls (beneficiaries, quotes) the same way.
+export const signedHeaders = async (apiKey: string, secretKey: string, body: string) => {
   const timestamp = new Date().toISOString();
   const signature = await hmacSha256Hex(secretKey, `${body}|${timestamp}`);
   return {
