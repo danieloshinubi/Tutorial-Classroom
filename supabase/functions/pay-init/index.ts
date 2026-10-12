@@ -140,6 +140,29 @@ Deno.serve(async (req) => {
       secrets,
     });
 
+    // Sznd does not echo back the metadata object above on its webhook —
+    // confirmed live 2026-10-12 against a real completed transaction (see
+    // 248_sznd_checkout_sessions.sql). Without this row, sznd-webhook has
+    // no way to know which invoice a completed Sznd payment belongs to.
+    // Other providers don't need this — they all return metadata faithfully.
+    if (gateway.provider === "sznd") {
+      const admin = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+        { db: { schema: "classroom" } },
+      );
+      const { error: sessionError } = await admin.from("sznd_checkout_sessions").insert({
+        reference,
+        gateway_id: gateway.gateway_id,
+        invoice_id: invoice.invoice_id,
+        payer_id: user.user.id,
+      });
+      // Not fatal to the checkout itself — the family can still pay — but
+      // without this row the webhook won't be able to credit it
+      // automatically, so this is worth knowing about.
+      if (sessionError) console.error("Could not record sznd_checkout_sessions row", sessionError.message);
+    }
+
     return json({
       authorizationUrl,
       reference,
