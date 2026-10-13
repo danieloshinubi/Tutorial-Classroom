@@ -28,7 +28,9 @@ export interface PayFigures {
 }
 
 type Rpc = (f: string, a: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
-const rpc = db.rpc as unknown as Rpc;
+// Called on the client itself: a detached db.rpc loses its client and every
+// call failed before reaching the database (the panel showed "—").
+const rpc: Rpc = (f, a) => (db as unknown as { rpc: Rpc }).rpc(f, a);
 
 /** A full month's pay for the figures on screen (a saved person's own deductions included). */
 export const previewPay = async (schoolId: string, staffId: string | null, figures: PayFigures): Promise<PayBreakdown> => {
