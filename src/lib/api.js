@@ -5005,8 +5005,10 @@ export const updateTicket = async ({
     target_school: schoolId,
     status_in: status ?? null,
     priority_in: priority ?? null,
-    group_id_in: groupId ?? null,
-    assigned_to_in: assignedTo ?? null,
+    // "No group" / "Unassigned" are empty strings in the form, which the
+    // database cannot read as an id; clear_group / clear_assignee say it.
+    group_id_in: groupId || null,
+    assigned_to_in: assignedTo || null,
     tags_in: tags ?? null,
     clear_group: Boolean(clearGroup),
     clear_assignee: Boolean(clearAssignee),
@@ -5474,12 +5476,14 @@ export const fetchPayrollStaff = async (schoolId) => {
   return data || [];
 };
 
+// Returns the record's id (a new one's too, so its panel can stay open).
 export const savePayrollStaff = async ({ id, ...row }) => {
   const query = id
-    ? supabase.from("payroll_staff").update({ ...row, updated_at: new Date().toISOString() }).eq("id", id)
-    : supabase.from("payroll_staff").insert(row);
-  const { error } = await query;
+    ? supabase.from("payroll_staff").update({ ...row, updated_at: new Date().toISOString() }).eq("id", id).select("id").single()
+    : supabase.from("payroll_staff").insert(row).select("id").single();
+  const { data, error } = await query;
   if (error) throw error;
+  return data?.id || id;
 };
 
 export const fetchDeductionTypes = async (schoolId) => {

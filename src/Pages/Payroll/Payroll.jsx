@@ -11,12 +11,9 @@ import {
   savePayrollSettings,
   confirmPayrollBands,
   fetchPayrollStaff,
-  savePayrollStaff,
   fetchDeductionTypes,
   saveDeductionType,
   fetchStaffDeductions,
-  saveStaffDeduction,
-  deleteStaffDeduction,
   fetchPayrollRuns,
   fetchPayslips,
   preparePayroll,
@@ -50,11 +47,11 @@ import {
   Notice,
   Empty,
   SkeletonCards,
-  displayName,
   formatDate,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { useConfirm, usePrompt } from "../../Components/Confirm";
+import { StaffTab } from "./StaffPanel";
 
 // Monthly payroll: staff pay, PAYE, pension, NHF, the school's own
 // deductions, and payments to consultants and vendors with withholding tax.
@@ -505,230 +502,7 @@ const RunsTab = ({ schoolId, settings, runs, money, onChanged, onGo, canApprove 
 };
 
 /* ------------------------------------------------------------------ staff */
-
-const blankStaff = {
-  id: null, user_id: "", full_name: "", job_title: "", start_date: "", end_date: "", is_active: true,
-  basic: "", housing: "", transport: "", other_allowances: [], pension_applies: true, nhf_applies: false,
-  annual_rent: "", bank_name: "", account_number: "", account_name: "", tin: "", pension_provider: "", rsa_pin: "", notes: "",
-};
-
-const StaffForm = ({ schoolId, initial, members, types, deductions, money, onSaved, onCancel }) => {
-  const L = useLabels();
-  const { setError, setNotice } = useActionFeedback();
-  const [f, setF] = useState(() => ({ ...blankStaff, ...initial, other_allowances: initial?.other_allowances || [] }));
-  const [busy, setBusy] = useState(false);
-  const [newDed, setNewDed] = useState({ type_id: "", kind: "fixed", value: "", balance: "" });
-  const set = (patch) => setF((x) => ({ ...x, ...patch }));
-  const mine = deductions.filter((d) => d.staff_id === f.id);
-
-  const gross = num(f.basic) + num(f.housing) + num(f.transport) + sum(f.other_allowances, (a) => a.amount);
-
-  const save = async (e) => {
-    e?.preventDefault();
-    if (!f.full_name.trim()) return setError("Enter the staff member's name.");
-    setBusy(true);
-    try {
-      const row = {
-        id: f.id || undefined,
-        school_id: schoolId,
-        user_id: f.user_id || null,
-        full_name: f.full_name.trim(),
-        job_title: f.job_title || null,
-        start_date: f.start_date || null,
-        end_date: f.end_date || null,
-        is_active: f.is_active,
-        basic: num(f.basic),
-        housing: num(f.housing),
-        transport: num(f.transport),
-        other_allowances: f.other_allowances.filter((a) => a.label && num(a.amount) > 0).map((a) => ({ label: a.label, amount: num(a.amount) })),
-        pension_applies: f.pension_applies,
-        nhf_applies: f.nhf_applies,
-        annual_rent: num(f.annual_rent),
-        bank_name: f.bank_name || null,
-        account_number: f.account_number || null,
-        account_name: f.account_name || null,
-        tin: f.tin || null,
-        pension_provider: f.pension_provider || null,
-        rsa_pin: f.rsa_pin || null,
-        notes: f.notes || null,
-      };
-      if (!row.id) delete row.id;
-      await savePayrollStaff(row);
-      setNotice(`${row.full_name} saved.`);
-      onSaved();
-    } catch (err) {
-      setError(/payroll_staff_user_once/.test(err.message || "") ? "That login already belongs to another staff record." : err.message || "Could not save.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addDeduction = async () => {
-    if (!newDed.type_id || !(num(newDed.value) > 0)) return setError("Choose a deduction and an amount.");
-    try {
-      await saveStaffDeduction({
-        school_id: schoolId,
-        staff_id: f.id,
-        type_id: newDed.type_id,
-        kind: newDed.kind,
-        value: num(newDed.value),
-        balance: newDed.balance === "" ? null : num(newDed.balance),
-      });
-      setNewDed({ type_id: "", kind: "fixed", value: "", balance: "" });
-      onSaved({ keepOpen: true });
-    } catch (err) {
-      setError(err.message || "Could not add the deduction.");
-    }
-  };
-
-  const memberOptions = [
-    { value: "", label: "No Schoolivio login" },
-    ...members
-      .filter((m) => !["parent", "student"].includes(m.role))
-      .map((m) => ({ value: m.user_id, label: `${displayName(m.profiles)} · ${m.role}` })),
-  ];
-
-  return (
-    <Card className="pr-form">
-      <form onSubmit={save}>
-        <h3>{f.id ? `Edit ${initial.full_name}` : "Add a staff member"}</h3>
-
-        <div className="pr-grid">
-          <Field label="Full name"><input className="input" value={f.full_name} onChange={(e) => set({ full_name: e.target.value })} /></Field>
-          <Field label="Job title"><input className="input" value={f.job_title || ""} onChange={(e) => set({ job_title: e.target.value })} placeholder="e.g. Mathematics teacher" /></Field>
-          <Field label="Schoolivio login" hint="Linked staff see their own payslips."><Select searchable value={f.user_id || ""} onChange={(v) => set({ user_id: v })} options={memberOptions} /></Field>
-          <Field label="Started"><DatePicker value={f.start_date || ""} onChange={(v) => set({ start_date: v })} /></Field>
-          <Field label="Left (if they have)"><DatePicker value={f.end_date || ""} onChange={(v) => set({ end_date: v })} /></Field>
-        </div>
-
-        <h4>{"Monthly pay"}</h4>
-        <div className="pr-grid">
-          <Field label="Basic salary"><MoneyInput value={f.basic} onChange={(v) => set({ basic: v })} placeholder="0" /></Field>
-          <Field label="Housing"><MoneyInput value={f.housing} onChange={(v) => set({ housing: v })} placeholder="0" /></Field>
-          <Field label="Transport"><MoneyInput value={f.transport} onChange={(v) => set({ transport: v })} placeholder="0" /></Field>
-        </div>
-        {f.other_allowances.map((a, i) => (
-          <div key={i} className="pr-allowance">
-            <input className="input" placeholder="Allowance, e.g. Responsibility" value={a.label} onChange={(e) => set({ other_allowances: f.other_allowances.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} />
-            <MoneyInput placeholder="0" value={a.amount} onChange={(v) => set({ other_allowances: f.other_allowances.map((x, j) => (j === i ? { ...x, amount: v } : x)) })} />
-            <Button size="sm" variant="ghost" onClick={() => set({ other_allowances: f.other_allowances.filter((_, j) => j !== i) })}>{"Remove"}</Button>
-          </div>
-        ))}
-        <div className="pr-inline">
-          <Button size="sm" variant="secondary" onClick={() => set({ other_allowances: [...f.other_allowances, { label: "", amount: "" }] })}>{"Add an allowance"}</Button>
-          <span className="pr-hint">{`Gross ${money(gross)} a month`}</span>
-        </div>
-
-        <h4>{"Tax and pension"}</h4>
-        <div className="pr-grid">
-          {L.rentRelief ? <Field label="Yearly rent paid" hint={`Reduces ${L.tax} (rent relief). Leave 0 if none.`}><MoneyInput value={f.annual_rent} onChange={(v) => set({ annual_rent: v })} placeholder="0" /></Field> : null}
-          <Field label={L.nigeria ? "Tax ID (TIN)" : "Tax ID"}><input className="input" value={f.tin || ""} onChange={(e) => set({ tin: e.target.value })} /></Field>
-          <Field label={L.nigeria ? "Pension provider (PFA)" : "Pension provider"}><input className="input" value={f.pension_provider || ""} onChange={(e) => set({ pension_provider: e.target.value })} /></Field>
-          <Field label={L.nigeria ? "RSA PIN" : "Pension number"}><input className="input" value={f.rsa_pin || ""} onChange={(e) => set({ rsa_pin: e.target.value })} /></Field>
-        </div>
-        <div className="pr-switches">
-          <Switch compact label={L.nigeria ? "Contributory pension" : L.pension} checked={f.pension_applies} onChange={(v) => set({ pension_applies: v })} />
-          {L.fundInUse || f.nhf_applies ? <Switch compact label={`Contributes to ${L.fund}`} checked={f.nhf_applies} onChange={(v) => set({ nhf_applies: v })} /> : null}
-          <Switch compact label="Active" checked={f.is_active} onChange={(v) => set({ is_active: v })} />
-        </div>
-
-        <h4>{"Bank"}</h4>
-        <div className="pr-grid">
-          <Field label="Bank"><input className="input" value={f.bank_name || ""} onChange={(e) => set({ bank_name: e.target.value })} /></Field>
-          <Field label="Account number"><input className="input" inputMode="numeric" value={f.account_number || ""} onChange={(e) => set({ account_number: e.target.value })} /></Field>
-          <Field label="Account name"><input className="input" value={f.account_name || ""} onChange={(e) => set({ account_name: e.target.value })} /></Field>
-        </div>
-
-        <div className="btn-row pr-form-actions">
-          <Button type="submit" disabled={busy}>{busy ? "Saving..." : "Save"}</Button>
-          <Button variant="secondary" onClick={onCancel}>{"Close"}</Button>
-        </div>
-      </form>
-
-      {f.id ? (
-        <div className="pr-deds">
-          <h4>{"Deductions for this person"}</h4>
-          {mine.length === 0 ? <p className="pr-hint">{"None."}</p> : null}
-          {mine.map((d) => {
-            const t = types.find((x) => x.id === d.type_id);
-            return (
-              <div key={d.id} className="pr-ded">
-                <span>{t?.label || "Deduction"}</span>
-                <b>{d.kind === "percent" ? `${num(d.value)}% of gross` : `${money(d.value)} a month`}</b>
-                <span className="pr-sub">{d.balance != null ? `${money(d.balance)} still owed` : ""}</span>
-                <Switch compact label="On" checked={d.is_active} onChange={(v) => saveStaffDeduction({ id: d.id, is_active: v }).then(() => onSaved({ keepOpen: true }))} />
-                <Button size="sm" variant="ghost" onClick={() => deleteStaffDeduction(d.id).then(() => onSaved({ keepOpen: true }))}>{"Remove"}</Button>
-              </div>
-            );
-          })}
-          <div className="pr-grid pr-ded-new">
-            <Field label="Deduction"><Select value={newDed.type_id} onChange={(v) => setNewDed((x) => ({ ...x, type_id: v }))} options={[{ value: "", label: "Choose…" }, ...types.filter((t) => t.is_active).map((t) => ({ value: t.id, label: t.label }))]} /></Field>
-            <Field label="How much"><Select value={newDed.kind} onChange={(v) => setNewDed((x) => ({ ...x, kind: v, value: "" }))} options={[{ value: "fixed", label: "Amount a month" }, { value: "percent", label: "% of gross" }]} /></Field>
-            <Field label={newDed.kind === "percent" ? "Percent" : "Amount"}>
-              {newDed.kind === "percent"
-                ? <input className="input" type="number" min="0" max="100" value={newDed.value} onChange={(e) => setNewDed((x) => ({ ...x, value: e.target.value }))} />
-                : <MoneyInput value={newDed.value} onChange={(v) => setNewDed((x) => ({ ...x, value: v }))} placeholder="0" />}
-            </Field>
-            <Field label="Total still owed" hint="For a loan or advance; stops at zero."><MoneyInput value={newDed.balance} onChange={(v) => setNewDed((x) => ({ ...x, balance: v }))} placeholder="Leave empty if ongoing" /></Field>
-          </div>
-          <Button size="sm" variant="secondary" onClick={addDeduction}>{"Add deduction"}</Button>
-        </div>
-      ) : (
-        <p className="pr-hint">{"Save first, then add loans, savings or insurance for this person."}</p>
-      )}
-    </Card>
-  );
-};
-
-const StaffTab = ({ schoolId, staff, types, deductions, members, money, onChanged }) => {
-  const { canEdit } = useModuleAccess("payroll");
-  const [editing, setEditing] = useState(null);
-  const [query, setQuery] = useState("");
-  const shown = staff.filter((s) => !query.trim() || s.full_name.toLowerCase().includes(query.trim().toLowerCase()));
-  const saved = async ({ keepOpen } = {}) => {
-    await onChanged();
-    if (!keepOpen) setEditing(null);
-  };
-
-  useEffect(() => {
-    if (editing?.id) {
-      const fresh = staff.find((s) => s.id === editing.id);
-      if (fresh && fresh !== editing) setEditing(fresh);
-    }
-  }, [staff, editing]);
-
-  return (
-    <div className="pr-stack">
-      {editing ? (
-        <StaffForm key={editing.id || "new"} schoolId={schoolId} initial={editing} members={members} types={types} deductions={deductions} money={money} onSaved={saved} onCancel={() => setEditing(null)} />
-      ) : null}
-      <div className="pr-toolbar">
-        <input className="input" placeholder="Search staff" value={query} onChange={(e) => setQuery(e.target.value)} />
-        {canEdit ? <Button onClick={() => setEditing({ ...blankStaff })}>{"Add staff"}</Button> : null}
-      </div>
-      {staff.length === 0 ? (
-        <Empty>{"No staff on payroll yet. Add each person with their monthly pay and bank details."}</Empty>
-      ) : (
-        <div className="table-wrap table-wrap-plain">
-          <table className="data pr-table">
-            <thead><tr><th>{"Name"}</th><th>{"Gross a month"}</th><th>{"Bank"}</th><th>{"Login"}</th><th aria-label="Actions" /></tr></thead>
-            <tbody>
-              {shown.map((s) => (
-                <tr key={s.id} className={s.is_active ? undefined : "pr-dim"}>
-                  <td><strong>{s.full_name}</strong>{s.job_title ? <span className="pr-sub">{s.job_title}</span> : null}{s.is_active ? null : <span className="pr-sub">{"Not active"}</span>}</td>
-                  <td>{money(num(s.basic) + num(s.housing) + num(s.transport) + sum(s.other_allowances || [], (a) => a.amount))}</td>
-                  <td>{s.bank_name ? `${s.bank_name} ${s.account_number ? `· ${String(s.account_number).slice(-4).padStart(8, "•")}` : ""}` : <span className="pr-sub">{"Not set"}</span>}</td>
-                  <td>{s.user_id ? "Linked" : "—"}</td>
-                  <td>{canEdit ? <Button size="sm" variant="secondary" onClick={() => setEditing(s)}>{"Edit"}</Button> : null}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-};
+// The staff list and each person's panel live in StaffPanel.tsx.
 
 /* ------------------------------------------------------------- deductions */
 
@@ -1151,7 +925,7 @@ const Payroll = () => {
           {!loading && !settings && canEdit ? <Setup schoolId={schoolId} onDone={() => load()} /> : null}
           {!loading && !settings && !canEdit ? <Empty>{"Payroll has not been set up yet."}</Empty> : null}
           {!loading && settings && tab === "runs" ? <RunsTab schoolId={schoolId} settings={settings} runs={runs} money={money} onChanged={refresh} onGo={setTab} canApprove={canApprove} /> : null}
-          {!loading && settings && tab === "staff" ? <StaffTab schoolId={schoolId} staff={staff} types={types} deductions={deductions} members={members} money={money} onChanged={refresh} /> : null}
+          {!loading && settings && tab === "staff" ? <StaffTab schoolId={schoolId} staff={staff} types={types} deductions={deductions} members={members} money={money} labels={labels} canEdit={canEdit} onChanged={refresh} /> : null}
           {!loading && settings && tab === "deductions" ? <DeductionsTab schoolId={schoolId} types={types} onChanged={refresh} /> : null}
           {!loading && settings && tab === "payees" ? <PayeesTab schoolId={schoolId} payees={payees} payments={payments} money={money} onChanged={refresh} /> : null}
           {!loading && settings && tab === "settings" ? <SettingsTab key={settings.updated_at} schoolId={schoolId} settings={settings} money={money} onChanged={refresh} /> : null}

@@ -58,14 +58,21 @@ const asList = (value: string | string[] | undefined): string[] =>
 // skipped, only ever deferred to a later poll if MAX_PER_POLL is hit.
 const MAX_PER_POLL = 25;
 
-// Mailboxes are checked a few at a time, each with its own time limit, and
-// the run stops starting new ones before the function's own limit, so one
-// slow or stuck mail server cannot hold up every other school's requests.
-// Whichever was checked longest ago goes first; any not reached this run
-// are first in line next time (every 5 minutes).
-const CONCURRENCY = 5;
-const PER_MAILBOX_MS = 45_000;
-const RUN_BUDGET_MS = 110_000;
+// Mail arrives in seconds, not minutes (2026-10-08). This runs every minute
+// (084's cron, now * * * * *) and, rather than one look per run, keeps each
+// mailbox open for most of that minute: IMAP IDLE has the mail server say
+// the moment a message lands, with a fresh look every few seconds besides
+// (not every server keeps IDLE going). A new email becomes a ticket, and a
+// reply joins its ticket, within a few seconds. It answers the scheduler at
+// once and watches in the background (EdgeRuntime.waitUntil): pg_net stops
+// waiting after 5 seconds. Each mailbox has its own connection and its own
+// time limit, so a slow or stuck mail server holds up nobody else; whichever
+// was checked longest ago goes first.
+const CONCURRENCY = 20;
+const WATCH_MS = 50_000;
+const LOOK_EVERY_MS = 8_000;
+const PER_MAILBOX_MS = WATCH_MS + 20_000;
+const RUN_BUDGET_MS = 55_000;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -96,6 +103,9 @@ Deno.serve(async (req) => {
   // deno-lint-ignore no-explicit-any
   const pollMailbox = async (mailbox: any, clients: Set<ImapFlow>) => {
     let ingested = 0;
+    // One watcher per mailbox: an earlier run still watching keeps it.
+    const { data: mine } = await admin.rpc("ticket_mailbox_watch", { target_mailbox: mailbox.id, seconds: Math.ceil(PER_MAILBOX_MS / 1000) });
+    if (!mine) return { mailboxId: mailbox.id, skipped: "already being watched" };
     try {
       const { data: password, error: secretError } = await admin.rpc("get_mailbox_secret", {
         target_mailbox: mailbox.id,
@@ -117,10 +127,15 @@ Deno.serve(async (req) => {
         const lock = await client.getMailboxLock("INBOX");
         try {
           const since = new Date(mailbox.created_at);
+          const watchUntil = Date.now() + WATCH_MS;
+          // Messages before the mailbox was connected are left alone, but are
+          // still unread: remembered so each look does not fetch them again.
+          const ignored = new Set<number>();
+          const drain = async () => {
           // Coarse, day-granular pass (all IMAP's SEARCH SINCE can do),
           // narrowed to an exact-time cutoff below before anything is
           // actually ingested.
-          const candidateUids = (await client.search({ seen: false, since }, { uid: true })) || [];
+          const candidateUids = ((await client.search({ seen: false, since }, { uid: true })) || []).filter((u: number) => !ignored.has(u));
           let processed = 0;
           for (const uid of candidateUids) {
             if (processed >= MAX_PER_POLL) {
@@ -140,7 +155,10 @@ Deno.serve(async (req) => {
             // before Schoolivio knew about this mailbox and was never ours
             // to touch.
             const receivedAt = message.envelope?.date ? new Date(message.envelope.date) : null;
-            if (receivedAt && receivedAt < since) continue;
+            if (receivedAt && receivedAt < since) {
+              ignored.add(uid);
+              continue;
+            }
 
             const parsed = await simpleParser(message.source);
             const fromAddress = parsed.from?.value?.[0]?.address;
@@ -173,6 +191,26 @@ Deno.serve(async (req) => {
 
             await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
           }
+          };
+
+          // Until the watch ends: take what is there, then wait for the server
+          // to say something arrived (IDLE), or the next look, whichever first.
+          await drain();
+          while (Date.now() < watchUntil) {
+            await new Promise<void>((resolve) => {
+              const done = () => {
+                clearTimeout(timer);
+                client.off("exists", done);
+                resolve();
+              };
+              const timer = setTimeout(done, Math.min(LOOK_EVERY_MS, Math.max(0, watchUntil - Date.now())));
+              client.on("exists", done);
+              // IDLE ends by itself when the next command (the search) runs.
+              client.idle().catch(() => undefined);
+            });
+            if (Date.now() >= watchUntil) break;
+            await drain();
+          }
         } finally {
           lock.release();
         }
@@ -196,6 +234,8 @@ Deno.serve(async (req) => {
         error_in: message,
       });
       return { mailboxId: mailbox.id, error: message };
+    } finally {
+      await admin.rpc("ticket_mailbox_watch", { target_mailbox: mailbox.id, seconds: 0 });
     }
   };
 
@@ -227,7 +267,16 @@ Deno.serve(async (req) => {
       results.push(outcome);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker));
-
+  const work = Promise.all(Array.from({ length: Math.min(CONCURRENCY, queue.length) }, worker)).then(() => {
+    if (skipped) console.warn(`${skipped} mailbox(es) not reached this run; first in line next minute.`);
+  });
+  // Answered at once; the watching carries on after the answer.
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(work);
+    return json({ watching: queue.length + results.length });
+  }
+  await work;
   return json({ polled: results.length, skipped, results });
 });

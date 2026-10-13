@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   classroom: {
     Tables: {
@@ -4924,6 +4924,76 @@ export type Database = {
           },
         ]
       }
+      payroll_payouts: {
+        Row: {
+          amount: number
+          beneficiary_id: string | null
+          created_at: string
+          failure_reason: string | null
+          gateway: string
+          gateway_ref: string
+          id: string
+          payslip_id: string
+          run_id: string
+          school_id: string
+          status: string
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          beneficiary_id?: string | null
+          created_at?: string
+          failure_reason?: string | null
+          gateway?: string
+          gateway_ref: string
+          id?: string
+          payslip_id: string
+          run_id: string
+          school_id: string
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          beneficiary_id?: string | null
+          created_at?: string
+          failure_reason?: string | null
+          gateway?: string
+          gateway_ref?: string
+          id?: string
+          payslip_id?: string
+          run_id?: string
+          school_id?: string
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_payouts_payslip_id_fkey"
+            columns: ["payslip_id"]
+            isOneToOne: false
+            referencedRelation: "payslips"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_payouts_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_payouts_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payroll_runs: {
         Row: {
           approved_at: string | null
@@ -5082,6 +5152,7 @@ export type Database = {
           rsa_pin: string | null
           school_id: string
           start_date: string | null
+          sznd_beneficiary_id: string | null
           tin: string | null
           transport: number
           updated_at: string
@@ -5108,6 +5179,7 @@ export type Database = {
           rsa_pin?: string | null
           school_id: string
           start_date?: string | null
+          sznd_beneficiary_id?: string | null
           tin?: string | null
           transport?: number
           updated_at?: string
@@ -5134,6 +5206,7 @@ export type Database = {
           rsa_pin?: string | null
           school_id?: string
           start_date?: string | null
+          sznd_beneficiary_id?: string | null
           tin?: string | null
           transport?: number
           updated_at?: string
@@ -6698,6 +6771,66 @@ export type Database = {
           },
         ]
       }
+      sznd_checkout_sessions: {
+        Row: {
+          created_at: string
+          gateway_id: string
+          invoice_id: string
+          payer_id: string
+          reference: string
+        }
+        Insert: {
+          created_at?: string
+          gateway_id: string
+          invoice_id: string
+          payer_id: string
+          reference: string
+        }
+        Update: {
+          created_at?: string
+          gateway_id?: string
+          invoice_id?: string
+          payer_id?: string
+          reference?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sznd_checkout_sessions_gateway_id_fkey"
+            columns: ["gateway_id"]
+            isOneToOne: false
+            referencedRelation: "payment_gateways"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sznd_checkout_sessions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoice_balances"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "sznd_checkout_sessions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sznd_checkout_sessions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "my_invoice_balances"
+            referencedColumns: ["invoice_id"]
+          },
+          {
+            foreignKeyName: "sznd_checkout_sessions_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       terms: {
         Row: {
           created_at: string
@@ -6812,6 +6945,7 @@ export type Database = {
           smtp_security: string | null
           updated_at: string
           username: string | null
+          watch_until: string | null
         }
         Insert: {
           address: string
@@ -6837,6 +6971,7 @@ export type Database = {
           smtp_security?: string | null
           updated_at?: string
           username?: string | null
+          watch_until?: string | null
         }
         Update: {
           address?: string
@@ -6862,6 +6997,7 @@ export type Database = {
           smtp_security?: string | null
           updated_at?: string
           username?: string | null
+          watch_until?: string | null
         }
         Relationships: [
           {
@@ -8398,6 +8534,7 @@ export type Database = {
           smtp_security: string | null
           updated_at: string
           username: string | null
+          watch_until: string | null
         }
         SetofOptions: {
           from: "*"
@@ -8806,6 +8943,7 @@ export type Database = {
           smtp_security: string | null
           updated_at: string
           username: string | null
+          watch_until: string | null
         }
         SetofOptions: {
           from: "*"
@@ -8840,6 +8978,7 @@ export type Database = {
           smtp_security: string | null
           updated_at: string
           username: string | null
+          watch_until: string | null
         }
         SetofOptions: {
           from: "*"
@@ -8988,6 +9127,7 @@ export type Database = {
           smtp_security: string | null
           updated_at: string
           username: string | null
+          watch_until: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -10133,6 +10273,13 @@ export type Database = {
         Args: { period_in: string; target_staff: string }
         Returns: Json
       }
+      payroll_compute_row: {
+        Args: {
+          period_in: string
+          st: Database["classroom"]["Tables"]["payroll_staff"]["Row"]
+        }
+        Returns: Json
+      }
       payroll_confirm_bands: {
         Args: { target_school: string }
         Returns: undefined
@@ -10191,6 +10338,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      payroll_preview: {
+        Args: { figures: Json; target_school: string; target_staff: string }
+        Returns: Json
       }
       payroll_recall: {
         Args: { target_run: string }
@@ -10302,6 +10453,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      payroll_staff_pay: {
+        Args: { target_school: string }
+        Returns: {
+          gross: number
+          net: number
+          staff_id: string
+        }[]
       }
       payroll_submit: {
         Args: { target_run: string }
@@ -10793,6 +10952,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      prune_sznd_checkout_sessions: { Args: never; Returns: undefined }
       public_admission_sessions: {
         Args: { target_school: string }
         Returns: {
@@ -12055,6 +12215,34 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      settle_sznd_payroll_payout: {
+        Args: {
+          failure_reason_in?: string
+          new_status: string
+          target_reference: string
+        }
+        Returns: {
+          amount: number
+          beneficiary_id: string | null
+          created_at: string
+          failure_reason: string | null
+          gateway: string
+          gateway_ref: string
+          id: string
+          payslip_id: string
+          run_id: string
+          school_id: string
+          status: string
+          submitted_by: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_payouts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       sign_in_email: {
         Args: { school_slug: string; username_in: string }
         Returns: string
@@ -12159,6 +12347,30 @@ export type Database = {
       start_subscription_payment: {
         Args: { actor: string; ref: string; target_school: string }
         Returns: Json
+      }
+      start_sznd_payroll_payout: {
+        Args: { actor: string; target_run: string }
+        Returns: {
+          amount: number
+          beneficiary_id: string | null
+          created_at: string
+          failure_reason: string | null
+          gateway: string
+          gateway_ref: string
+          id: string
+          payslip_id: string
+          run_id: string
+          school_id: string
+          status: string
+          submitted_by: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "payroll_payouts"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       start_trial_school: {
         Args: {
@@ -12402,6 +12614,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      sznd_school_balance: { Args: { target_school: string }; Returns: number }
       take_payment: {
         Args: {
           amount: number
@@ -12439,6 +12652,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      ticket_bare_subject: { Args: { s: string }; Returns: string }
       ticket_group_history: {
         Args: { target_school: string; target_ticket: string }
         Returns: {
@@ -12447,6 +12661,14 @@ export type Database = {
           from_group_name: string
           to_group_name: string
         }[]
+      }
+      ticket_mailbox_watch: {
+        Args: { seconds: number; target_mailbox: string }
+        Returns: boolean
+      }
+      ticket_thread_message_ids: {
+        Args: { target_ticket: string }
+        Returns: string[]
       }
       tidy_spaces: { Args: { value: string }; Returns: string }
       timetable_class_subject: {

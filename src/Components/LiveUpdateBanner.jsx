@@ -31,17 +31,25 @@ import {
 // added as an effect dependency, since `shouldCount` is a fresh closure
 // every render and re-subscribing the channel every render (instead of once
 // per `key`) would mean briefly missing events during the resubscribe.
+//
+// Every broadcast also carries actor (supabase/253): whoever's request made
+// the change. Anything the viewer did themselves never counts, on any page
+// using this banner, whatever the table: they already see their own change.
 const useRealtimeCounter = (key, subscribe, shouldCount) => {
+  const { user } = useAuth();
   const [count, setCount] = useState(0);
   const countRef = useRef(0);
   const shouldCountRef = useRef(shouldCount);
   shouldCountRef.current = shouldCount;
+  const meRef = useRef(user?.id);
+  meRef.current = user?.id;
 
   useEffect(() => {
     if (!key) return undefined;
     setCount(0);
     countRef.current = 0;
     const channel = subscribe((event) => {
+      if (meRef.current && (event?.actor === meRef.current || event?.actor_id === meRef.current)) return;
       if (shouldCountRef.current && !shouldCountRef.current(event)) return;
       countRef.current += 1;
       setCount(countRef.current);
@@ -78,8 +86,7 @@ export const useLiveApplicationsListUpdates = (schoolId) =>
   useRealtimeCounter(schoolId, (onChange) => subscribeToApplicationsList(schoolId, onChange));
 
 // Same self-filtering for a ticket thread's own messages (ticket_messages
-// carries author_id). The ticket row's own status/priority updates have no
-// single "who changed this" column to check, so those always count.
+// carries author_id); the ticket row's own changes are filtered by actor.
 export const useLiveTicketThreadUpdates = (ticketId) => {
   const { user } = useAuth();
   return useRealtimeCounter(

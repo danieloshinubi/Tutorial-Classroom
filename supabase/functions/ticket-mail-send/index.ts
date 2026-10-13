@@ -25,12 +25,14 @@ const json = (body: unknown, status = 200) =>
     headers: { ...CORS, "Content-Type": "application/json" },
   });
 
-// A reply's subject stays anchored to "[#<number>]" so a customer's own
-// reply threads back by subject even if their mail client drops headers —
-// stripped and reapplied each time so it never accumulates "Re: Re: [#12] [#12]".
+// A reply's subject is "Re: " and the conversation's own subject, exactly:
+// Gmail, Outlook and Titan only keep mail in one conversation when the
+// subject matches (apart from Re:), so the old "Re: [#8] …" started a new
+// one in the customer's inbox (supabase/255). The ticket is found again from
+// the conversation's Message-IDs, or the sender and subject, not a token.
 const bareSubject = (subject: string, number: number) =>
   subject
-    .replace(/^(re:\s*)+/i, "")
+    .replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "")
     .replace(new RegExp(`\\[#${number}\\]\\s*`, "i"), "")
     .trim();
 
@@ -121,12 +123,12 @@ Deno.serve(async (req) => {
     });
     if (secretError || !password) return json({ error: "Could not read that mailbox's credentials." }, 500);
 
-    // The most recent message in the thread — whichever direction — is what
-    // a reply threads onto, so the recipient's mail client groups it
-    // correctly even without the "#N" subject token.
-    const { data: lastMessageId } = await admin.rpc("last_ticket_email_message_id", {
-      target_ticket: ticketId,
-    });
+    // Every email in the conversation, the original first: In-Reply-To is the
+    // latest, References all of them, so every mail app files the reply in
+    // the same conversation (supabase/255).
+    const { data: threadIds } = await admin.rpc("ticket_thread_message_ids", { target_ticket: ticketId });
+    const thread = ((threadIds as string[] | null) ?? []).filter(Boolean);
+    const lastMessageId = thread[thread.length - 1] || null;
 
     const transport = nodemailer.createTransport({
       host: mailbox.smtp_host,
@@ -136,7 +138,7 @@ Deno.serve(async (req) => {
       auth: { user: mailbox.username, pass: password },
     });
 
-    const subject = `Re: [#${ticket.number}] ${bareSubject(ticket.subject, ticket.number)}`;
+    const subject = `Re: ${bareSubject(ticket.subject, ticket.number) || "(no subject)"}`;
     const from = mailbox.display_name ? `"${mailbox.display_name}" <${mailbox.address}>` : mailbox.address;
 
     let messageId: string | null = null;
@@ -151,7 +153,8 @@ Deno.serve(async (req) => {
         html: body,
         text: plainBody,
         inReplyTo: lastMessageId || undefined,
-        references: lastMessageId || undefined,
+        references: thread.length ? thread : undefined,
+        headers: { "X-Schoolivio-Ticket": String(ticket.number) },
       });
       messageId = info.messageId || null;
     } catch (err) {
