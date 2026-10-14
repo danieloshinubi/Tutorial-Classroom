@@ -38,7 +38,7 @@ const Person = ({ profile, children, sub }) => (
   </div>
 );
 
-const PeopleTab = ({ course, canManage, schoolId }) => {
+const PeopleTab = ({ course, canManage, schoolId, onChanged }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
@@ -61,6 +61,7 @@ const PeopleTab = ({ course, canManage, schoolId }) => {
     try {
       await decideEnrollment({ courseId: course.id, userId, approve });
       load();
+      onChanged?.();
     } catch (err) {
       setError(err.message || "Could not update that request.");
     } finally {

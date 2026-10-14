@@ -16,6 +16,8 @@ module.exports = {
     "./src/Pages/Attendance/**/*.{ts,tsx}",
     // Payroll → Staff (TypeScript).
     "./src/Pages/Payroll/**/*.{ts,tsx}",
+    // Results (TypeScript).
+    "./src/Pages/Results/**/*.{ts,tsx}",
   ],
   // Tailwind decides what to generate by scanning the files above for
   // anything that LOOKS like a class name — which includes ordinary English

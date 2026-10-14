@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { Icon } from "react-icons-kit";
 import { printer } from "react-icons-kit/feather/printer";
 import Navbar from "../../Components/Navbar/Navbar";
+import TermResults from "../Results/TermResults";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import {
@@ -368,6 +369,9 @@ const StudentReport = () => {
                 ))}
               </section>
             ) : null}
+
+            {/* Released term results from the school's exams (supabase/258). */}
+            <TermResults studentId={studentId} />
 
             {courseCount ? (
               <section className="sr-card">

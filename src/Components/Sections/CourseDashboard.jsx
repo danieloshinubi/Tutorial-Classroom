@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import Navbar from "../Navbar/Navbar";
 import ClassChat from "./ClassChat";
 import Upcoming from "./Upcoming";
@@ -12,6 +12,7 @@ import { useSchool } from "../../context/SchoolContext";
 import {
   fetchCourseByCode,
   fetchMyEnrollment,
+  fetchParticipants,
   requestEnrollment,
   unenroll,
 } from "../../lib/api";
@@ -25,7 +26,13 @@ const CourseDashboard = () => {
 
   const [course, setCourse] = useState(null);
   const [membership, setMembership] = useState(null);
-  const [tab, setTab] = useState("stream");
+  // A link can open a tab directly: the join-request notification opens
+  // People (?tab=people, supabase/259).
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => searchParams.get("tab") || "stream");
+  // Pupils asking to join, for whoever runs the course: shown on the People
+  // tab and in a banner until someone answers them.
+  const [waiting, setWaiting] = useState(0);
   const [loading, setLoading] = useState(true);
   const { setError } = useActionFeedback();
   const [busy, setBusy] = useState(false);
@@ -61,6 +68,19 @@ const CourseDashboard = () => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t) setTab(t);
+  }, [searchParams]);
+
+  const loadWaiting = useCallback(() => {
+    if (!course?.id || !schoolId || !canManage) return setWaiting(0);
+    fetchParticipants({ courseId: course.id, schoolId })
+      .then((rows) => setWaiting(rows.filter((r) => r.status === "pending").length))
+      .catch(() => setWaiting(0));
+  }, [course?.id, schoolId, canManage]);
+  useEffect(loadWaiting, [loadWaiting]);
 
   const handleJoin = async () => {
     setBusy(true);
@@ -120,7 +140,17 @@ const CourseDashboard = () => {
     { id: "assignments", label: "Assignments" },
     { id: "exams", label: "Exams" },
     { id: "midexams", label: "Mid-exams" },
-    { id: "people", label: "People" },
+    {
+      id: "people",
+      label: waiting ? (
+        <>
+          {"People"}
+          <span className="tab-count" aria-label={`${waiting} waiting to join`}>{waiting}</span>
+        </>
+      ) : (
+        "People"
+      ),
+    },
   ];
 
   return (
@@ -153,6 +183,16 @@ const CourseDashboard = () => {
 
         {course.description ? (
           <p style={{ color: "var(--ink-2)", marginTop: 18 }}>{course.description}</p>
+        ) : null}
+
+        {canManage && waiting > 0 && tab !== "people" ? (
+          <div className="join-waiting">
+            <span className="join-waiting-dot" aria-hidden="true" />
+            <span className="join-waiting-text">
+              {waiting === 1 ? "1 pupil is asking to join this course." : `${waiting} pupils are asking to join this course.`}
+            </span>
+            <Button size="sm" onClick={() => setTab("people")}>{"Review"}</Button>
+          </div>
         ) : null}
 
         {hasAccess ? (
@@ -203,7 +243,7 @@ const CourseDashboard = () => {
             ) : null}
 
             {tab === "people" ? (
-              <PeopleTab course={course} canManage={canManage} schoolId={schoolId} />
+              <PeopleTab course={course} canManage={canManage} schoolId={schoolId} onChanged={loadWaiting} />
             ) : null}
           </>
         )}

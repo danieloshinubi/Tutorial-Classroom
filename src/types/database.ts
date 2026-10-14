@@ -5770,7 +5770,8 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           ca_max: number
-          course_id: string
+          class_subject_id: string | null
+          course_id: string | null
           created_at: string
           created_by: string | null
           exam_max: number
@@ -5788,7 +5789,8 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           ca_max?: number
-          course_id: string
+          class_subject_id?: string | null
+          course_id?: string | null
           created_at?: string
           created_by?: string | null
           exam_max?: number
@@ -5806,7 +5808,8 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           ca_max?: number
-          course_id?: string
+          class_subject_id?: string | null
+          course_id?: string | null
           created_at?: string
           created_by?: string | null
           exam_max?: number
@@ -5826,6 +5829,13 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "result_sheets_class_subject_id_fkey"
+            columns: ["class_subject_id"]
+            isOneToOne: false
+            referencedRelation: "class_subjects"
             referencedColumns: ["id"]
           },
           {
@@ -7539,6 +7549,8 @@ export type Database = {
         Row: {
           ca_max: number | null
           ca_score: number | null
+          class_name: string | null
+          class_subject_id: string | null
           course_code: string | null
           course_id: string | null
           course_title: string | null
@@ -7564,6 +7576,13 @@ export type Database = {
             columns: ["student_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "result_sheets_class_subject_id_fkey"
+            columns: ["class_subject_id"]
+            isOneToOne: false
+            referencedRelation: "class_subjects"
             referencedColumns: ["id"]
           },
           {
@@ -7892,7 +7911,8 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           ca_max: number
-          course_id: string
+          class_subject_id: string | null
+          course_id: string | null
           created_at: string
           created_by: string | null
           exam_max: number
@@ -8014,6 +8034,10 @@ export type Database = {
       can_release_results: { Args: { target_school: string }; Returns: boolean }
       can_see_envelope: { Args: { target_envelope: string }; Returns: boolean }
       can_see_person: { Args: { target: string }; Returns: boolean }
+      can_teach_result: {
+        Args: { target_class_subject: string; target_course: string }
+        Returns: boolean
+      }
       can_view_accounts: { Args: { target_school: string }; Returns: boolean }
       can_view_admissions: { Args: { target_school: string }; Returns: boolean }
       can_view_bursary: { Args: { target_school: string }; Returns: boolean }
@@ -10128,7 +10152,41 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           ca_max: number
-          course_id: string
+          class_subject_id: string | null
+          course_id: string | null
+          created_at: string
+          created_by: string | null
+          exam_max: number
+          id: string
+          released_at: string | null
+          released_by: string | null
+          school_id: string
+          status: Database["classroom"]["Enums"]["result_status"]
+          submitted_at: string | null
+          submitted_by: string | null
+          term_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "result_sheets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      open_subject_result_sheet: {
+        Args: {
+          ca_max?: number
+          exam_max?: number
+          target_class_subject: string
+          target_term: string
+        }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          ca_max: number
+          class_subject_id: string | null
+          course_id: string | null
           created_at: string
           created_by: string | null
           exam_max: number
@@ -11533,7 +11591,8 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           ca_max: number
-          course_id: string
+          class_subject_id: string | null
+          course_id: string | null
           created_at: string
           created_by: string | null
           exam_max: number
@@ -11811,13 +11870,22 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      result_sheet_label: {
+        Args: { sheet: Database["classroom"]["Tables"]["result_sheets"]["Row"] }
+        Returns: string
+      }
+      result_sheet_teachers: {
+        Args: { sheet: Database["classroom"]["Tables"]["result_sheets"]["Row"] }
+        Returns: string[]
+      }
       return_result_sheet: {
         Args: { note: string; target_sheet: string }
         Returns: {
           approved_at: string | null
           approved_by: string | null
           ca_max: number
-          course_id: string
+          class_subject_id: string | null
+          course_id: string | null
           created_at: string
           created_by: string | null
           exam_max: number
@@ -12115,6 +12183,34 @@ export type Database = {
       set_mailbox_secret: {
         Args: { plaintext: string; target_mailbox: string; which: string }
         Returns: undefined
+      }
+      set_result_sheet_split: {
+        Args: { ca_max_in: number; exam_max_in: number; target_sheet: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          ca_max: number
+          class_subject_id: string | null
+          course_id: string | null
+          created_at: string
+          created_by: string | null
+          exam_max: number
+          id: string
+          released_at: string | null
+          released_by: string | null
+          school_id: string
+          status: Database["classroom"]["Enums"]["result_status"]
+          submitted_at: string | null
+          submitted_by: string | null
+          term_id: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "result_sheets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_screening_item_status: {
         Args: {
@@ -12593,7 +12689,8 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           ca_max: number
-          course_id: string
+          class_subject_id: string | null
+          course_id: string | null
           created_at: string
           created_by: string | null
           exam_max: number
@@ -12705,7 +12802,8 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           ca_max: number
-          course_id: string
+          class_subject_id: string | null
+          course_id: string | null
           created_at: string
           created_by: string | null
           exam_max: number

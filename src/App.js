@@ -83,6 +83,8 @@ const Fees = lazyPage(() => import("./Pages/Fees/Fees"));
 const PaymentReturn = lazyPage(() => import("./Pages/Fees/PaymentReturn"));
 const Reports = lazyPage(() => import("./Pages/Reports/Reports"));
 const StudentReport = lazyPage(() => import("./Pages/Reports/StudentReport"));
+const Results = lazyPage(() => import("./Pages/Results/Results"));
+const ResultSheet = lazyPage(() => import("./Pages/Results/ResultSheet"));
 
 // Module-scope, not inside the App component: it has to run no matter which
 // of App/PlatformApp/MarketingApp ends up mounted below, and it watches
@@ -220,6 +222,13 @@ function App() {
 
             <Route path="/Reports" element={<Reports />} />
             <Route path="/Reports/:studentId" element={<StudentReport />} />
+
+            {/* Term results from paper exams: teachers enter, leaders
+                approve and release (supabase/024, 258). */}
+            <Route element={<SchoolRoute module="results" />}>
+              <Route path="/Results" element={<Results />} />
+              <Route path="/Results/:sheetId" element={<ResultSheet />} />
+            </Route>
 
             {/* Staff who may run a course. Uses the "teach" module, not the
                 broader isStaff check — a bursar or admissions officer has no

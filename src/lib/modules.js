@@ -180,6 +180,17 @@ export const MODULES = [
     roles: [...RUNS_THE_SCHOOL, "principal", "admissions"],
   },
   {
+    id: "results",
+    priority: 44,
+    group: "School",
+    path: "/Results",
+    label: "Results",
+    // Term results from paper exams (supabase/024, 258): teachers enter the
+    // marks; the principal, a proprietor or an admin approves and releases.
+    // Families see released results on their child's report, not here.
+    roles: [...RUNS_THE_SCHOOL, "principal", "teacher"],
+  },
+  {
     id: "reports",
     priority: 45,
     group: "School",
