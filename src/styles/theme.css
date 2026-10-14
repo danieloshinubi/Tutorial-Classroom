@@ -8734,20 +8734,3 @@ body.view-only-active .modal .btn-primary,
 body.view-only-active .modal .btn-danger,
 body.view-only-active .modal .btn-danger-outline { display: none !important; }
 .view-only-scope form[inert], body.view-only-active .modal form[inert] { opacity: .85; }
-
-/* A course's join requests waiting for its teacher (CourseDashboard,
-   supabase/259): a count on the People tab, and a banner until answered. */
-.tab-count {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px;
-  border-radius: 999px; background: var(--danger); color: #fff;
-  font-size: 11px; font-weight: 700; line-height: 1;
-}
-.join-waiting {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  margin-top: 16px; padding: 10px 14px;
-  border: 1px solid var(--warn-soft); border-radius: var(--r-lg, 14px);
-  background: var(--warn-soft); color: var(--warn-ink);
-}
-.join-waiting-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn-ink); flex: none; }
-.join-waiting-text { flex: 1; min-width: 180px; font-size: 14px; font-weight: 600; }

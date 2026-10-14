@@ -78,12 +78,20 @@ export const fetchCourseSessions = async ({ schoolId, code }) => {
 // is a member of SOME school that owns a row, not that it's the tenant
 // currently open. Someone who teaches at two schools would otherwise see
 // both schools' courses merged into whichever one they happen to be on.
+// Every course the person teaches: as its lead, a co-teacher, or the
+// teacher of the class subject it belongs to (supabase/260). userId is
+// kept for callers; the database answers for whoever is signed in.
+// eslint-disable-next-line no-unused-vars
 export const fetchCoursesOwnedBy = async ({ schoolId, userId }) => {
+  const { data: ids, error: idError } = await supabase.rpc("my_taught_course_ids", { target_school: schoolId });
+  if (idError) throw idError;
+  const list = (ids || []).map((r) => (typeof r === "string" ? r : r.my_taught_course_ids)).filter(Boolean);
+  if (!list.length) return [];
   const { data, error } = await supabase
     .from("courses")
     .select("id, code, title, level_year, archived, session_id, sessions ( id, name, is_current )")
     .eq("school_id", schoolId)
-    .eq("owner_id", userId)
+    .in("id", list)
     .order("code");
   if (error) throw error;
   return data;

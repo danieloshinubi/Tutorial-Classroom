@@ -1896,6 +1896,56 @@ export type Database = {
           },
         ]
       }
+      course_teachers: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          course_id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          course_id: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          course_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "course_teachers_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_teachers_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "course_teachers_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "result_slips"
+            referencedColumns: ["course_id"]
+          },
+          {
+            foreignKeyName: "course_teachers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       courses: {
         Row: {
           archived: boolean
@@ -7738,6 +7788,10 @@ export type Database = {
         Args: { member_ids: string[]; target_channel: string }
         Returns: undefined
       }
+      add_course_teacher: {
+        Args: { target_course: string; target_user: string }
+        Returns: undefined
+      }
       add_ticket_message: {
         Args: {
           body_in: string
@@ -8302,6 +8356,8 @@ export type Database = {
         Returns: number
       }
       course_is_visible: { Args: { target_course: string }; Returns: boolean }
+      course_staff: { Args: { target_course: string }; Returns: Json }
+      course_teacher_ids: { Args: { target_course: string }; Returns: string[] }
       create_applicant_account: {
         Args: {
           date_of_birth_in?: string
@@ -9051,6 +9107,10 @@ export type Database = {
       is_chat_member: { Args: { target_channel: string }; Returns: boolean }
       is_chat_member_of_message: {
         Args: { target_message: string }
+        Returns: boolean
+      }
+      is_course_teacher: {
+        Args: { target_course: string; who: string }
         Returns: boolean
       }
       is_enrolled_in: { Args: { target_course: string }; Returns: boolean }
@@ -9903,6 +9963,10 @@ export type Database = {
       }
       mail_snippet: { Args: { html: string }; Returns: string }
       mail_unread: { Args: { target_school: string }; Returns: number }
+      make_course_lead: {
+        Args: { target_course: string; target_user: string }
+        Returns: undefined
+      }
       mark_attempt: {
         Args: { forced?: boolean; target_attempt: string }
         Returns: {
@@ -10077,6 +10141,10 @@ export type Database = {
       }
       my_school_ids: { Args: never; Returns: string[] }
       my_school_subscription: { Args: { target_school: string }; Returns: Json }
+      my_taught_course_ids: {
+        Args: { target_school: string }
+        Returns: string[]
+      }
       my_teaching: {
         Args: { target_school: string }
         Returns: {
@@ -11615,6 +11683,10 @@ export type Database = {
       }
       remove_chat_member: {
         Args: { target_channel: string; target_user: string }
+        Returns: undefined
+      }
+      remove_course_teacher: {
+        Args: { target_course: string; target_user: string }
         Returns: undefined
       }
       report_overview: {

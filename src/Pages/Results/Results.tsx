@@ -51,7 +51,7 @@ const Results = () => {
 
   const me = user?.id;
   const canTeach = useCallback(
-    (u: Unit) => u.teacherId === me || u.formTeacherId === me || (u.kind === "subject" && !u.teacherId && isLeader),
+    (u: Unit) => u.teacherId === me || u.formTeacherId === me || (!!me && u.coTeacherIds.includes(me)) || (u.kind === "subject" && !u.teacherId && isLeader),
     [me, isLeader],
   );
   const sheetOf = useMemo(() => {

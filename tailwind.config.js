@@ -18,6 +18,8 @@ module.exports = {
     "./src/Pages/Payroll/**/*.{ts,tsx}",
     // Results (TypeScript).
     "./src/Pages/Results/**/*.{ts,tsx}",
+    // Course pages (TypeScript).
+    "./src/Components/Sections/**/*.{ts,tsx}",
   ],
   // Tailwind decides what to generate by scanning the files above for
   // anything that LOOKS like a class name — which includes ordinary English

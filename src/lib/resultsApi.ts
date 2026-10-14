@@ -58,6 +58,8 @@ export interface Unit {
   teacher: Person | null;
   teacherId: string | null;
   formTeacherId: string | null;
+  /** A course's co-teachers (supabase/260), who mark it too. */
+  coTeacherIds: string[];
   pupils: number;
 }
 export interface Entry {
@@ -100,7 +102,7 @@ export const fetchUnits = async (schoolId: string): Promise<Unit[]> => {
       .select(`id, class_id, teacher_id, subject:subjects ( name ), class:classes ( name, form_teacher_id, level_year ), teacher:profiles!class_subjects_teacher_id_fkey ( ${PERSON} )`)
       .eq("school_id", schoolId),
     from("class_students").select("class_id, classes!inner ( school_id )").eq("classes.school_id", schoolId),
-    from("courses").select(`id, code, title, owner_id, owner:profiles!courses_owner_id_fkey ( ${PERSON} )`).eq("school_id", schoolId),
+    from("courses").select(`id, code, title, owner_id, owner:profiles!courses_owner_id_fkey ( ${PERSON} ), course_teachers ( user_id )`).eq("school_id", schoolId),
     from("enrollments").select("course_id, courses!inner ( school_id )").eq("courses.school_id", schoolId).eq("status", "approved"),
   ]);
   for (const r of [subs, roster, courses, enrol]) if (r.error) fail(r.error, "Could not load the subjects.");
@@ -119,6 +121,7 @@ export const fetchUnits = async (schoolId: string): Promise<Unit[]> => {
       teacher: s.teacher || null,
       teacherId: s.teacher_id,
       formTeacherId: s.class?.form_teacher_id || null,
+      coTeacherIds: [],
       pupils: perClass.get(s.class_id) || 0,
       _level: s.class?.level_year ?? 99,
     })),
@@ -133,6 +136,7 @@ export const fetchUnits = async (schoolId: string): Promise<Unit[]> => {
         teacher: c.owner || null,
         teacherId: c.owner_id,
         formTeacherId: null,
+        coTeacherIds: (c.course_teachers || []).map((t: any) => t.user_id),
         pupils: perCourse.get(c.id) || 0,
         _level: 100,
       })),
@@ -157,7 +161,7 @@ export const openSheet = async (unit: Unit, termId: string): Promise<Sheet> => {
 
 export interface SheetDetail {
   sheet: Sheet;
-  unit: { title: string; where: string; termName: string; teacherId: string | null; formTeacherId: string | null; courseOwnerId: string | null; kind: "subject" | "course" };
+  unit: { title: string; where: string; termName: string; teacherId: string | null; formTeacherId: string | null; courseOwnerId: string | null; coTeacherIds: string[]; kind: "subject" | "course" };
   entries: Entry[];
   events: Event[];
 }
@@ -165,7 +169,7 @@ export interface SheetDetail {
 export const fetchSheet = async (sheetId: string): Promise<SheetDetail> => {
   const [s, e, ev] = await Promise.all([
     from("result_sheets")
-      .select("*, term:terms ( name, sessions ( name ) ), course:courses ( code, title, owner_id ), cs:class_subjects ( teacher_id, subject:subjects ( name ), class:classes ( name, form_teacher_id ) )")
+      .select("*, term:terms ( name, sessions ( name ) ), course:courses ( code, title, owner_id, course_teachers ( user_id ) ), cs:class_subjects ( teacher_id, subject:subjects ( name ), class:classes ( name, form_teacher_id ) )")
       .eq("id", sheetId)
       .maybeSingle(),
     from("result_entries").select(`id, student_id, ca_score, exam_score, total, remark, student:profiles!result_entries_student_id_fkey ( ${PERSON} )`).eq("sheet_id", sheetId),
@@ -184,6 +188,7 @@ export const fetchSheet = async (sheetId: string): Promise<SheetDetail> => {
       teacherId: d.cs?.teacher_id ?? null,
       formTeacherId: d.cs?.class?.form_teacher_id ?? null,
       courseOwnerId: d.course?.owner_id ?? null,
+      coTeacherIds: (d.course?.course_teachers || []).map((t: any) => t.user_id),
       kind: d.class_subject_id ? "subject" : "course",
     },
     entries: ((e.data || []) as Entry[]).sort((a, b) => nameOf(a.student).localeCompare(nameOf(b.student))),

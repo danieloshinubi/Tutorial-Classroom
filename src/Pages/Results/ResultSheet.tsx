@@ -224,7 +224,7 @@ const ResultSheet = () => {
   // teacher yet; for a course, its teacher.
   const me = user?.id;
   const u = d?.unit;
-  const teaches = !!u && (u.kind === "subject" ? u.teacherId === me || u.formTeacherId === me || (!u.teacherId && isLeader) : u.courseOwnerId === me || isLeader);
+  const teaches = !!u && (u.kind === "subject" ? u.teacherId === me || u.formTeacherId === me || (!u.teacherId && isLeader) : u.courseOwnerId === me || (!!me && u.coTeacherIds.includes(me)) || isLeader);
   const canMark = editable && teaches;
   const outOf = sheet ? sheet.ca_max + sheet.exam_max : 100;
   const marked = (d?.entries || []).filter((e) => e.ca_score != null || e.exam_score != null).length;

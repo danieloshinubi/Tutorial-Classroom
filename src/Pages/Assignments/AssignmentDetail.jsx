@@ -26,6 +26,7 @@ import {
 } from "../../Components/UI";
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 import { useActionFeedback } from "../../Components/Toast";
+import { courseStaff } from "../../lib/courseTeamApi";
 
 // Nice size line, so a phone user knows what they are about to download.
 const humanSize = (bytes) => {
@@ -486,8 +487,23 @@ const AssignmentDetail = () => {
     };
   }, [assignmentId, schoolId, setError]);
 
+  // Any of the course's teachers marks its work, not only the one who
+  // created it (co-teachers, supabase/260): the database's own answer.
+  const [teaches, setTeaches] = useState(false);
+  const courseId = assignment?.course_id;
+  useEffect(() => {
+    if (!courseId) return undefined;
+    let live = true;
+    courseStaff(courseId)
+      .then((s) => live && setTeaches(Boolean(s.can_manage)))
+      .catch(() => live && setTeaches(false));
+    return () => {
+      live = false;
+    };
+  }, [courseId]);
   const canManage =
     isAdmin ||
+    teaches ||
     (assignment?.courses?.owner_id && assignment.courses.owner_id === user?.id);
 
   return (
