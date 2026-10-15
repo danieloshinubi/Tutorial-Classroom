@@ -10,6 +10,7 @@
 // around its own privileged write.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { checkMailHost } from "../_shared/net/mailHost.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -60,6 +61,11 @@ Deno.serve(async (req) => {
     if (!imapHost || !smtpHost || !username || !password) {
       return json({ error: "The IMAP host, SMTP host, username and app password are all required." }, 400);
     }
+    // Our servers will dial these: only public mail servers on mail ports.
+    const badImap = await checkMailHost(imapHost, imapPort ? Number(imapPort) : 993, "imap");
+    if (badImap) return json({ error: `IMAP: ${badImap}` }, 400);
+    const badSmtp = await checkMailHost(smtpHost, smtpPort ? Number(smtpPort) : 587, "smtp");
+    if (badSmtp) return json({ error: `SMTP: ${badSmtp}` }, 400);
 
     // As the caller — the same way pay-init asks payable_now() as the paying
     // user rather than trusting the client's own claim about its access.

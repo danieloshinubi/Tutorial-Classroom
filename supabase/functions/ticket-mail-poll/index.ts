@@ -13,6 +13,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { ImapFlow } from "npm:imapflow@2.0.2";
 import { simpleParser } from "npm:mailparser@3.9.26";
+import { checkMailHost } from "../_shared/net/mailHost.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -113,6 +114,8 @@ Deno.serve(async (req) => {
       });
       if (secretError || !password) throw new Error(secretError?.message || "No password stored for this mailbox.");
 
+      const badHost = await checkMailHost(mailbox.imap_host, mailbox.imap_port || 993, "imap");
+      if (badHost) throw new Error(badHost);
       const client = new ImapFlow({
         host: mailbox.imap_host,
         port: mailbox.imap_port || 993,

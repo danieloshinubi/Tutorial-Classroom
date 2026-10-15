@@ -88,8 +88,13 @@ const saveBlob = (blob, name) => {
 
 // --------------------------------------------------------------------- csv
 
+// A text cell starting with = + - @ (or a tab/return) is a formula to Excel:
+// a name like =HYPERLINK(...) typed by a parent would run when the bursar
+// opens the export. Such text gets a leading apostrophe, which Excel shows
+// as plain text. Numbers are left alone so they still add up.
 const csvCell = (value) => {
-  const text = value === null || value === undefined ? "" : String(value);
+  let text = value === null || value === undefined ? "" : String(value);
+  if (typeof value === "string" && /^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 };
 

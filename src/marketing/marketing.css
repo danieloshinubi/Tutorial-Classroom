@@ -599,8 +599,10 @@ body:has(.mkt) { overflow-x: hidden; }
   background: radial-gradient(circle at center, rgba(124,79,224,.10) 0%, rgba(124,79,224,0) 70%);
 }
 
+/* The card is as tall as the list beside it (16 tabs), so no empty space
+   opens up below a short card; its content sits centred in it. */
 .mkt-cap-layout {
-  display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start;
+  display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: stretch;
   min-width: 0;
 }
 @media (max-width: 880px) { .mkt-cap-layout { grid-template-columns: 1fr; overflow: hidden; } }
@@ -653,8 +655,23 @@ body:has(.mkt) { overflow-x: hidden; }
   position: relative; overflow: hidden;
   background: var(--mkt-dark-card); border-radius: 24px;
   border: 1px solid rgba(255,255,255,.08);
-  padding: 36px 40px; min-height: 440px;
-  display: flex; flex-direction: column;
+  padding: 36px 40px 72px; min-height: 440px;
+  display: flex; flex-direction: column; justify-content: center;
+}
+/* Where you are among the capabilities, along the card's foot. */
+.mkt-cap-progress {
+  position: absolute; z-index: 1; left: 40px; right: 40px; bottom: 28px;
+  display: flex; gap: 6px;
+}
+.mkt-cap-dot {
+  flex: 1; height: 4px; border: 0; padding: 0; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,.12); transition: background .2s;
+}
+.mkt-cap-dot:hover { background: rgba(255,255,255,.3); }
+.mkt-cap-dot.active { background: var(--mkt-brand-2); }
+@media (max-width: 880px) {
+  .mkt-cap-panel { padding-bottom: 56px; }
+  .mkt-cap-progress { left: 24px; right: 24px; bottom: 22px; }
 }
 .mkt-cap-panel::before {
   content: ""; position: absolute;

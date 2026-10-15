@@ -15,6 +15,7 @@ import { mail as mailIcon } from "react-icons-kit/feather/mail";
 import { toggleRight } from "react-icons-kit/feather/toggleRight";
 import { settings as settingsIcon } from "react-icons-kit/feather/settings";
 import { chevronDown } from "react-icons-kit/feather/chevronDown";
+import { award } from "react-icons-kit/feather/award";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useSchool } from "../../context/SchoolContext";
 import LevelsPanel from "./LevelsPanel";
@@ -29,6 +30,7 @@ import OrganogramPanel from "./OrganogramPanel";
 import SecurityPanel from "./SecurityPanel";
 import SchoolAccessPanel from "./SchoolAccessPanel";
 import BillingPanel from "./BillingPanel";
+import GradingPanel from "./GradingPanel";
 import MailSettingsPanel from "../Mail/MailSettingsPanel";
 import PeopleSection from "./people/PeopleSection";
 import { CountrySelect, CurrencySelect, TimeZoneSelect } from "../../Components/LocalePickers";
@@ -756,6 +758,7 @@ const SECTIONS = [
       { id: "academic", label: "Calendar", icon: calendarIcon, description: "Sessions and terms, and which one is current." },
       { id: "levels", label: "Levels & departments", icon: layers, description: "Year groups (JSS 1, Year 7) or departments (Science, Arts) the school sorts by." },
       { id: "classes", label: "Classes & subjects", icon: grid, description: "The actual classes with pupils in them, their form teachers, and the subjects taught." },
+      { id: "grading", label: "Grading", icon: award, description: "The grades on result sheets and report cards, and the mark each starts at." },
     ],
   },
   {
@@ -788,6 +791,7 @@ const PANELS = {
   academic: AcademicPanel,
   classes: ClassesPanel,
   levels: LevelsPanel,
+  grading: GradingPanel,
   admissions: AdmissionsSettingsPanel,
   students: StudentRegistrationsPanel,
   mail: MailSettingsPanel,

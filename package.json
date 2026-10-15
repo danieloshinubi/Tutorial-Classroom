@@ -27,7 +27,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons-kit": "^2.0.0",
-    "react-router-dom": "^6.22.3",
+    "react-router-dom": "6.30.6",
     "react-scripts": "5.0.1",
     "styled-components": "^6.1.8",
     "typeface-poppins": "^1.1.13",

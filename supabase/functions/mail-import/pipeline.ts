@@ -6,6 +6,12 @@
 import { Buffer } from "node:buffer";
 import { simpleParser } from "npm:mailparser@3.9.26";
 
+// Stored so a browser downloads it rather than showing it: an HTML or SVG
+// attachment opened straight from storage could otherwise run a script.
+const storedType = (t?: string | null) =>
+  /html|svg|xml|javascript|ecmascript/i.test(t || "") ? "application/octet-stream" : t || "application/octet-stream";
+
+
 // deno-lint-ignore no-explicit-any
 export type AdminClient = any;
 
@@ -130,7 +136,7 @@ export async function importRaw(
       continue;
     }
     const path = `${job.mailbox_id}/${envelope}/${crypto.randomUUID()}-${safeName(a.filename ?? "")}`;
-    const up = await admin.storage.from("mail").upload(path, a.content, { contentType: a.contentType || "application/octet-stream", upsert: false });
+    const up = await admin.storage.from("mail").upload(path, a.content, { contentType: storedType(a.contentType), upsert: false });
     if (up.error) {
       skipped.push(a.filename || "attachment");
       continue;

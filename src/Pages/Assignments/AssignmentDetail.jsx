@@ -27,6 +27,7 @@ import {
 import { useDocumentPreview } from "../../Components/DocumentPreview";
 import { useActionFeedback } from "../../Components/Toast";
 import { courseStaff } from "../../lib/courseTeamApi";
+import { safeHref } from "../../lib/safeUrl";
 
 // Nice size line, so a phone user knows what they are about to download.
 const humanSize = (bytes) => {
@@ -386,7 +387,7 @@ const GradePanel = ({ assignment, graderId }) => {
           ) : null}
           {submission.url ? (
             <a
-              href={submission.url}
+              href={safeHref(submission.url)}
               target="_blank"
               rel="noreferrer noopener"
               style={{ wordBreak: "break-all" }}
@@ -556,7 +557,7 @@ const AssignmentDetail = () => {
                     {assignment.link_url ? (
                       <a
                         className="tf-brief-link"
-                        href={assignment.link_url}
+                        href={safeHref(assignment.link_url)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >

@@ -6,6 +6,7 @@
 
 import { ImapFlow } from "npm:imapflow@2.0.2";
 import { type AdminClient, type Folder, importKey, importRaw, isMine, type Job, seenKeys, type Tally } from "./pipeline.ts";
+import { checkMailHost } from "../_shared/net/mailHost.ts";
 
 export interface Budget {
   deadline: number;      // Date.now() to stop by
@@ -55,6 +56,9 @@ export function imapFolder(path: string, specialUse?: string): Folder | null {
 const ORDER: Folder[] = ["inbox", "sent", "drafts", "junk", "deleted", "archive"];
 
 export async function imapClient(job: Pick<Job, "imap_host" | "imap_port" | "imap_security" | "imap_username" | "password">) {
+  // Only public mail servers on mail ports (never our own network).
+  const bad = await checkMailHost(job.imap_host!, job.imap_port || 993, "imap");
+  if (bad) throw new Error(bad);
   const client = new ImapFlow({
     host: job.imap_host!,
     port: job.imap_port || 993,

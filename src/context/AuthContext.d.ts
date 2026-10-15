@@ -12,6 +12,16 @@ export interface AuthValue {
   signOut: () => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  signUp: (args: {
+    email: string;
+    password: string;
+    firstName: string;
+    surname: string;
+    username?: string;
+    role?: string;
+    pendingApplicantSchoolId?: string;
+  }) => Promise<{ session: unknown | null; user?: unknown }>;
+  signIn: (args: { email: string; password: string }) => Promise<unknown>;
   [key: string]: unknown;
 }
 export declare const useAuth: () => AuthValue;

@@ -26,6 +26,7 @@ const QUICK: { action: ComposeAction; label: string }[] = [
 
 const eligible = (el: Element | null): el is HTMLTextAreaElement =>
   el instanceof HTMLTextAreaElement &&
+  !document.body.classList.contains("exam-mode") &&
   !el.disabled &&
   !el.readOnly &&
   !el.closest("[data-no-ai]") &&

@@ -1,5 +1,5 @@
 import React from "react";
-import type { Status } from "../../lib/resultsApi";
+import { DEFAULT_BANDS, fetchGradeBands, type GradeBand, type Status } from "../../lib/resultsApi";
 
 // Small pieces shared by the Results screens (Tailwind, tw- prefix).
 
@@ -21,6 +21,22 @@ export const I = {
   edit: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z",
   history: "M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2",
   eye: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+};
+
+// The school's grading scale, for drawing grades (the default until it loads).
+export const useGradeBands = (schoolId: string | null | undefined) => {
+  const [bands, setBands] = React.useState<GradeBand[]>(DEFAULT_BANDS);
+  React.useEffect(() => {
+    if (!schoolId) return;
+    let live = true;
+    fetchGradeBands(schoolId)
+      .then((b) => live && setBands(b))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [schoolId]);
+  return bands;
 };
 
 export type Tone = "good" | "bad" | "warn" | "brand" | "muted";

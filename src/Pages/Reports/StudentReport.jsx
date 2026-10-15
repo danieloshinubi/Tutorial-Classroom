@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useParams, Link, Navigate, useLocation } from "react-router-dom";
+import { useReportPeriod, PeriodPicker } from "../../Components/ReportPeriod";
 import { Icon } from "react-icons-kit";
 import { printer } from "react-icons-kit/feather/printer";
 import Navbar from "../../Components/Navbar/Navbar";
@@ -134,10 +135,22 @@ const CourseRow = ({ c, labelFor }) => {
   );
 };
 
-const StudentReport = () => {
+const StudentReportPage = () => {
   const { studentId } = useParams();
   const { user } = useAuth();
-  const { schoolId, labelFor } = useSchool();
+  const { schoolId, labelFor, roles } = useSchool();
+  const { search } = useLocation();
+  // The term (or session) this report covers; only its work counts.
+  const { school } = useSchool();
+  const { ready: periodReady, periods, period, setPeriod } = useReportPeriod(schoolId, school?.timezone);
+  const inPeriod = useCallback(
+    (iso) => {
+      // As instants, not text: the database and the browser write dates differently.
+      const t = Date.parse(iso);
+      return Number.isFinite(t) && (!period.from || t >= Date.parse(period.from)) && (!period.to || t < Date.parse(period.to));
+    },
+    [period.from, period.to]
+  );
 
   const [student, setStudent] = useState(null);
   const [rows, setRows] = useState([]);
@@ -149,36 +162,45 @@ const StudentReport = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Only the latest load may fill the page: switching term quickly must not
+  // let a slower, older answer land under the new term's name.
+  const loadSeq = useRef(0);
+
   const load = useCallback(async () => {
     // Waiting for the school: without this the query goes out with
     // school_id=eq.null and Postgres rejects "null" as a uuid.
-    if (!studentId || !schoolId) return;
+    if (!studentId || !schoolId || !periodReady) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     setError("");
     try {
       const [report, marksRows, people, guardianRows, classAttendanceRows, schoolAttendanceRows] = await Promise.all([
-        fetchStudentReport(studentId, schoolId),
-        fetchStudentMarks(studentId, schoolId),
+        fetchStudentReport(studentId, schoolId, period),
+        fetchStudentMarks(studentId, schoolId, period),
         fetchReportableStudents(schoolId),
         fetchGuardiansOf(studentId, schoolId).catch(() => []),
-        fetchStudentClassAttendance(studentId, schoolId).catch(() => []),
+        fetchStudentClassAttendance(studentId, schoolId, { fromAt: period.from, toAt: period.to }).catch(() => []),
         fetchSchoolAttendanceRecords({ schoolId, personId: studentId }).catch(() => []),
       ]);
+      if (seq !== loadSeq.current) return;
       setRows(report);
       setMarks(marksRows);
       setGuardians(guardianRows);
+      // Class registers already come for the period only (from the server).
       setClassAttendance(classAttendanceRows);
-      setSchoolAttendance(schoolAttendanceRows);
+      setSchoolAttendance(schoolAttendanceRows.filter((r) => r.resumed_at && inPeriod(String(r.resumed_at))));
       setStudent(
         people.find((p) => p.student_id === studentId) ||
           (studentId === user?.id ? { student_id: user.id, email: user.email } : null)
       );
     } catch (err) {
+      if (seq !== loadSeq.current) return;
       setError(err.message || "Could not build this report.");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [studentId, schoolId, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentId, schoolId, user, periodReady, period.key]);
 
   useEffect(() => {
     load();
@@ -229,13 +251,20 @@ const StudentReport = () => {
 
   const shellClass = "shell sr-shell";
 
-  const backLink = (
-    <Link to="/Reports" className="sr-back sr-no-print">
+  const pupil = isPupilOnly(roles || []);
+  const picker = <PeriodPicker periods={periods} period={period} onChange={setPeriod} />;
+  const backLink = pupil ? (
+    <div className="sr-no-print">{picker}</div>
+  ) : (
+    <div className="sr-toolbar sr-no-print">
+    <Link to={`/Reports${search}`} className="sr-back sr-no-print">
       <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
         <path d="M10 3.5 5.5 8 10 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       {"All reports"}
     </Link>
+    {picker}
+    </div>
   );
 
   if (loading) {
@@ -266,11 +295,11 @@ const StudentReport = () => {
     return (
       <div className={shellClass}>
         <Navbar />
-        <Page title={name} subtitle="Student report">
+        <Page title={name} subtitle={`Student report · ${period.label}`}>
           {backLink}
           <div className="sr-empty">
-            <strong>{"Nothing to report yet"}</strong>
-            <span>{"This student is not on any course and has no attendance recorded, so there is nothing to show."}</span>
+            <strong>{`Nothing to report for ${period.label}`}</strong>
+            <span>{period.key === "all" ? "This student is not on any course and has no attendance recorded, so there is nothing to show." : "No work, exams or attendance were recorded in this period. Pick another term above."}</span>
           </div>
         </Page>
       </div>
@@ -288,6 +317,7 @@ const StudentReport = () => {
         subtitle={[
           levels.join(", ") || null,
           `${courseCount} course${courseCount === 1 ? "" : "s"}`,
+          period.label,
           `Report as of ${formatDate(new Date().toISOString(), { withTime: false })}`,
         ]
           .filter(Boolean)
@@ -298,10 +328,13 @@ const StudentReport = () => {
             {"Print"}
           </Button>
         }
+        toolbar={backLink}
+        className="sr-fixed"
       >
-        {backLink}
-
-        <div className="sr-stats">
+        {/* Header above stays put; each side below scrolls on its own. */}
+        <div className="sr-body sr-split">
+          <div className="sr-main sr-pane">
+        <div className="sr-stats sr-stats-main">
           <Stat
             label="Overall average"
             value={report.average === null ? "—" : `${report.average}%`}
@@ -330,27 +363,8 @@ const StudentReport = () => {
           >
             <span>{report.punctuality === null ? "Nothing handed in yet" : "of the work handed in"}</span>
           </Stat>
-          {attendance.hasData ? (
-            <Stat
-              label="Class attendance"
-              value={attendance.classAttendanceRate === null ? "—" : `${attendance.classAttendanceRate}%`}
-              muted={attendance.classAttendanceRate === null}
-            >
-              <Badge tone={attendance.classBand.tone}>{attendance.classBand.label}</Badge>
-            </Stat>
-          ) : (
-            <Stat label="Class contributions" value={report.totalContribution} muted={!report.totalContribution}>
-              <span>
-                {report.totalReactions > 0
-                  ? `${report.totalMessages} posts, ${report.totalReactions} reactions`
-                  : `${report.totalMessages} posts on class streams`}
-              </span>
-            </Stat>
-          )}
         </div>
 
-        <div className="sr-body">
-          <div className="sr-main">
             {findings.length ? (
               <section className="sr-card">
                 <h2 className="sr-card-title">{"What this shows"}</h2>
@@ -371,7 +385,7 @@ const StudentReport = () => {
             ) : null}
 
             {/* Released term results from the school's exams (supabase/258). */}
-            <TermResults studentId={studentId} />
+            <TermResults studentId={studentId} termIds={period.termIds} />
 
             {courseCount ? (
               <section className="sr-card">
@@ -402,7 +416,26 @@ const StudentReport = () => {
             ) : null}
           </div>
 
-          <aside className="sr-aside">
+          <aside className="sr-aside sr-pane">
+            <div className="sr-stats sr-stats-aside">
+              {attendance.hasData ? (
+                <Stat
+                  label="Class attendance"
+                  value={attendance.classAttendanceRate === null ? "—" : `${attendance.classAttendanceRate}%`}
+                  muted={attendance.classAttendanceRate === null}
+                >
+                  <Badge tone={attendance.classBand.tone}>{attendance.classBand.label}</Badge>
+                </Stat>
+              ) : (
+                <Stat label="Class contributions" value={report.totalContribution} muted={!report.totalContribution}>
+                  <span>
+                    {report.totalReactions > 0
+                      ? `${report.totalMessages} posts, ${report.totalReactions} reactions`
+                      : `${report.totalMessages} posts on class streams`}
+                  </span>
+                </Stat>
+              )}
+            </div>
             {attendance.hasData ? (
               <section className="sr-card">
                 <h2 className="sr-card-title">{"Attendance"}</h2>
@@ -498,6 +531,19 @@ const StudentReport = () => {
       </Page>
     </div>
   );
+};
+
+
+// A pupil (not also staff or a parent) has one report: their own. Reports
+// takes them straight to it, and they cannot open anyone else's.
+const isPupilOnly = (roles) => roles.includes("student") && !roles.some((r) => r !== "student");
+
+const StudentReport = () => {
+  const { studentId } = useParams();
+  const { user } = useAuth();
+  const { roles } = useSchool();
+  if (user && studentId !== user.id && isPupilOnly(roles || [])) return <Navigate to={`/Reports/${user.id}`} replace />;
+  return <StudentReportPage />;
 };
 
 export default StudentReport;

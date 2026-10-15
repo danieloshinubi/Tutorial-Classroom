@@ -214,9 +214,12 @@ const PeopleTab = ({ course, canManage, schoolId, onChanged }: { course: { id: s
                           {"Add as teacher"}
                         </button>
                       ) : null}
-                      <button type="button" className={btn(isStaff ? "secondary" : "primary")} disabled={busy !== null} onClick={() => run(`a:${p.id}`, () => decideEnrollment({ courseId: course.id, userId: p.id, approve: true }), `${displayName(p)} joined ${course.code}.`)}>
-                        {isStaff ? "Approve as pupil" : "Approve"}
-                      </button>
+                      {/* Staff join as teachers (supabase/261), never as pupils. */}
+                      {!isStaff ? (
+                        <button type="button" className={btn("primary")} disabled={busy !== null} onClick={() => run(`a:${p.id}`, () => decideEnrollment({ courseId: course.id, userId: p.id, approve: true }), `${displayName(p)} joined ${course.code}.`)}>
+                          {"Approve"}
+                        </button>
+                      ) : null}
                       <button type="button" className={btn()} disabled={busy !== null} onClick={() => run(`d:${p.id}`, () => decideEnrollment({ courseId: course.id, userId: p.id, approve: false }))}>
                         {"Decline"}
                       </button>

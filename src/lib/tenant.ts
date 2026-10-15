@@ -11,11 +11,32 @@ const RESERVED = new Set(["www", "app", "api", "admin", "static", "cdn", "mail"]
 
 const FALLBACK = process.env.REACT_APP_DEFAULT_SCHOOL || "jane-nath";
 
-export const resolveSlug = (hostname = window.location.hostname) => {
+const isIp = (host: string): boolean => /^\d+\.\d+\.\d+\.\d+$/.test(host);
+
+// An address with no room for a school's name (an IP address, as when
+// testing on a phone over Wi-Fi, or plain localhost) names the school with
+// ?school=<slug> instead, remembered for the rest of that tab.
+const OVERRIDE_KEY = "schoolivio.devSchool";
+const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
+const overrideSlug = (): string | null => {
+  try {
+    const fromQuery = new URLSearchParams(window.location.search).get("school");
+    if (fromQuery && SLUG.test(fromQuery.toLowerCase())) {
+      window.sessionStorage.setItem(OVERRIDE_KEY, fromQuery.toLowerCase());
+      return fromQuery.toLowerCase();
+    }
+    const saved = window.sessionStorage.getItem(OVERRIDE_KEY);
+    return saved && SLUG.test(saved) ? saved : null;
+  } catch {
+    return null;
+  }
+};
+
+export const resolveSlug = (hostname: string = window.location.hostname): string => {
   const host = hostname.toLowerCase().split(":")[0];
 
   // An IP address is never a subdomain.
-  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return FALLBACK;
+  if (isIp(host) || host === "localhost") return overrideSlug() || FALLBACK;
 
   const parts = host.split(".");
 
@@ -33,17 +54,20 @@ export const resolveSlug = (hostname = window.location.hostname) => {
 // resolveSlug falls back to the default (plain localhost, an IP address).
 // Only a named school can be wrong, so only this is checked for "no such
 // school" (TenantGate).
-export const slugFromHost = (hostname = window.location.hostname) => {
+export const slugFromHost = (hostname: string = window.location.hostname): string | null => {
   const slug = resolveSlug(hostname);
   const first = hostname.toLowerCase().split(":")[0].split(".")[0];
   return slug === first ? slug : null;
 };
 
 // Where a given school lives, used when switching between them.
-export const schoolUrl = (slug) => {
+export const schoolUrl = (slug: string): string => {
   const { protocol, hostname, port } = window.location;
   const host = hostname.toLowerCase();
   const parts = host.split(".");
+
+  // No subdomains on an IP address: the school goes in the query instead.
+  if (isIp(host)) return `${protocol}//${host}${port ? `:${port}` : ""}/?school=${encodeURIComponent(slug)}`;
 
   const base =
     host.endsWith("localhost") || host === "localhost"
@@ -60,13 +84,13 @@ export const schoolUrl = (slug) => {
 //
 // Only "admin". "app" stays a reserved name that falls back to a tenant, so
 // nobody lands in the console by typing a host that merely sounds like it.
-export const isPlatformHost = (hostname = window.location.hostname) => {
+export const isPlatformHost = (hostname: string = window.location.hostname): boolean => {
   const first = hostname.toLowerCase().split(":")[0].split(".")[0];
   return first === "admin";
 };
 
 // Where the console lives, from wherever you are now.
-export const platformUrl = () => {
+export const platformUrl = (): string => {
   const { protocol, hostname, port } = window.location;
   const host = hostname.toLowerCase();
   const parts = host.split(".");
@@ -83,7 +107,7 @@ export const platformUrl = () => {
 // dev's existing fallback to REACT_APP_DEFAULT_SCHOOL (see resolveSlug
 // above) stays untouched, so every existing dev workflow keeps working.
 // Visit /Welcome on any host to preview the marketing site locally instead.
-export const isMarketingHost = (hostname = window.location.hostname) => {
+export const isMarketingHost = (hostname: string = window.location.hostname): boolean => {
   const host = hostname.toLowerCase().split(":")[0];
   const parts = host.split(".");
   if (parts.length === 2 && parts[1] !== "localhost") return true; // schoolivio.com

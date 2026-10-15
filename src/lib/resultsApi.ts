@@ -81,8 +81,54 @@ export interface Event {
   created_at: string;
 }
 
-export const gradeFor = (pct: number | null) =>
-  pct === null ? "" : pct >= 70 ? "A" : pct >= 60 ? "B" : pct >= 50 ? "C" : pct >= 45 ? "D" : pct >= 40 ? "E" : "F";
+// Grading (supabase/262): each school's own scale, or Schoolivio's default
+// until the school sets one (School admin → Grading).
+export interface GradeBand {
+  grade: string;
+  min_pct: number;
+  remark: string | null;
+  is_default?: boolean;
+}
+export const DEFAULT_BANDS: GradeBand[] = [
+  { grade: "A", min_pct: 70, remark: "Excellent", is_default: true },
+  { grade: "B", min_pct: 60, remark: "Very good", is_default: true },
+  { grade: "C", min_pct: 50, remark: "Good", is_default: true },
+  { grade: "D", min_pct: 45, remark: "Fair", is_default: true },
+  { grade: "E", min_pct: 40, remark: "Pass", is_default: true },
+  { grade: "F", min_pct: 0, remark: "Fail", is_default: true },
+];
+
+const byMin = (bands: GradeBand[]) => [...bands].sort((a, b) => b.min_pct - a.min_pct);
+
+export const bandFor = (pct: number | null, bands: GradeBand[] = DEFAULT_BANDS): GradeBand | null =>
+  pct === null ? null : byMin(bands).find((b) => pct >= b.min_pct) || null;
+
+export const gradeFor = (pct: number | null, bands: GradeBand[] = DEFAULT_BANDS) => bandFor(pct, bands)?.grade || "";
+
+// The top grade reads green, the lowest red, the rest plain.
+export const gradeTone = (grade: string, bands: GradeBand[] = DEFAULT_BANDS): "good" | "bad" | "muted" => {
+  const sorted = byMin(bands);
+  if (!sorted.length) return "muted";
+  if (grade === sorted[0].grade) return "good";
+  if (grade === sorted[sorted.length - 1].grade) return "bad";
+  return "muted";
+};
+
+export const fetchGradeBands = async (schoolId: string): Promise<GradeBand[]> => {
+  const { data, error } = await rpc("grade_bands_for", { target_school: schoolId });
+  if (error) fail(error, "Could not load the grading scale.");
+  const rows = ((data as GradeBand[]) || []).map((b) => ({ ...b, min_pct: Number(b.min_pct) }));
+  return rows.length ? rows : DEFAULT_BANDS;
+};
+
+// An empty list goes back to the Schoolivio default.
+export const saveGradeBands = async (schoolId: string, bands: GradeBand[]) => {
+  const { error } = await rpc("set_grade_bands", {
+    target_school: schoolId,
+    bands: bands.map((b) => ({ grade: b.grade.trim(), min_pct: b.min_pct, remark: b.remark?.trim() || null })),
+  });
+  if (error) fail(error, "Could not save the grading scale.");
+};
 
 const PERSON = "id, first_name, surname, username, email, avatar_url";
 
@@ -96,14 +142,26 @@ export const fetchTerms = async (schoolId: string): Promise<Term[]> => {
 };
 
 /** Every class subject and course with pupils, as units results are kept for. */
+// Every row (the database returns at most 1000 per request), so pupil counts
+// stay right in a big school.
+const allRows = async (build: () => any) => {
+  const rows: any[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await build().range(from, from + 999);
+    if (error) return { data: null, error };
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) return { data: rows, error: null };
+  }
+};
+
 export const fetchUnits = async (schoolId: string): Promise<Unit[]> => {
   const [subs, roster, courses, enrol] = await Promise.all([
     from("class_subjects")
       .select(`id, class_id, teacher_id, subject:subjects ( name ), class:classes ( name, form_teacher_id, level_year ), teacher:profiles!class_subjects_teacher_id_fkey ( ${PERSON} )`)
       .eq("school_id", schoolId),
-    from("class_students").select("class_id, classes!inner ( school_id )").eq("classes.school_id", schoolId),
+    allRows(() => from("class_students").select("class_id, student_id, classes!inner ( school_id )").eq("classes.school_id", schoolId).order("class_id").order("student_id")),
     from("courses").select(`id, code, title, owner_id, owner:profiles!courses_owner_id_fkey ( ${PERSON} ), course_teachers ( user_id )`).eq("school_id", schoolId),
-    from("enrollments").select("course_id, courses!inner ( school_id )").eq("courses.school_id", schoolId).eq("status", "approved"),
+    allRows(() => from("enrollments").select("course_id, user_id, courses!inner ( school_id )").eq("courses.school_id", schoolId).eq("status", "approved").order("course_id").order("user_id")),
   ]);
   for (const r of [subs, roster, courses, enrol]) if (r.error) fail(r.error, "Could not load the subjects.");
   const perClass = new Map<string, number>();
@@ -125,8 +183,9 @@ export const fetchUnits = async (schoolId: string): Promise<Unit[]> => {
       pupils: perClass.get(s.class_id) || 0,
       _level: s.class?.level_year ?? 99,
     })),
+    // Courses with no pupils yet are kept, so their teacher sees them (and
+    // why there is nothing to mark) rather than wondering where they went.
     ...(courses.data || [])
-      .filter((c: any) => (perCourse.get(c.id) || 0) > 0)
       .map((c: any) => ({
         key: `c:${c.id}`,
         kind: "course" as const,
@@ -210,6 +269,13 @@ const transition = async (fn: string, args: Record<string, unknown>, fallback: s
 export const submitSheet = (id: string, note?: string) => transition("submit_result_sheet", { target_sheet: id, note: note || null }, "Could not submit the results.");
 export const approveSheet = (id: string, note?: string) => transition("approve_result_sheet", { target_sheet: id, note: note || null }, "Could not approve the results.");
 export const returnSheet = (id: string, note: string) => transition("return_result_sheet", { target_sheet: id, note }, "Could not send the results back.");
+// Every approved sheet of a term in one go, one notice per family (supabase/270).
+export const releaseTermResults = async (schoolId: string, termId: string): Promise<number> => {
+  const { data, error } = await rpc("release_term_results", { target_school: schoolId, target_term: termId });
+  if (error) fail(error, "Could not release the results.");
+  return Number(data || 0);
+};
+
 export const releaseSheet = (id: string, note?: string) => transition("release_result_sheet", { target_sheet: id, note: note || null }, "Could not release the results.");
 export const withdrawSheet = (id: string, note: string) => transition("unrelease_result_sheet", { target_sheet: id, note }, "Could not withdraw the results.");
 export const setSplit = (id: string, ca: number, exam: number) => transition("set_result_sheet_split", { target_sheet: id, ca_max_in: ca, exam_max_in: exam }, "Could not change the split.");
@@ -232,8 +298,9 @@ export interface Slip {
   remark: string | null;
   released_at: string | null;
 }
-export const fetchReleasedResults = async (studentId: string): Promise<Slip[]> => {
-  const { data, error } = await from("result_slips").select("*").eq("student_id", studentId).eq("status", "released");
+// This school's only: a pupil at two schools sees each school's on its own.
+export const fetchReleasedResults = async (studentId: string, schoolId: string): Promise<Slip[]> => {
+  const { data, error } = await from("result_slips").select("*").eq("student_id", studentId).eq("school_id", schoolId).eq("status", "released");
   if (error) fail(error, "Could not load the results.");
   return (data || []) as Slip[];
 };

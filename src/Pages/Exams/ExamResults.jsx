@@ -295,7 +295,7 @@ const ExamResults = () => {
                 ) : null}
                 {attempt.submitted_late ? <Badge tone="warn">{"late"}</Badge> : null}
                 {attempt.violations > 0 ? (
-                  <Badge tone="danger">{`${attempt.violations} violations`}</Badge>
+                  <Badge tone="danger">{`${attempt.violations} violation${attempt.violations === 1 ? "" : "s"}`}</Badge>
                 ) : null}
                 {attempt.submitted_at ? (
                   <Badge tone={attempt.graded_at ? "success" : "warn"}>

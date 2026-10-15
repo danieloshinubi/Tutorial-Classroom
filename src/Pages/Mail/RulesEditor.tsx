@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Select } from "../../Components/UI";
+import { Select, Switch } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { confirmDialog } from "../../Components/Confirm";
 import { deleteRule, listRules, saveRule, type MailRule } from "../../lib/mailApi";
@@ -84,28 +84,18 @@ const RulesEditor = ({ mailboxId }: { mailboxId: string }) => {
               <input className={input} value={editing.subject_contains} placeholder="Invoice" onChange={(e) => set({ subject_contains: e.target.value })} />
             </label>
           </div>
-          <label className="tw-mt-2 tw-flex tw-items-center tw-gap-2 tw-text-[13.5px] tw-text-ink">
-            <input type="checkbox" checked={editing.with_attachments} onChange={(e) => set({ with_attachments: e.target.checked })} />
-            {"it has attachments"}
-          </label>
+          <div className="tw-mt-2">
+            <Switch compact checked={editing.with_attachments} onChange={(v: boolean) => set({ with_attachments: v })} label="it has attachments" />
+          </div>
           <p className="tw-m-0 tw-mb-2 tw-mt-4 tw-text-[13px] tw-font-semibold tw-text-ink">{"Then"}</p>
           <div className="tw-grid tw-grid-cols-2 tw-gap-3 mobile:tw-grid-cols-1">
             <Select value={editing.move_to ?? ""} onChange={(v: string) => set({ move_to: (v || null) as MailRule["move_to"] })} options={FOLDERS} />
             <input className={input} value={editing.forward_to ?? ""} placeholder="Forward to (optional): name@example.com" onChange={(e) => set({ forward_to: e.target.value || null })} />
           </div>
           <div className="tw-mt-2 tw-flex tw-flex-wrap tw-gap-4">
-            <label className="tw-flex tw-items-center tw-gap-2 tw-text-[13.5px] tw-text-ink">
-              <input type="checkbox" checked={editing.mark_read} onChange={(e) => set({ mark_read: e.target.checked })} />
-              {"mark it read"}
-            </label>
-            <label className="tw-flex tw-items-center tw-gap-2 tw-text-[13.5px] tw-text-ink">
-              <input type="checkbox" checked={editing.flag} onChange={(e) => set({ flag: e.target.checked })} />
-              {"flag it"}
-            </label>
-            <label className="tw-flex tw-items-center tw-gap-2 tw-text-[13.5px] tw-text-ink">
-              <input type="checkbox" checked={editing.stop} onChange={(e) => set({ stop: e.target.checked })} />
-              {"stop: no later rules"}
-            </label>
+            <Switch compact checked={editing.mark_read} onChange={(v: boolean) => set({ mark_read: v })} label="mark it read" />
+            <Switch compact checked={editing.flag} onChange={(v: boolean) => set({ flag: v })} label="flag it" />
+            <Switch compact checked={editing.stop} onChange={(v: boolean) => set({ stop: v })} label="stop: no later rules" />
           </div>
           <p className="tw-m-0 tw-mt-3 tw-text-[12.5px] tw-text-ink-2">{describe(editing)}</p>
           <div className="tw-mt-3 tw-flex tw-gap-2">
@@ -121,9 +111,9 @@ const RulesEditor = ({ mailboxId }: { mailboxId: string }) => {
       <ul className="tw-m-0 tw-list-none tw-p-0">
         {(rules || []).map((r) => (
           <li key={r.id} className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-border-0 tw-border-t tw-border-solid tw-border-line tw-py-3">
-            <label className="tw-flex tw-items-center" title={r.enabled ? "On" : "Off"}>
-              <input type="checkbox" checked={r.enabled} onChange={(e) => save({ ...r, enabled: e.target.checked })} />
-            </label>
+            <span title={r.enabled ? "On" : "Off"} className="tw-shrink-0">
+              <Switch compact checked={r.enabled} onChange={(v: boolean) => save({ ...r, enabled: v })} label="" />
+            </span>
             <span className="tw-flex tw-min-w-0 tw-flex-1 tw-flex-col">
               <span className={`tw-text-[14px] tw-font-semibold ${r.enabled ? "tw-text-ink" : "tw-text-ink-3"}`}>{r.name || "Rule"}</span>
               <span className="tw-text-[12.5px] tw-text-ink-3">{describe(r)}</span>

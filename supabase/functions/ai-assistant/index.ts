@@ -265,7 +265,17 @@ const cleanTurns = (messages: unknown, keep: number, chars: number): Turn[] => {
   return turns;
 };
 
-const admissions = async (admin: SupabaseClient, body: Record<string, unknown>, apiKey: string) => {
+// Who is asking, for rate limits: the visitor's network address (hashed,
+// never stored as-is) when there is no account.
+const visitorKey = async (req: Request) => {
+  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("cf-connecting-ip") || "unknown";
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`schoolivio-ai:${ip}`));
+  return `ip:${Array.from(new Uint8Array(digest)).slice(0, 12).map((b) => b.toString(16).padStart(2, "0")).join("")}`;
+};
+
+const TOO_FAST = "You're sending messages too quickly. Please wait a little and try again.";
+
+const admissions = async (req: Request, admin: SupabaseClient, body: Record<string, unknown>, apiKey: string) => {
   let schoolId: string | null = null;
   try {
     const slug = body.slug;
@@ -278,14 +288,20 @@ const admissions = async (admin: SupabaseClient, body: Record<string, unknown>, 
     if (schoolError || !row?.id) return json({ error: "Unknown school." }, 404);
     schoolId = row.id;
 
-    const { data: contact } = await admin.from("schools").select("email, phone, address").eq("id", schoolId).maybeSingle();
+    const { data: contact } = await admin.from("schools").select("email, phone, address, ai_token_limit").eq("id", schoolId).maybeSingle();
+    // A school that switched AI off has it off on its admissions page too.
+    if (contact && Number(contact.ai_token_limit ?? 0) <= 0) return json({ error: "The assistant is not available for this school." }, 403);
+    // No account here, so each visitor and each school are limited.
+    const { data: inRate } = await admin.rpc("ai_rate_ok", { target_school: schoolId, who_in: await visitorKey(req), per_hour: 20, per_school_day: 300 });
+    if (inRate === false) return json({ error: TOO_FAST }, 429);
 
     const { data: used } = await admin.rpc("ai_tokens_this_month", { target_school: schoolId });
     if (Number(used || 0) >= ADMISSIONS_MONTHLY_CEILING) {
       return json({ error: "The assistant has reached this school's limit for this month." }, 429);
     }
 
-    const systemText = admissionsSystem({ ...row, ...(contact || {}) }, "");
+    const { ai_token_limit: _limit, ...contactInfo } = (contact || {}) as Record<string, unknown>;
+    const systemText = admissionsSystem({ ...row, ...contactInfo }, "");
     if (provider() === "groq") {
       const result = await groqComplete(
         { model: groqModel(), max_tokens: 1024, messages: [{ role: "system", content: systemText }, ...clean] },
@@ -747,6 +763,11 @@ const applyFilters = (query: any, filters: unknown) => {
   return query;
 };
 
+const COLUMN_LIMITED: Record<string, string> = {
+  exam_options: "id,question_id,body,position",
+  exam_questions: "id,exam_id,kind,prompt,points,position,image_path",
+};
+
 const checkTable = (table: unknown, known: Set<string>) => {
   const name = String(table || "");
   if (!known.has(name)) throw new ToolError(`No such table in the catalogue: ${name}`);
@@ -761,7 +782,10 @@ const clipJson = (value: unknown, max = 60_000) => {
 // deno-lint-ignore no-explicit-any
 const findRecords = async (caller: SupabaseClient, known: Set<string>, input: any, maxChars = 60_000) => {
   const table = checkTable(input.table, known);
-  const select = String(input.select || "*").slice(0, 2000);
+  // Tables whose answer-key columns no signed-in user may read (supabase/
+  // 266): "everything" means the readable columns.
+  const asked = String(input.select || "*").slice(0, 2000);
+  const select = asked.trim() === "*" && COLUMN_LIMITED[table] ? COLUMN_LIMITED[table] : asked;
   const bad = forbiddenIn(select);
   if (bad) throw new ToolError(`Not available: ${bad}`);
   const limit = Math.min(200, Math.max(1, Number(input.limit) || 50));
@@ -936,6 +960,8 @@ const assistant = async (
   if (Number(used || 0) >= limit) {
     return json({ error: "The assistant has reached this school's limit for this month. It resets on the 1st." }, 429);
   }
+  const { data: inRate } = await admin.rpc("ai_rate_ok", { target_school: schoolId, who_in: `user:${user.id}`, per_hour: 60, per_school_day: null });
+  if (inRate === false) return json({ error: TOO_FAST }, 429);
 
   const turns = cleanTurns(body.messages, 30, 8000);
   // Pictures and PDFs attached to the latest question, for a model that can
@@ -1513,6 +1539,8 @@ const compose = async (req: Request, admin: SupabaseClient, body: Record<string,
   if (!school) return json({ error: "Unknown school." }, 404);
   const limit = Number(school.ai_token_limit ?? 0);
   if (limit <= 0) return json({ error: "AI is switched off for this school." }, 403);
+  const { data: inRate } = await admin.rpc("ai_rate_ok", { target_school: schoolId, who_in: `user:${uid}`, per_hour: 60, per_school_day: null });
+  if (inRate === false) return json({ error: TOO_FAST }, 429);
   const { data: used } = await admin.rpc("ai_tokens_this_month", { target_school: schoolId });
   if (Number(used || 0) >= limit) return json({ error: "AI has reached this school's limit for this month. It resets on the 1st." }, 429);
 
@@ -1609,5 +1637,5 @@ Deno.serve(async (req) => {
 
   if (body.surface === "assistant") return assistant(req, admin, body, apiKey);
   if (body.surface === "compose") return compose(req, admin, body, apiKey);
-  return admissions(admin, body, apiKey);
+  return admissions(req, admin, body, apiKey);
 });

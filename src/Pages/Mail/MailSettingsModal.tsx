@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Button, DateTimePicker, Modal, Select } from "../../Components/UI";
+import { Button, DateTimePicker, Modal, Select, Switch } from "../../Components/UI";
 import { RichTextEditor } from "../../Components/RichTextEditor";
 import { useActionFeedback } from "../../Components/Toast";
 import { saveMailboxSettings, saveSignature, type Mailbox } from "../../lib/mailApi";
@@ -99,10 +99,7 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
         </>
       ) : tab === "away" ? (
         <div className="tw-flex tw-flex-col tw-gap-3">
-          <label className="tw-flex tw-items-center tw-gap-2 tw-text-[14px] tw-font-semibold tw-text-ink">
-            <input type="checkbox" checked={away.on} onChange={(e) => setAway({ ...away, on: e.target.checked })} />
-            {"Send automatic replies"}
-          </label>
+          <Switch checked={away.on} onChange={(on: boolean) => setAway({ ...away, on })} label="Send automatic replies" hint="Replies for you while you are away, between the dates below." />
           <div className="tw-grid tw-grid-cols-2 tw-gap-3 mobile:tw-grid-cols-1">
             <label className="tw-flex tw-flex-col tw-gap-1">
               <span className="tw-text-[13px] tw-font-semibold tw-text-ink-2">{"From (optional)"}</span>
@@ -116,11 +113,12 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
           <div className="tw-rounded-xl tw-border tw-border-solid tw-border-line tw-p-3">
             <RichTextEditor value={away.html} onChange={(v: string) => setAway({ ...away, html: v })} toolbar="full" placeholder="Your automatic reply" />
           </div>
-          <label className="tw-flex tw-items-center tw-gap-2 tw-text-[13.5px] tw-text-ink">
-            <input type="checkbox" checked={away.outside} onChange={(e) => setAway({ ...away, outside: e.target.checked })} />
-            {"Also reply to people outside the school"}
-          </label>
-          <p className="tw-m-0 tw-text-[12.5px] tw-text-ink-3">{"Each person gets it once every 4 days at most. Automatic mail (no-reply addresses, newsletters) never gets one."}</p>
+          <Switch
+            checked={away.outside}
+            onChange={(outside: boolean) => setAway({ ...away, outside })}
+            label="Also reply to people outside the school"
+            hint="Each person gets it once every 4 days at most. Automatic mail (no-reply addresses, newsletters) never gets one."
+          />
         </div>
       ) : tab === "rules" ? (
         <RulesEditor mailboxId={mailbox.id} />
@@ -143,26 +141,18 @@ const MailSettingsModal = ({ mailbox, onClose, onSaved }: { mailbox: Mailbox; on
             />
             <span className="tw-text-[12.5px] tw-text-ink-3">{"How long you have to take a message back after pressing Send."}</span>
           </label>
-          <label className="tw-flex tw-items-start tw-gap-2 tw-text-[13.5px] tw-text-ink">
-            <input type="checkbox" className="tw-mt-1" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
-            <span>
-              <strong>{"Tell me when my mail is opened"}</strong>
-              <br />
-              <span className="tw-text-[12.5px] tw-text-ink-3">
-                {"New messages start with this on (you can switch it off on any message). You get a notification the moment each person opens it, on screen and on your phone. Inside Schoolivio it is exact; outside, it works when the recipient's mail app shows pictures (Apple Mail may report an open early)."}
-              </span>
-            </span>
-          </label>
-          <label className="tw-flex tw-items-start tw-gap-2 tw-text-[13.5px] tw-text-ink">
-            <input type="checkbox" className="tw-mt-1" checked={push} onChange={(e) => setPush(e.target.checked)} />
-            <span>
-              <strong>{"Notify my phone about new mail"}</strong>
-              <br />
-              <span className="tw-text-[12.5px] tw-text-ink-3">
-                {"A notification for each new message in your Inbox, on the devices where you turned on Schoolivio notifications. Junk stays quiet."}
-              </span>
-            </span>
-          </label>
+          <Switch
+            checked={notify}
+            onChange={setNotify}
+            label="Tell me when my mail is opened"
+            hint="New messages start with this on (you can switch it off on any message). You get a notification the moment each person opens it, on screen and on your phone. Inside Schoolivio it is exact; outside, it works when the recipient's mail app shows pictures (Apple Mail may report an open early)."
+          />
+          <Switch
+            checked={push}
+            onChange={setPush}
+            label="Notify my phone about new mail"
+            hint="A notification for each new message in your Inbox, on the devices where you turned on Schoolivio notifications. Junk stays quiet."
+          />
         </div>
       )}
     </Modal>

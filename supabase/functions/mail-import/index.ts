@@ -110,6 +110,14 @@ async function work() {
   return { id: job.id, status, ...t };
 }
 
+// Compares in constant time, so the signature can't be guessed byte by byte.
+const sameText = (a: string, b: string) => {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const url = new URL(req.url);
@@ -120,7 +128,7 @@ Deno.serve(async (req) => {
     const [payload, sig] = state.split(".");
     let back = "https://schoolivio.com";
     try {
-      if (!CRON || !payload || !sig || sig !== (await sign(payload))) throw new Error("bad state");
+      if (!CRON || !payload || !sig || !sameText(sig, await sign(payload))) throw new Error("bad state");
       const s = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { s: string; u?: string; r: string; t: number };
       if (allowedReturn(s.r)) back = s.r;
       if (Date.now() - s.t > 60 * 60 * 1000) throw new Error("This approval link has expired. Start it again from Mail settings.");

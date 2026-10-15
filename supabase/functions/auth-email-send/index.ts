@@ -64,6 +64,22 @@ Deno.serve(async (req) => {
       if (!isAdmin) return json({ error: "Only an owner or administrator can send that." }, 403);
     }
 
+    // At most a few sign-in emails an hour to one address, whichever route
+    // they take, so this endpoint can't be used to flood someone's inbox.
+    const { data: allowed } = await admin.rpc("auth_mail_allowed", { target_email: cleanEmail });
+    if (allowed === false) return json(GENERIC_OK);
+
+    // The school's own mailbox is the school's to control (it can be pointed
+    // at any mail server), so a sign-in link only goes through it for people
+    // who belong to that school alone and are not platform admins (supabase/
+    // 265). Everyone else gets Supabase's own email, which the school never
+    // sees. Without this, any school could request a reset link for anyone
+    // on the platform and receive it on its own server.
+    const { data: mayBrand } = await admin.rpc("may_send_branded_auth_mail", {
+      target_school: schoolId,
+      target_email: cleanEmail,
+    });
+
     const { data: schoolRows } = await admin.rpc("get_school_for_mail", { target_school: schoolId });
     const school = schoolRows?.[0];
 
@@ -72,22 +88,25 @@ Deno.serve(async (req) => {
     // generateLink both confirms the address has an account AND hands back
     // the action link WITHOUT triggering Supabase's own email — exactly the
     // split needed to send our own branded one instead.
-    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-      type: "recovery",
-      email: cleanEmail,
-      options: redirectTo ? { redirectTo } : undefined,
-    });
+    // A link is only generated when it may go through the school's mailbox.
+    const { data: linkData, error: linkError } = mayBrand
+      ? await admin.auth.admin.generateLink({
+          type: "recovery",
+          email: cleanEmail,
+          options: redirectTo ? { redirectTo } : undefined,
+        })
+      : { data: null, error: null };
 
-    if (linkError || !linkData?.properties?.action_link || !school) {
+    if (!mayBrand || linkError || !linkData?.properties?.action_link || !school) {
       // No account, no school, or generateLink failed for some other
       // reason — fall back to Supabase's own flow so a genuine account
       // still gets a (generic, unbranded) reset email rather than nothing.
-      if (kind === "reset") {
-        const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
-        await anon.auth.resetPasswordForEmail(cleanEmail, {
-          redirectTo: redirectTo || `${new URL(req.url).origin}/Reset-Password`,
-        }).catch(() => null);
-      }
+      // Also the route for anyone the school's mailbox may not carry links
+      // for (mayBrand false: they belong to another school too, or none).
+      const anon = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!);
+      await anon.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: redirectTo || `${new URL(req.url).origin}/Reset-Password`,
+      }).catch(() => null);
       return json(GENERIC_OK);
     }
 

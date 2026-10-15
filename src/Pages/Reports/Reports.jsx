@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { Link, Navigate, useLocation } from "react-router-dom";
+import { useReportPeriod, PeriodPicker } from "../../Components/ReportPeriod";
 import Navbar from "../../Components/Navbar/Navbar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
@@ -120,13 +121,14 @@ const Chevron = () => (
 );
 
 const StudentRow = ({ s }) => {
+  const { search } = useLocation();
   const { report } = s;
   const band = bandFor(report.average);
   const concern = report.findings.find((f) => f.kind === "concern");
   const courses = report.courses.length;
 
   return (
-    <Link to={`/Reports/${s.student_id}`} className="rp-row">
+    <Link to={`/Reports/${s.student_id}${search}`} className="rp-row">
       <span className="rp-who">
         <Avatar student={s} />
         <span className="rp-who-text">
@@ -201,9 +203,12 @@ const RowList = ({ rows }) => (
   </div>
 );
 
-const Reports = () => {
+const ReportsPage = () => {
   const { user } = useAuth();
   const { schoolId, isParent, isAdmin } = useSchool();
+  // The term (or session) the figures cover; only its work counts.
+  const { school } = useSchool();
+  const { ready: periodReady, periods, period, setPeriod } = useReportPeriod(schoolId, school?.timezone);
 
   const [rows, setRows] = useState([]);
   const [query, setQuery] = useState("");
@@ -213,19 +218,27 @@ const Reports = () => {
   const [loading, setLoading] = useState(true);
   const { setError } = useActionFeedback();
 
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
     // Waiting for the school: without this the query goes out with
     // school_id=eq.null and Postgres rejects "null" as a uuid.
-    if (!schoolId || !user) return;
+    if (!schoolId || !user || !periodReady) return;
+    const seq = ++loadSeq.current;
     setLoading(true);
     try {
-      setRows(await fetchReportOverview(schoolId));
+      const rows = await fetchReportOverview(schoolId, period);
+      // A slower, older answer never replaces the term now chosen.
+      if (seq === loadSeq.current) setRows(rows);
     } catch (err) {
+      if (seq !== loadSeq.current) return;
+      // Never leave the previous term's figures up under the new term.
+      setRows([]);
       setError(err.message || "Could not load students.");
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
-  }, [schoolId, user, setError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [schoolId, user, setError, periodReady, period.key]);
 
   useEffect(() => {
     load();
@@ -306,19 +319,21 @@ const Reports = () => {
       <Navbar />
       <Page
         title="Reports"
-        subtitle={isParent ? "How your children are doing" : "How your students are progressing"}
+        subtitle={`${isParent ? "How your children are doing" : "How your students are progressing"} · ${period.label}`}
         action={
           exportRows.length ? (
             <ExportMenu
-              filename={`student-reports-${filter}`}
+              filename={`student-reports-${period.label.replace(/[^A-Za-z0-9]+/g, "-")}-${filter}`}
               sheetName="Students"
-              title={`Student reports — ${activeFilter.label}${klass ? ` · ${klass}` : ""}`}
+              title={`Student reports — ${period.label} — ${activeFilter.label}${klass ? ` · ${klass}` : ""}`}
               rows={exportRows}
               columns={exportColumns}
             />
           ) : null
         }
       >
+        <PeriodPicker periods={periods} period={period} onChange={setPeriod} />
+
         {loading ? <SkeletonTable rows={5} cols={5} /> : null}
 
         {nothingAtAll ? (
@@ -414,6 +429,18 @@ const Reports = () => {
       </Page>
     </div>
   );
+};
+
+
+// A pupil (not also staff or a parent) has one report: their own. Reports
+// takes them straight to it, and they cannot open anyone else's.
+const isPupilOnly = (roles) => roles.includes("student") && !roles.some((r) => r !== "student");
+
+const Reports = () => {
+  const { user } = useAuth();
+  const { roles } = useSchool();
+  if (user && isPupilOnly(roles || [])) return <Navigate to={`/Reports/${user.id}`} replace />;
+  return <ReportsPage />;
 };
 
 export default Reports;

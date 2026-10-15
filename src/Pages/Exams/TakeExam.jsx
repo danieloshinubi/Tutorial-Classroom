@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import Navbar from "../../Components/Navbar/Navbar";
+import ExamBar from "../../Components/Exam/ExamBar";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import {
   fetchExam,
   fetchQuestionsForSitting,
+  fetchExamQuestionCount,
+  fetchClockOffset,
   fetchMyAttempt,
   startAttempt,
   saveAnswer,
@@ -31,7 +33,7 @@ import {
   isNetworkError,
 } from "../../lib/offline";
 import ConnectionStatus from "../../Components/ConnectionStatus";
-import ScientificCalculator from "../../Components/ScientificCalculator";
+import ExamCalculator from "../../Components/calculator/ExamCalculator";
 import {
   Page,
   Card,
@@ -80,6 +82,18 @@ const TakeExam = () => {
 
   const [exam, setExam] = useState(null);
   const [questions, setQuestions] = useState([]);
+  // Before starting, only how many: the questions themselves are not
+  // readable until the attempt exists (supabase/266).
+  const [questionCount, setQuestionCount] = useState(0);
+  // The server's time, not the device's: a pupil's clock running fast or
+  // slow must not change how long they get.
+  const clockOffset = useRef(0);
+  useEffect(() => {
+    fetchClockOffset().then((ms) => {
+      clockOffset.current = ms;
+    }).catch(() => undefined);
+  }, []);
+  const serverNow = () => Date.now() + clockOffset.current;
   // Which question the student is on right now. One-at-a-time navigation
   // keeps the paper focused and matches how CBT venues run in the field —
   // no scrolling past everyone else's answers, no accidental double-answer.
@@ -93,7 +107,6 @@ const TakeExam = () => {
   const [remaining, setRemaining] = useState(null);
   const [warning, setWarning] = useState("");
   const [connection, setConnection] = useState("online");
-  const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [pending, setPending] = useState(0);
   const [pendingSubmit, setPendingSubmit] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -114,11 +127,13 @@ const TakeExam = () => {
       fetchExam({ id: examId, schoolId }),
       fetchQuestionsForSitting({ examId, schoolId }),
       fetchMyAttempt({ examId, userId: user.id }),
+      fetchExamQuestionCount(examId).catch(() => 0),
     ])
-      .then(async ([examRow, questionRows, attemptRow]) => {
+      .then(async ([examRow, questionRows, attemptRow, count]) => {
         if (!active) return;
         setExam(examRow);
         setQuestions(questionRows);
+        setQuestionCount(count || questionRows.length);
         setAttempt(attemptRow);
 
         if (attemptRow) {
@@ -157,6 +172,9 @@ const TakeExam = () => {
   }, [examId, user.id, schoolId, setError]);
 
   // Pushes anything unsynced and reports what the connection is doing.
+  // Whether the last sync stopped because of the connection (not a refusal).
+  const lastSyncFailedOnNetwork = useRef(false);
+
   const flush = useCallback(async () => {
     const current = attemptRef.current;
     if (!current || current.submitted_at) return true;
@@ -164,6 +182,7 @@ const TakeExam = () => {
     setConnection((state) => (state === "offline" ? state : "syncing"));
     const result = await syncAnswers(current.id, saveAnswer);
     setPending(result.pending);
+    lastSyncFailedOnNetwork.current = !result.ok && isNetworkError(result.error);
 
     if (result.ok) {
       setConnection("online");
@@ -190,11 +209,22 @@ const TakeExam = () => {
     setError("");
     try {
       // Deliver every outstanding answer before closing the paper, so nothing
-      // typed during an outage is left behind.
-      await flush();
+      // typed during an outage is left behind. A second try covers a blip.
+      let delivered = await flush();
+      if (!delivered && !lastSyncFailedOnNetwork.current) delivered = await flush();
+      if (!delivered && lastSyncFailedOnNetwork.current) {
+        // Still offline with answers unsent: don't close the paper on them.
+        // It submits by itself once they are through.
+        setError("Some answers have not reached the school yet. Your paper will submit by itself once they are sent — keep this page open.");
+        setPendingSubmit(true);
+        submittedRef.current = false;
+        return;
+      }
       const result = await submitAttempt(current.id);
       setAttempt(result);
-      clearLocalAnswers(current.id);
+      // Local copies go only once nothing is left unsent; anything the server
+      // refused (time up) stays on this device rather than vanishing.
+      if (pendingCount(current.id) === 0) clearLocalAnswers(current.id);
       exitFullscreen();
     } catch (err) {
       if (isNetworkError(err)) {
@@ -290,7 +320,7 @@ const TakeExam = () => {
       new Date(attempt.started_at).getTime() + exam.duration_mins * 60000;
 
     const tick = () => {
-      const left = Math.round((deadline - Date.now()) / 1000);
+      const left = Math.round((deadline - serverNow()) / 1000);
       setRemaining(left);
       if (left <= 0) handleSubmit();
     };
@@ -305,7 +335,15 @@ const TakeExam = () => {
     setError("");
     try {
       if (exam.require_fullscreen) await requestFullscreen();
-      setAttempt(await startAttempt({ examId }));
+      const started = await startAttempt({ examId });
+      // The paper opens now: its questions become readable once the attempt
+      // exists, so they are fetched before the attempt is shown.
+      try {
+        setQuestions(await fetchQuestionsForSitting({ examId, schoolId }));
+      } finally {
+        // Started either way; a reload fetches the paper if this fetch failed.
+        setAttempt(started);
+      }
     } catch (err) {
       setError(err.message || "Could not start the exam.");
     } finally {
@@ -341,8 +379,8 @@ const TakeExam = () => {
 
   if (loading) {
     return (
-      <div className="shell">
-        <Navbar />
+      <div className="shell exam-shell">
+        <ExamBar />
         <Page><Empty>{"Loading exam..."}</Empty></Page>
       </div>
     );
@@ -350,8 +388,8 @@ const TakeExam = () => {
 
   if (!exam) {
     return (
-      <div className="shell">
-        <Navbar />
+      <div className="shell exam-shell">
+        <ExamBar back="/Dashboard" />
         <Page title="Exam">
           {error ? null : <Notice tone="error">{"That exam is not available."}</Notice>}
         </Page>
@@ -363,7 +401,7 @@ const TakeExam = () => {
     ? `/Courses/${exam.courses.code}`
     : "/Dashboard";
 
-  const closed = exam.closes_at && new Date(exam.closes_at) < new Date();
+  const closed = exam.closes_at && Date.parse(exam.closes_at) < serverNow();
   const answered = ordered.filter((q) => {
     const answer = answers[q.id];
     return answer && (answer.optionId || answer.text?.trim());
@@ -373,8 +411,8 @@ const TakeExam = () => {
   if (attempt?.submitted_at || attempt?.disqualified) {
     const showScore = exam.show_results && attempt.total_score !== null;
     return (
-      <div className="shell">
-        <Navbar />
+      <div className="shell exam-shell">
+        <ExamBar back={backLink} />
         <Page title={exam.title} subtitle={exam.courses?.code}>
           <Card style={{ textAlign: "center", padding: 34 }}>
             <h2 style={{ marginBottom: 14 }}>
@@ -421,8 +459,8 @@ const TakeExam = () => {
   /* -------------------------------------------------------- not started */
   if (!attempt) {
     return (
-      <div className="shell">
-        <Navbar />
+      <div className="shell exam-shell">
+        <ExamBar back={backLink} />
         <Page title={exam.title} subtitle={exam.courses?.code}>
           <Card style={{ maxWidth: 660 }}>
             {exam.instructions ? (
@@ -430,7 +468,7 @@ const TakeExam = () => {
             ) : null}
 
             <div className="btn-row" style={{ margin: "14px 0" }}>
-              <Badge>{`${questions.length} questions`}</Badge>
+              <Badge>{`${questionCount} question${questionCount === 1 ? "" : "s"}`}</Badge>
               <Badge>
                 {exam.duration_mins ? `${exam.duration_mins} minutes` : "No time limit"}
               </Badge>
@@ -505,8 +543,8 @@ const TakeExam = () => {
   };
 
   return (
-    <div className="shell">
-      <Navbar />
+    <div className="shell exam-shell">
+      <ExamBar />
       <Page title={exam.title} subtitle={exam.courses?.code}>
         <ConnectionStatus state={connection} pending={pending} />
 
@@ -688,21 +726,7 @@ const TakeExam = () => {
         </div>
       </Page>
 
-      {exam.allow_calculator ? (
-        calculatorOpen ? (
-          <ScientificCalculator onClose={() => setCalculatorOpen(false)} />
-        ) : (
-          <button
-            type="button"
-            className="calc-launcher"
-            onClick={() => setCalculatorOpen(true)}
-            aria-label="Open calculator"
-            title="Calculator"
-          >
-            {"🖩"}
-          </button>
-        )
-      ) : null}
+      {exam.allow_calculator ? <ExamCalculator /> : null}
     </div>
   );
 };

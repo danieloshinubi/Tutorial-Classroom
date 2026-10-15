@@ -30,3 +30,6 @@ yarn-error.log*
 
 # Outlook .pst reader build tools (tools/pst-worker)
 /tools/pst-worker/node_modules
+
+# Security handover notes describe open issues: never commit.
+SECURITY-HANDOVER-*.md

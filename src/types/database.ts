@@ -340,6 +340,27 @@ export type Database = {
           },
         ]
       }
+      ai_requests: {
+        Row: {
+          at: string
+          id: number
+          school_id: string | null
+          who: string
+        }
+        Insert: {
+          at?: string
+          id?: never
+          school_id?: string | null
+          who: string
+        }
+        Update: {
+          at?: string
+          id?: never
+          school_id?: string | null
+          who?: string
+        }
+        Relationships: []
+      }
       ai_usage: {
         Row: {
           created_at: string
@@ -1360,6 +1381,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      auth_mail_requests: {
+        Row: {
+          email: string
+          id: number
+          requested_at: string
+        }
+        Insert: {
+          email: string
+          id?: never
+          requested_at?: string
+        }
+        Update: {
+          email?: string
+          id?: never
+          requested_at?: string
+        }
+        Relationships: []
       }
       billing_records: {
         Row: {
@@ -2713,6 +2752,51 @@ export type Database = {
             columns: ["term_id"]
             isOneToOne: false
             referencedRelation: "terms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grade_bands: {
+        Row: {
+          grade: string
+          id: string
+          min_pct: number
+          remark: string | null
+          school_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          grade: string
+          id?: string
+          min_pct: number
+          remark?: string | null
+          school_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          grade?: string
+          id?: string
+          min_pct?: number
+          remark?: string | null
+          school_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grade_bands_school_id_fkey"
+            columns: ["school_id"]
+            isOneToOne: false
+            referencedRelation: "schools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grade_bands_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -5699,6 +5783,7 @@ export type Database = {
         Row: {
           ca_score: number | null
           exam_score: number | null
+          grade: string | null
           id: string
           remark: string | null
           sheet_id: string
@@ -5710,6 +5795,7 @@ export type Database = {
         Insert: {
           ca_score?: number | null
           exam_score?: number | null
+          grade?: string | null
           id?: string
           remark?: string | null
           sheet_id: string
@@ -5721,6 +5807,7 @@ export type Database = {
         Update: {
           ca_score?: number | null
           exam_score?: number | null
+          grade?: string | null
           id?: string
           remark?: string | null
           sheet_id?: string
@@ -7880,6 +7967,15 @@ export type Database = {
       ai_allowance: { Args: { target_school: string }; Returns: Json }
       ai_catalog: { Args: never; Returns: Json }
       ai_functions: { Args: never; Returns: Json }
+      ai_rate_ok: {
+        Args: {
+          per_hour: number
+          per_school_day: number
+          target_school: string
+          who_in: string
+        }
+        Returns: boolean
+      }
       ai_tokens_this_month: { Args: { target_school: string }; Returns: number }
       ai_whoami: { Args: never; Returns: string }
       application_workflow_steps: {
@@ -8060,6 +8156,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      auth_mail_allowed: { Args: { target_email: string }; Returns: boolean }
       can_access_ticket: { Args: { target_ticket: string }; Returns: boolean }
       can_do_accounts: { Args: { target_school: string }; Returns: boolean }
       can_do_admissions: { Args: { target_school: string }; Returns: boolean }
@@ -8088,6 +8185,7 @@ export type Database = {
       can_release_results: { Args: { target_school: string }; Returns: boolean }
       can_see_envelope: { Args: { target_envelope: string }; Returns: boolean }
       can_see_person: { Args: { target: string }; Returns: boolean }
+      can_set_grading: { Args: { target_school: string }; Returns: boolean }
       can_teach_result: {
         Args: { target_class_subject: string; target_course: string }
         Returns: boolean
@@ -8870,6 +8968,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      default_grade_bands: {
+        Args: never
+        Returns: {
+          grade: string
+          min_pct: number
+          remark: string
+        }[]
+      }
       delete_ticket_mailbox: {
         Args: { target_mailbox: string; target_school: string }
         Returns: undefined
@@ -8907,6 +9013,16 @@ export type Database = {
         Returns: undefined
       }
       ensure_it_group: { Args: { target_school: string }; Returns: string }
+      exam_answer_keys: {
+        Args: { target_exam: string }
+        Returns: {
+          answer_key: string
+          is_correct: boolean
+          option_id: string
+          question_id: string
+        }[]
+      }
+      exam_question_count: { Args: { target_exam: string }; Returns: number }
       expire_school_access: { Args: never; Returns: number }
       family_accounts_request: {
         Args: { target_ticket: string }
@@ -9067,12 +9183,27 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      grade_for: { Args: { pct: number }; Returns: string }
+      grade_bands_for: {
+        Args: { target_school: string }
+        Returns: {
+          grade: string
+          is_default: boolean
+          min_pct: number
+          remark: string
+        }[]
+      }
+      grade_for:
+        | { Args: { pct: number }; Returns: string }
+        | { Args: { pct: number; target_school: string }; Returns: string }
       has_role_in: {
         Args: {
           roles: Database["classroom"]["Enums"]["member_role"][]
           target_school: string
         }
+        Returns: boolean
+      }
+      in_period: {
+        Args: { from_at: string; to_at: string; ts: string }
         Returns: boolean
       }
       ingest_inbound_ticket_email: {
@@ -9123,6 +9254,10 @@ export type Database = {
       is_school_approver: { Args: { target_school: string }; Returns: boolean }
       is_school_staff: { Args: { target_school: string }; Returns: boolean }
       is_staff: { Args: never; Returns: boolean }
+      is_teaching_staff: {
+        Args: { target_school: string; who: string }
+        Returns: boolean
+      }
       is_ticket_staff: { Args: { target_school: string }; Returns: boolean }
       issue_invoice: {
         Args: { target_invoice: string }
@@ -10022,6 +10157,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      may_send_branded_auth_mail: {
+        Args: { target_email: string; target_school: string }
+        Returns: boolean
+      }
       may_touch_payment_proof: {
         Args: { path_invoice: string }
         Returns: boolean
@@ -10187,6 +10326,10 @@ export type Database = {
           title: string
         }
         Returns: undefined
+      }
+      only_in_school: {
+        Args: { target_school: string; target_user: string }
+        Returns: boolean
       }
       open_dm: {
         Args: { other_user: string; target_school: string }
@@ -11681,6 +11824,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      release_term_results: {
+        Args: { target_school: string; target_term: string }
+        Returns: number
+      }
       remove_chat_member: {
         Args: { target_channel: string; target_user: string }
         Returns: undefined
@@ -11691,6 +11838,20 @@ export type Database = {
       }
       report_overview: {
         Args: { target_school: string }
+        Returns: {
+          avatar_url: string
+          class_name: string
+          courses: Json
+          email: string
+          first_name: string
+          is_my_child: boolean
+          relationship: string
+          student_id: string
+          surname: string
+        }[]
+      }
+      report_overview_in: {
+        Args: { from_at: string; target_school: string; to_at: string }
         Returns: {
           avatar_url: string
           class_name: string
@@ -12173,6 +12334,25 @@ export type Database = {
           user_id: string
         }[]
       }
+      school_rank: {
+        Args: { target_school: string; who: string }
+        Returns: number
+      }
+      school_tutors: {
+        Args: { target_school: string }
+        Returns: {
+          avatar_url: string
+          bio: string
+          courses: string[]
+          email: string
+          first_name: string
+          id: string
+          school_role: string
+          surname: string
+          username: string
+        }[]
+      }
+      server_now: { Args: never; Returns: string }
       set_chat_member_role: {
         Args: { new_role: string; target_channel: string; target_user: string }
         Returns: undefined
@@ -12250,6 +12430,10 @@ export type Database = {
       }
       set_gateway_secret: {
         Args: { secrets: Json; target_gateway: string }
+        Returns: undefined
+      }
+      set_grade_bands: {
+        Args: { bands: Json; target_school: string }
         Returns: undefined
       }
       set_mailbox_secret: {
@@ -12614,8 +12798,51 @@ export type Database = {
           title: string
         }[]
       }
+      student_marks_in: {
+        Args: {
+          from_at: string
+          target_school: string
+          target_student: string
+          to_at: string
+        }
+        Returns: {
+          course_code: string
+          happened_at: string
+          kind: string
+          late: boolean
+          out_of: number
+          scored: number
+          title: string
+        }[]
+      }
       student_report: {
         Args: { target_school: string; target_student: string }
+        Returns: {
+          assignments_done: number
+          assignments_graded: number
+          assignments_ontime: number
+          assignments_set: number
+          course_code: string
+          course_id: string
+          course_title: string
+          exam_max: number
+          exam_score: number
+          exams_sat: number
+          last_activity: string
+          level_year: number
+          messages_sent: number
+          points_earned: number
+          points_possible: number
+          reactions_given: number
+        }[]
+      }
+      student_report_in: {
+        Args: {
+          from_at: string
+          target_school: string
+          target_student: string
+          to_at: string
+        }
         Returns: {
           assignments_done: number
           assignments_graded: number

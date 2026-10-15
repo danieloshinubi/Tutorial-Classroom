@@ -53,6 +53,26 @@ const parseAddresses = (raw) =>
 // text content, not the markup.
 const isHtmlEmpty = (html) => !html || !html.replace(/<[^>]+>/g, "").trim();
 
+
+// An email in a ticket, with its outside pictures held back until someone
+// chooses to see them: loading them tells the sender (and any tracker in the
+// email) that it was opened, and from where.
+const TicketEmail = ({ html, title }) => {
+  const [show, setShow] = React.useState(false);
+  const [blocked, setBlocked] = React.useState(0);
+  return (
+    <>
+      {!show && blocked > 0 ? (
+        <div className="tk-pictures-held">
+          <span>{`${blocked} outside picture${blocked === 1 ? "" : "s"} held back.`}</span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => setShow(true)}>{"Show pictures"}</button>
+        </div>
+      ) : null}
+      <EmailFrame html={html} title={title} blockRemote={!show} onBlocked={setBlocked} warnLinks />
+    </>
+  );
+};
+
 const TicketDetail = () => {
   const { ticketId } = useParams();
   const location = useLocation();
@@ -427,7 +447,7 @@ const TicketDetail = () => {
                   </div>
                   {ticket.description ? (
                     ticket.description_format === "html" ? (
-                      <EmailFrame html={ticket.description} title={`Email from ${requesterName}`} />
+                      <TicketEmail html={ticket.description} title={`Email from ${requesterName}`} />
                     ) : (
                       <p className="tk-msg-text">{ticket.description}</p>
                     )
@@ -455,7 +475,7 @@ const TicketDetail = () => {
                         <span className="tk-msg-time">{formatDate(m.created_at)}</span>
                       </div>
                       {m.body_format === "html" && (m.direction === "inbound" || m.direction === "outbound") ? (
-                        <EmailFrame html={m.body} title={`Email from ${displayName(authorProfile)}`} />
+                        <TicketEmail html={m.body} title={`Email from ${displayName(authorProfile)}`} />
                       ) : m.body_format === "html" ? (
                         <div
                           className="tix-msg-html tk-msg-body"

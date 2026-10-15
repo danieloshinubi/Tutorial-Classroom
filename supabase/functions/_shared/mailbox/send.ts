@@ -6,6 +6,7 @@
 // does its OWN authorization check before reaching this — this module
 // only knows how to send, not who's allowed to ask it to.
 import nodemailer from "npm:nodemailer@10.0.9";
+import { checkMailHost } from "../net/mailHost.ts";
 
 // deno-lint-ignore no-explicit-any
 type AdminClient = any;
@@ -40,6 +41,8 @@ async function getSchoolMailboxTransport(
   });
   if (secretError || !password) return { ok: false, reason: "no_secret" };
 
+  // Only public mail servers on mail ports (never our own network).
+  if (await checkMailHost(mailbox.smtp_host, mailbox.smtp_port || 587, "smtp")) return { ok: false, reason: "unsupported_provider" };
   const transport = nodemailer.createTransport({
     host: mailbox.smtp_host,
     port: mailbox.smtp_port || 587,

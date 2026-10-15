@@ -9,6 +9,21 @@ import {
 // consistently across the app.
 const PROFILE_FIELDS = "id, first_name, surname, username, email, role, avatar_url";
 
+// Every row, not just the first 1000. The database hands back at most 1000
+// rows per request; a list bigger than that (a large school's members, a
+// term of registers) was silently cut short. build() returns a fresh query
+// with a stable order, and pages are fetched until one comes back short.
+const PAGE = 1000;
+export const fetchAllRows = async (build) => {
+  const rows = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await build().range(from, from + PAGE - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE) return rows;
+  }
+};
+
 /* -------------------------------------------------------------------------- */
 /* levels & courses                                                           */
 /* -------------------------------------------------------------------------- */
@@ -472,32 +487,29 @@ export const gradeSubmission = async ({ id, schoolId, grade, feedback, graderId 
 /* people                                                                     */
 /* -------------------------------------------------------------------------- */
 
-// profiles has no school_id of its own — scoped through school_members
-// (which does carry it), the same way fetchSchoolMembers already does.
-// Sorted client-side since ordering by an embedded table's column is
-// awkward over PostgREST.
+// The school's teachers and principals, and anyone else who teaches one of
+// its courses, with what they teach (supabase/263). By their role in this
+// school, not the old account-wide profiles.role, which school staff never had.
 export const fetchTutors = async (schoolId) => {
-  const { data, error } = await supabase
-    .from("school_members")
-    .select(`profiles!school_members_user_id_fkey!inner ( ${PROFILE_FIELDS}, bio )`)
-    .eq("school_id", schoolId)
-    .eq("is_active", true)
-    .in("profiles.role", ["tutor", "admin"]);
+  const { data, error } = await supabase.rpc("school_tutors", { target_school: schoolId });
   if (error) throw error;
-  return data
-    .map((row) => row.profiles)
-    .filter(Boolean)
-    .sort(byName());
+  return (data || []).sort(byName());
 };
 
 export const fetchAllProfiles = async (schoolId) => {
-  const { data, error } = await supabase
-    .from("school_members")
-    .select(`profiles!school_members_user_id_fkey!inner ( ${PROFILE_FIELDS}, level_year, created_at )`)
-    .eq("school_id", schoolId)
-    .order("created_at", { ascending: false, referencedTable: "profiles" });
-  if (error) throw error;
-  return data.map((row) => row.profiles).filter(Boolean).sort(byName());
+  const data = await fetchAllRows(() =>
+    supabase
+      .from("school_members")
+      .select(`profiles!school_members_user_id_fkey!inner ( ${PROFILE_FIELDS}, level_year, created_at )`)
+      .eq("school_id", schoolId)
+      .order("id")
+  );
+  // One person can hold several roles: listed once.
+  const seen = new Set();
+  return data
+    .map((row) => row.profiles)
+    .filter((p) => p && !seen.has(p.id) && seen.add(p.id))
+    .sort(byName());
 };
 
 export const updateProfile = async (id, changes) => {
@@ -681,8 +693,9 @@ export const deleteExam = async (id, schoolId) => {
   if (error) throw error;
 };
 
-// Deliberately omits exam_options.is_correct — students must never receive the
-// answer key. Marking happens server-side in submit_exam_attempt().
+// Never the answer key: the database does not let signed-in users read
+// is_correct or answer_key at all (supabase/266), and a pupil sees a paper's
+// questions only once their attempt has started. Marking is server-side.
 export const fetchQuestionsForSitting = async ({ examId, schoolId }) => {
   const { data, error } = await supabase
     .from("exam_questions")
@@ -694,17 +707,56 @@ export const fetchQuestionsForSitting = async ({ examId, schoolId }) => {
   return data.map(({ exams, ...rest }) => rest);
 };
 
-// The authoring view, which does include the answer key. RLS restricts this to
-// staff who manage the course.
-export const fetchQuestionsForEditing = async ({ examId, schoolId }) => {
-  const { data, error } = await supabase
-    .from("exam_questions")
-    .select("id, kind, prompt, image_path, points, position, answer_key, exam_options ( id, body, position, is_correct ), exams!inner ( courses!inner ( school_id ) )")
-    .eq("exam_id", examId)
-    .eq("exams.courses.school_id", schoolId)
-    .order("position");
+// The answer key of one exam, for staff who manage its course (supabase/266):
+// { answerKeys: Map<questionId, text>, correct: Set<optionId> }.
+export const fetchExamAnswerKeys = async (examId) => {
+  const { data, error } = await supabase.rpc("exam_answer_keys", { target_exam: examId });
   if (error) throw error;
-  return data.map(({ exams, ...rest }) => rest);
+  const answerKeys = new Map();
+  const correct = new Set();
+  (data || []).forEach((row) => {
+    if (row.answer_key) answerKeys.set(row.question_id, row.answer_key);
+    if (row.option_id && row.is_correct) correct.add(row.option_id);
+  });
+  return { answerKeys, correct };
+};
+
+// How many questions a paper has, for its start screen (before a pupil may
+// see the questions themselves).
+// How far this device's clock is from the server's, in milliseconds (add it
+// to Date.now() for the server's time). Measured at the middle of the round
+// trip; 0 if it can't be measured.
+export const fetchClockOffset = async () => {
+  const sent = Date.now();
+  const { data, error } = await supabase.rpc("server_now");
+  const received = Date.now();
+  if (error || !data) return 0;
+  return Date.parse(data) - (sent + received) / 2;
+};
+
+export const fetchExamQuestionCount = async (examId) => {
+  const { data, error } = await supabase.rpc("exam_question_count", { target_exam: examId });
+  if (error) throw error;
+  return data || 0;
+};
+
+// The authoring view, with the answer key merged in from exam_answer_keys().
+export const fetchQuestionsForEditing = async ({ examId, schoolId }) => {
+  const [{ data, error }, keys] = await Promise.all([
+    supabase
+      .from("exam_questions")
+      .select("id, kind, prompt, image_path, points, position, exam_options ( id, body, position ), exams!inner ( courses!inner ( school_id ) )")
+      .eq("exam_id", examId)
+      .eq("exams.courses.school_id", schoolId)
+      .order("position"),
+    fetchExamAnswerKeys(examId),
+  ]);
+  if (error) throw error;
+  return data.map(({ exams, ...rest }) => ({
+    ...rest,
+    answer_key: keys.answerKeys.get(rest.id) || null,
+    exam_options: (rest.exam_options || []).map((o) => ({ ...o, is_correct: keys.correct.has(o.id) })),
+  }));
 };
 
 export const createQuestion = async (question) => {
@@ -850,11 +902,18 @@ export const recalculateAttempt = async (attemptId) => {
 export const fetchAttemptDetail = async ({ attemptId, schoolId }) => {
   const { data, error } = await supabase
     .from("exam_answers")
-    .select("id, question_id, selected_option_id, answer_text, awarded_points, exam_questions ( id, kind, prompt, points, answer_key, position ), exam_attempts!inner ( exams!inner ( courses!inner ( school_id ) ) )")
+    .select("id, question_id, selected_option_id, answer_text, awarded_points, exam_questions ( id, kind, prompt, points, position ), exam_attempts!inner ( exam_id, exams!inner ( courses!inner ( school_id ) ) )")
     .eq("attempt_id", attemptId)
     .eq("exam_attempts.exams.courses.school_id", schoolId);
   if (error) throw error;
-  return data;
+  const examId = data[0]?.exam_attempts?.exam_id;
+  if (!examId) return data;
+  // The written-answer keys, for the marker (staff only, supabase/266).
+  const keys = await fetchExamAnswerKeys(examId).catch(() => null);
+  return data.map((row) => ({
+    ...row,
+    exam_questions: row.exam_questions ? { ...row.exam_questions, answer_key: keys?.answerKeys.get(row.question_id) || null } : row.exam_questions,
+  }));
 };
 
 /* -------------------------------------------------------------------------- */
@@ -1579,15 +1638,17 @@ export const updateSchool = async (id, changes) => {
 // The school's people. profiles is embedded through the membership's own
 // foreign key so the join is unambiguous.
 export const fetchSchoolMembers = async (schoolId) => {
-  const { data, error } = await supabase
-    .from("school_members")
-    // user_id is what invoices and payments and every other table joins on;
-    // without it the Bursary invoice table falls back to "Student" instead
-    // of the child's name.
-    .select(`id, user_id, role, is_active, created_at, manager_id, job_title, access_expires_at, granted_via, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS}, bio )`)
-    .eq("school_id", schoolId)
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const data = await fetchAllRows(() =>
+    supabase
+      .from("school_members")
+      // user_id is what invoices and payments and every other table joins on;
+      // without it the Bursary invoice table falls back to "Student" instead
+      // of the child's name.
+      .select(`id, user_id, role, is_active, created_at, manager_id, job_title, access_expires_at, granted_via, profiles!school_members_user_id_fkey ( ${PROFILE_FIELDS}, bio )`)
+      .eq("school_id", schoolId)
+      .order("created_at", { ascending: false })
+      .order("id")
+  );
   return data.filter((row) => row.profiles).sort(byName((row) => row.profiles));
 };
 
@@ -1630,14 +1691,10 @@ export const updateMemberJobTitle = async ({ schoolId, userId, jobTitle }) => {
 
 // Extra module access beyond a person's role (supabase/208): rows of
 // { user_id, module, level } where level is "read" (view only) or "edit".
-export const fetchModuleAccess = async (schoolId) => {
-  const { data, error } = await supabase
-    .from("member_module_access")
-    .select("user_id, module, level")
-    .eq("school_id", schoolId);
-  if (error) throw error;
-  return data || [];
-};
+export const fetchModuleAccess = async (schoolId) =>
+  fetchAllRows(() =>
+    supabase.from("member_module_access").select("user_id, module, level").eq("school_id", schoolId).order("user_id").order("module")
+  );
 
 // The signed-in person's own extra access at this school, as { module: level }.
 export const fetchMyModuleAccess = async (schoolId, userId) => {
@@ -1900,8 +1957,11 @@ export const countCoursesOnLevel = async ({ schoolId, year }) => {
 
 // Computed in Postgres, which checks who is asking before returning anything —
 // a parent cannot fetch another child's rows by changing an id in the browser.
-export const fetchStudentReport = async (studentId, schoolId) => {
-  const { data, error } = await supabase.rpc("student_report", {
+// With a period (supabase/264), only that term's or session's work counts.
+export const fetchStudentReport = async (studentId, schoolId, period) => {
+  const { data, error } = period
+    ? await supabase.rpc("student_report_in", { target_student: studentId, target_school: schoolId, from_at: period.from, to_at: period.to })
+    : await supabase.rpc("student_report", {
     target_student: studentId,
     target_school: schoolId,
   });
@@ -1909,8 +1969,10 @@ export const fetchStudentReport = async (studentId, schoolId) => {
   return data || [];
 };
 
-export const fetchStudentMarks = async (studentId, schoolId) => {
-  const { data, error } = await supabase.rpc("student_marks", {
+export const fetchStudentMarks = async (studentId, schoolId, period) => {
+  const { data, error } = period
+    ? await supabase.rpc("student_marks_in", { target_student: studentId, target_school: schoolId, from_at: period.from, to_at: period.to })
+    : await supabase.rpc("student_marks", {
     target_student: studentId,
     target_school: schoolId,
   });
@@ -1924,20 +1986,20 @@ export const fetchStudentMarks = async (studentId, schoolId) => {
 // per-course rows student_report() returns, in one call (report_overview in
 // supabase/179). Run through analyse() these give the same average, hand-in
 // rate and punctuality the student's own report page shows.
-export const fetchReportOverview = async (schoolId) => {
-  const { data, error } = await supabase.rpc("report_overview", {
-    target_school: schoolId,
-  });
-  if (error) throw error;
-  return data || [];
+export const fetchReportOverview = async (schoolId, period) => {
+  const data = await fetchAllRows(() =>
+    period
+      ? supabase.rpc("report_overview_in", { target_school: schoolId, from_at: period.from, to_at: period.to })
+      : supabase.rpc("report_overview", { target_school: schoolId })
+  );
+  const seen = new Set();
+  return data.filter((row) => !seen.has(row.student_id) && seen.add(row.student_id));
 };
 
 export const fetchReportableStudents = async (schoolId) => {
-  const { data, error } = await supabase.rpc("reportable_students", {
-    target_school: schoolId,
-  });
-  if (error) throw error;
-  return (data || []).sort(byName());
+  const data = await fetchAllRows(() => supabase.rpc("reportable_students", { target_school: schoolId }));
+  const seen = new Set();
+  return data.filter((row) => !seen.has(row.student_id) && seen.add(row.student_id)).sort(byName());
 };
 
 export const fetchChildren = async (guardianId, schoolId) => {
@@ -2307,6 +2369,7 @@ export const saveAttendance = async ({ schoolId, classId, sessionAt, records }) 
 // first. Omit classId to see every class in the school (staff only; RLS
 // still narrows a guardian down to their own child regardless of filters).
 export const fetchAttendanceRecords = async ({ schoolId, classId, from, to }) => {
+  const build = () => {
   let query = supabase
     .from("attendance_records")
     .select(
@@ -2320,8 +2383,9 @@ export const fetchAttendanceRecords = async ({ schoolId, classId, from, to }) =>
   if (classId) query = query.eq("class_id", classId);
   if (from) query = query.gte("session_at", from);
   if (to) query = query.lte("session_at", endOfDay(to));
-  const { data, error } = await query;
-  if (error) throw error;
+  return query.order("id");
+  };
+  const data = await fetchAllRows(build);
   return data.filter((row) => row.student);
 };
 
@@ -2352,16 +2416,19 @@ export const fetchMyChildrenAttendance = async ({ schoolId, guardianId, from, to
 // One student's whole class-attendance history, across every class they've
 // been marked in — what the student profile's Attendance card is built
 // from. RLS (staff/self/guardian) decides whether the caller may see it.
-export const fetchStudentClassAttendance = async (studentId, schoolId) => {
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .select(`id, session_at, status, note, classes!inner ( id, name, school_id )`)
-    .eq("student_id", studentId)
-    .eq("classes.school_id", schoolId)
-    .order("session_at", { ascending: false });
-  if (error) throw error;
-  return data;
-};
+// fromAt/toAt (ISO, toAt exclusive): only that period, filtered here
+// rather than after fetching everything.
+export const fetchStudentClassAttendance = async (studentId, schoolId, { fromAt, toAt } = {}) =>
+  fetchAllRows(() => {
+    let q = supabase
+      .from("attendance_records")
+      .select(`id, session_at, status, note, classes!inner ( id, name, school_id )`)
+      .eq("student_id", studentId)
+      .eq("classes.school_id", schoolId);
+    if (fromAt) q = q.gte("session_at", fromAt);
+    if (toAt) q = q.lt("session_at", toAt);
+    return q.order("session_at", { ascending: false }).order("id");
+  });
 
 /* -------------------------------------------------------------------------- */
 /* school attendance — the biometric/card resumption feed                    */
@@ -2389,6 +2456,7 @@ export const fetchSchoolPeopleForAttendance = async (schoolId) => {
 };
 
 export const fetchSchoolAttendanceRecords = async ({ schoolId, personId, from, to }) => {
+  const build = () => {
   let query = supabase
     .from("school_attendance_records")
     .select(
@@ -2400,8 +2468,9 @@ export const fetchSchoolAttendanceRecords = async ({ schoolId, personId, from, t
   if (personId) query = query.eq("person_id", personId);
   if (from) query = query.gte("resumed_at", from);
   if (to) query = query.lte("resumed_at", endOfDay(to));
-  const { data, error } = await query;
-  if (error) throw error;
+  return query.order("id");
+  };
+  const data = await fetchAllRows(build);
   return data.filter((row) => row.person);
 };
 
@@ -2718,27 +2787,36 @@ export const submitApplication = async ({ slug, ...fields }) => {
   return Array.isArray(data) ? data[0] : data;
 };
 
-// Uploaded before the application exists — there's no application_id yet,
-// so this writes straight to storage under admissions/<schoolId>/<random>-
-// <name>. The RLS policy (051) is what actually decides an anonymous caller
-// may write there at all; this function does nothing to enforce that itself.
-// submitApplication() registers the result into application_documents once
-// the application id exists.
+// Uploaded before the application exists, through the apply-upload Edge
+// Function (supabase/274): it stores the file under admissions/<school>/ and
+// returns a private token. Storage itself lets no logged-out visitor read or
+// delete these, so the token is the only way to remove one again.
+// submitApplication() attaches the stored files once the application exists.
 export const uploadPublicApplicationDocument = async ({ schoolId, file, kind }) => {
-  const safeName = file.name.replace(/[^\w.\-() ]+/g, "_").slice(0, 120);
-  const path = `admissions/${schoolId}/${uuidV4()}-${safeName}`;
-  const { error } = await supabase.storage
-    .from(MATERIALS_BUCKET_NAME)
-    .upload(path, file, { cacheControl: "3600", upsert: false });
-  if (error) throw error;
-  return { path, name: file.name, size: file.size, mime_type: file.type || null, kind: kind || "other" };
+  const form = new FormData();
+  form.append("schoolId", schoolId);
+  form.append("kind", kind || "other");
+  form.append("file", file);
+  const { data, error } = await supabase.functions.invoke("apply-upload", { body: form });
+  if (error) {
+    // The function's own message (wrong type, too big, too many) when it gave one.
+    let detail = "";
+    try {
+      detail = (await error.context?.json())?.error || "";
+    } catch {
+      detail = "";
+    }
+    throw new Error(detail || "Could not upload that file.");
+  }
+  if (data?.error) throw new Error(data.error);
+  return { path: data.path, token: data.token, name: file.name, size: file.size, mime_type: data.mime_type || file.type || null, kind: data.kind || kind || "other" };
 };
 
-// Lets a family remove an attachment before submitting. Once submitted, the
-// same storage policy refuses this — the file is application_documents'
-// responsibility from then on, the same as a staff-uploaded one.
-export const removePublicApplicationDocument = async (path) => {
-  const { error } = await supabase.storage.from(MATERIALS_BUCKET_NAME).remove([path]);
+// Lets a family remove an attachment before submitting, with the token it
+// was given. Once submitted, the file belongs to the application.
+export const removePublicApplicationDocument = async (path, token) => {
+  if (!path || !token) return;
+  const { error } = await supabase.functions.invoke("apply-upload", { body: { action: "remove", path, token } });
   if (error) throw error;
 };
 
@@ -4971,7 +5049,11 @@ export const fetchTickets = async ({ schoolId, status = "unresolved", groupId, a
   if (groupId) q = q.eq("group_id", groupId);
   if (assignedTo) q = q.eq("assigned_to", assignedTo);
   if (priority) q = q.eq("priority", priority);
-  if (query) q = q.or(`subject.ilike.%${query}%,description.ilike.%${query}%`);
+  if (query) {
+    // Commas, brackets and wildcards would break (or widen) the filter.
+    const safe = String(query).replace(/[,()*%\\]/g, " ").trim();
+    if (safe) q = q.or(`subject.ilike.%${safe}%,description.ilike.%${safe}%`);
+  }
   q = q.order("created_at", { ascending: false });
   const { data, error } = await q;
   if (error) throw error;

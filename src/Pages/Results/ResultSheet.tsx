@@ -9,7 +9,8 @@ import { useSchool } from "../../context/SchoolContext";
 import {
   approveSheet,
   fetchSheet,
-  gradeFor,
+  bandFor,
+  gradeTone,
   releaseSheet,
   returnSheet,
   saveEntry,
@@ -20,7 +21,7 @@ import {
   type Entry,
   type SheetDetail,
 } from "../../lib/resultsApi";
-import { Chip, Svg, I, btn, card, statusTone } from "./resultsUi";
+import { Chip, Svg, I, btn, card, statusTone, useGradeBands } from "./resultsUi";
 
 // One subject's results for one term (Results.tsx explains the whole flow).
 // The teacher types each pupil's CA and exam mark (saved as they go, checked
@@ -108,12 +109,19 @@ const ScoreInput = ({ value, max, disabled, onSave, label, rowIndex, col }: { va
 const PasteMarks = ({ entries, caMax, examMax, onClose, onApply }: { entries: Entry[]; caMax: number; examMax: number; onClose: () => void; onApply: (rows: { entry: Entry; ca: number | null; exam: number | null }[]) => Promise<void> }) => {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
+  // A name two pupils share matches neither (null): their marks must not be
+  // given to the wrong child. Their usernames still match.
   const byName = useMemo(() => {
-    const m = new Map<string, Entry>();
+    const m = new Map<string, Entry | null>();
+    const put = (key: string, e: Entry) => {
+      if (!key) return;
+      const had = m.get(key);
+      m.set(key, had === undefined || had === e ? e : null);
+    };
     entries.forEach((e) => {
       const p = e.student;
-      m.set(normal(`${p?.first_name || ""} ${p?.surname || ""}`), e);
-      if (p?.username) m.set(normal(p.username), e);
+      put(normal(`${p?.first_name || ""} ${p?.surname || ""}`), e);
+      if (p?.username) put(normal(p.username), e);
     });
     return m;
   }, [entries]);
@@ -125,11 +133,13 @@ const PasteMarks = ({ entries, caMax, examMax, onClose, onApply }: { entries: En
       .map((cells) => {
         // Name first, then the CA and the exam marks (the first two numbers).
         const numbers = cells.slice(1).map(num).filter((n) => n !== null) as number[];
-        const entry = byName.get(normal(cells[0] || ""));
+        const found = byName.get(normal(cells[0] || ""));
+        const ambiguous = found === null;
+        const entry = found || undefined;
         const ca = numbers[0] ?? null;
         const exam = numbers[1] ?? null;
         const bad = (ca !== null && (Number.isNaN(ca) || ca < 0 || ca > caMax)) || (exam !== null && (Number.isNaN(exam) || exam < 0 || exam > examMax));
-        return { name: cells[0], entry, ca, exam, bad };
+        return { name: cells[0], entry, ca, exam, bad, ambiguous };
       })
       .filter((r) => !/^(name|student|pupil)s?$/i.test(r.name || ""));
   }, [text, byName, caMax, examMax]);
@@ -177,7 +187,7 @@ const PasteMarks = ({ entries, caMax, examMax, onClose, onApply }: { entries: En
                   <td className="tw-px-3 tw-py-1.5 tw-text-center tw-tabular-nums">{r.ca ?? "—"}</td>
                   <td className="tw-px-3 tw-py-1.5 tw-text-center tw-tabular-nums">{r.exam ?? "—"}</td>
                   <td className="tw-px-3 tw-py-1.5 tw-text-right">
-                    {!r.entry ? <Chip tone="bad">{"Not in this class"}</Chip> : r.bad ? <Chip tone="bad">{"Mark out of range"}</Chip> : <Chip tone="good">{displayName(r.entry.student)}</Chip>}
+                    {r.ambiguous ? <Chip tone="bad">{"Two pupils have this name: use the username"}</Chip> : !r.entry ? <Chip tone="bad">{"Not in this class"}</Chip> : r.bad ? <Chip tone="bad">{"Mark out of range"}</Chip> : <Chip tone="good">{displayName(r.entry.student)}</Chip>}
                   </td>
                 </tr>
               ))}
@@ -193,7 +203,8 @@ const PasteMarks = ({ entries, caMax, examMax, onClose, onApply }: { entries: En
 const ResultSheet = () => {
   const { sheetId } = useParams();
   const { user } = useAuth() as { user: { id: string } | null };
-  const { roles } = useSchool();
+  const { roles, schoolId } = useSchool();
+  const bands = useGradeBands(schoolId);
   const { setError, setNotice } = useActionFeedback();
   const isLeader = roles.some((r) => r === "owner" || r === "admin" || r === "principal");
   const [d, setD] = useState<SheetDetail | null>(null);
@@ -288,7 +299,13 @@ const ResultSheet = () => {
     let done = 0;
     for (const r of rows) {
       try {
-        await patchEntry(r.entry, { ca_score: r.ca, exam_score: r.exam });
+        // Only what was pasted: a sheet with just the CA column must not
+        // wipe exam marks already saved.
+        const patch: { ca_score?: number; exam_score?: number } = {};
+        if (r.ca !== null) patch.ca_score = r.ca;
+        if (r.exam !== null) patch.exam_score = r.exam;
+        if (!Object.keys(patch).length) continue;
+        await patchEntry(r.entry, patch);
         done += 1;
       } catch (err) {
         setError(`${displayName(r.entry.student)}: ${(err as Error).message}`);
@@ -393,7 +410,8 @@ const ResultSheet = () => {
                     <tbody>
                       {d.entries.map((e, i) => {
                         const pct = e.ca_score == null && e.exam_score == null ? null : Math.round((Number(e.total) * 1000) / outOf) / 10;
-                        const grade = gradeFor(pct);
+                        const band = bandFor(pct, bands);
+                        const grade = band?.grade || "";
                         return (
                           <tr key={e.id} className="tw-border-0 tw-border-t tw-border-solid tw-border-line">
                             <td className="tw-px-3 tw-py-2 tw-text-[12.5px] tw-text-ink-3">{i + 1}</td>
@@ -406,7 +424,7 @@ const ResultSheet = () => {
                             </td>
                             <td className="tw-px-3 tw-py-2 tw-text-center tw-font-semibold tw-tabular-nums tw-text-ink">{pct === null ? "—" : Number(e.total)}</td>
                             <td className="tw-px-3 tw-py-2 tw-text-center tw-tabular-nums tw-text-ink-2">{pct === null ? "—" : pct}</td>
-                            <td className="tw-px-3 tw-py-2 tw-text-center">{grade ? <Chip tone={grade === "F" ? "bad" : grade === "A" ? "good" : "muted"}>{grade}</Chip> : "—"}</td>
+                            <td className="tw-px-3 tw-py-2 tw-text-center" title={band?.remark || undefined}>{grade ? <Chip tone={gradeTone(grade, bands)}>{grade}</Chip> : "—"}</td>
                             <td className="tw-min-w-[180px] tw-px-3 tw-py-2">
                               {canMark ? (
                                 <input

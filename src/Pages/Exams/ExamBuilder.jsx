@@ -687,21 +687,30 @@ const ExamBuilder = () => {
           </div>
         ))}
 
-        <div className="btn-row" style={{ marginTop: 16 }}>
+        {/* Always in reach at the bottom of the screen, however long the
+            paper gets: no scrolling to the end to add a question or save. */}
+        <div className="btn-row sticky-actions">
           <Button
             variant="secondary"
-            onClick={() => setQuestions((c) => [...c, blankQuestion()])}
+            onClick={() => {
+              setQuestions((c) => [...c, blankQuestion()]);
+              // Straight to the new question.
+              setTimeout(() => {
+                const cards = document.querySelectorAll(".q-card");
+                cards[cards.length - 1]?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }, 50);
+            }}
           >
             {"Add question"}
           </Button>
+          <Badge>{`${questions.length} question${questions.length === 1 ? "" : "s"} · ${totalPoints} points`}</Badge>
           <span style={{ flex: 1 }} />
-          <Badge>{`${totalPoints} points`}</Badge>
-        </div>
-
-
-        <div className="btn-row" style={{ marginTop: 18 }}>
-          <Button onClick={() => handleSave(true)} disabled={saving}>
-            {saving ? "Saving..." : "Save & publish"}
+          <Button
+            variant="ghost"
+            onClick={() => navigate(-1)}
+            disabled={saving}
+          >
+            {"Cancel"}
           </Button>
           <Button
             variant="secondary"
@@ -710,12 +719,8 @@ const ExamBuilder = () => {
           >
             {"Save as draft"}
           </Button>
-          <Button
-            variant="ghost"
-            onClick={() => navigate(-1)}
-            disabled={saving}
-          >
-            {"Cancel"}
+          <Button onClick={() => handleSave(true)} disabled={saving}>
+            {saving ? "Saving..." : "Save & publish"}
           </Button>
         </div>
       </Page>

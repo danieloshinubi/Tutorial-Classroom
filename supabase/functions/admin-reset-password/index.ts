@@ -24,8 +24,9 @@ const json = (body: unknown, status = 200) =>
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 const LOWER = "abcdefghijkmnpqrstuvwxyz";
 const DIGITS = "23456789";
+// Cryptographically random, not Math.random: this is a password.
 const pick = (chars: string, n: number) =>
-  Array.from({ length: n }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  Array.from(crypto.getRandomValues(new Uint32Array(n)), (v) => chars[v % chars.length]).join("");
 const temporaryPassword = () => `${pick(ALPHABET, 3)}-${pick(LOWER, 4)}-${pick(DIGITS, 3)}`;
 
 Deno.serve(async (req) => {

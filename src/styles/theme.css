@@ -1183,7 +1183,14 @@ a.card-link:hover .tile { transform: translateY(-2px); box-shadow: var(--shadow-
 
 /* ----------------------------------------------------------------- pieces */
 .badge {
-  display: inline-block;
+  /* Text centred in the pill, and the pill never stretched to the height
+     of the row it sits in (its text then sat at the top). */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  line-height: 1.2;
+  white-space: nowrap;
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 11.5px;
@@ -1832,8 +1839,11 @@ table.data tr:last-child td { border-bottom: none; }
   color: #ffffff;
   font-size: 11px;
   font-weight: 700;
-  line-height: 18px;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
   border: 2px solid var(--bg);
 }
 
@@ -4098,129 +4108,63 @@ table.data tr:last-child td { border-bottom: none; }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* ==========================================================================
-   Scientific calculator (Components/ScientificCalculator.jsx) — a floating
-   panel available during an exam only when the tutor turns it on. Styled to
-   read as a physical calculator, not another form on the page.
-   ========================================================================== */
-.calc-launcher {
-  position: fixed;
-  right: 22px;
-  bottom: 22px;
-  z-index: 60;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  border: none;
-  background: var(--brand-dark);
-  color: #fff;
-  font-size: 22px;
-  box-shadow: var(--shadow-2, 0 8px 24px rgb(0 0 0 / 0.25));
-  cursor: pointer;
-}
-.calc-shell {
-  position: fixed;
-  right: 22px;
-  bottom: 22px;
-  z-index: 60;
-  width: 300px;
-  background: #1c1d24;
-  border-radius: var(--r-lg);
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgb(0 0 0 / 0.45);
-  font-family: ui-monospace, "IBM Plex Mono", monospace;
-}
-.calc-bar {
-  display: flex;
+/* Tickets: outside pictures in an email, held back until asked for. */
+.tk-pictures-held { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 8px; padding: 8px 12px; border-radius: var(--r-sm); background: var(--bg); font-size: 13px; color: var(--ink-2); }
+
+/* Reports: which term or session the report covers (Components/ReportPeriod). */
+.report-period {
+  display: inline-flex;
+  white-space: nowrap;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: #26272f;
-  color: #fff;
-  font-size: 13px;
-  font-family: var(--font, inherit);
-  cursor: default;
-}
-.calc-close {
-  background: none;
-  border: none;
-  color: rgb(255 255 255 / 0.7);
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 4px;
-}
-.calc-close:hover { color: #fff; }
-.calc-display {
-  background: #cdd6c4;
-  padding: 10px 12px 8px;
-}
-.calc-mode-row {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 4px;
-  min-height: 14px;
-}
-.calc-mode {
-  font-size: 10px;
-  font-weight: 700;
-  color: #33421f;
-  background: rgb(255 255 255 / 0.4);
-  border-radius: 4px;
-  padding: 1px 5px;
-}
-.calc-mode.shift { color: #6b4400; }
-.calc-field {
-  display: block;
-  width: 100%;
-  min-height: 30px;
-  background: transparent;
-  border: none;
-  font-size: 17px;
-  color: #17210c;
-  --ml__base-font-size: 17px;
-}
-.calc-result {
-  text-align: right;
-  font-size: 22px;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-size: 13.5px;
   font-weight: 600;
-  color: #17210c;
-  min-height: 28px;
-  padding-top: 4px;
-  border-top: 1px solid rgb(0 0 0 / 0.12);
-  overflow-wrap: anywhere;
+  color: var(--ink-2);
 }
-.calc-error {
-  font-size: 12px;
-  font-weight: 500;
-  color: #7a1f1f;
-}
-.calc-pad {
-  padding: 8px;
+.report-period .select { min-width: 260px; }
+.sr-toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px 24px;
 }
-.calc-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.calc-btn {
-  border: none;
-  border-radius: 8px;
-  padding: 9px 0;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  background: #33343d;
-  color: #f0f0f2;
+.sr-toolbar .report-period { margin: 0 0 16px; }
+@media (max-width: 900px) {
+  .report-period { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  .report-period .select { min-width: 0; }
 }
-.calc-btn:hover { filter: brightness(1.15); }
-.calc-btn:active { filter: brightness(0.9); }
-.calc-digit { background: #43444e; }
-.calc-op { background: #4a4432; color: #ffcf6b; }
-.calc-fn { background: #33343d; font-size: 11.5px; }
-.calc-clear { background: #5a2a2a; color: #ffb4b4; }
-.calc-shift { background: #2f3a4a; color: #9fd0ff; }
-.calc-shift.active { background: #3d6ea8; color: #fff; }
-.calc-modebtn { background: #2f3a4a; color: #9fd0ff; font-size: 11px; }
-.calc-equals { background: var(--brand-dark); color: #fff; font-weight: 700; }
+
+/* A page's main buttons pinned to the bottom of the screen (the exam
+   builder): they stay in reach however long the page grows. */
+.sticky-actions {
+  position: sticky;
+  /* Down over the page's own 32px bottom padding, so it sits on the very
+     bottom edge and nothing shows beneath it. */
+  bottom: -32px;
+  z-index: 5;
+  margin-top: 18px;
+  padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  align-items: center;
+}
+
+/* ==========================================================================
+   Exams in progress (Components/Exam/ExamBar.tsx): no sidebar, just the
+   school's own header, so the page is the paper and nothing else. The
+   natural-display calculator (Components/calculator) is styled in Tailwind;
+   only its cursor's blink lives here.
+   ========================================================================== */
+.shell.exam-shell {
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "topbar"
+    "main";
+}
+.calc-caret { animation: calc-blink 1s steps(1) infinite; }
+@keyframes calc-blink { 50% { opacity: 0; } }
 
 /* ==========================================================================
    Audit log (Pages/AuditLog/AuditLog.jsx)
@@ -5408,6 +5352,39 @@ table.data tr:last-child td { border-bottom: none; }
   align-items: start;
 }
 .sr-main, .sr-aside { min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+
+/* The report page does not scroll as a whole: its header (name, term picker)
+   stays put, and below it the main column and the side column each scroll
+   on their own, filling exactly the space left (--page-avail-h, measured by
+   Page). Phones and print go back to one ordinary scrolling page. */
+.sr-fixed .page-toolbar .sr-toolbar .report-period,
+.sr-fixed .page-toolbar .report-period { margin: 0; }
+.sr-fixed .page-body { padding-top: 16px; }
+@media (min-width: 901px) {
+  /* !important: the shell rule that makes .page a scroll box is stronger. */
+  .shell > .page.sr-fixed { overflow: hidden !important; }
+}
+.sr-split {
+  height: var(--page-avail-h, auto);
+  align-items: stretch;
+}
+.sr-pane {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 4px 24px 2px;
+}
+.sr-stats.sr-stats-main { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 0; }
+.sr-stats.sr-stats-aside { grid-template-columns: minmax(0, 1fr); margin-bottom: 0; }
+@media (max-width: 900px) {
+  .sr-split { height: auto; }
+  .sr-pane { overflow: visible; padding: 0; }
+  .sr-stats.sr-stats-main { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+}
+@media print {
+  .sr-split { height: auto; }
+  .sr-pane { overflow: visible; }
+}
 
 .sr-card {
   padding: 20px;

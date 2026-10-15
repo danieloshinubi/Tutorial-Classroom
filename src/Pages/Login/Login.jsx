@@ -9,6 +9,7 @@ import { useAuth } from "../../context/AuthContext";
 import { Field, Button, Notice } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { lastUserId } from "../../lib/lastUser";
+import { safeInternalPath } from "../../lib/safeUrl";
 import { signInEmailFor } from "../../lib/signInName";
 
 const Login = () => {
@@ -31,9 +32,8 @@ const Login = () => {
   // (browsers treat that as protocol-relative to another host), so this can
   // never become an open redirect off a crafted link.
   const fromParam = params.get("from");
-  const safeFromParam = fromParam && fromParam.startsWith("/") && !fromParam.startsWith("//")
-    ? fromParam
-    : null;
+  // (and never "/\evil.com" either, which browsers also read as another host)
+  const safeFromParam = safeInternalPath(fromParam);
   // The whole address, query included: coming back to /Store without its
   // ?tab=items after a sign-in put you on the wrong tab.
   const fromState = location.state?.from;

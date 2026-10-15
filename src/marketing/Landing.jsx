@@ -922,6 +922,11 @@ const Capabilities = () => {
               <Link to="/Start-Trial" className="mkt-btn mkt-btn-primary">{"Start free trial"}</Link>
               <a href="mailto:hello@schoolivio.com" className="mkt-btn mkt-btn-ghost-dark">{"Request a demo"}</a>
             </div>
+            <div className="mkt-cap-progress" aria-hidden="true">
+              {CAPABILITIES.map((c, i) => (
+                <button key={c.key} type="button" tabIndex={-1} className={`mkt-cap-dot${i === active ? " active" : ""}`} onClick={() => select(i)} />
+              ))}
+            </div>
           </div>
         </div>
       </div>

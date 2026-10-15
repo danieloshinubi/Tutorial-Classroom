@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import DOMPurify from "dompurify";
+import { safeInternalPath } from "../../lib/safeUrl";
 
 // The assistant answers in markdown: short paragraphs, bold, lists and
 // tables. This turns the parts it uses into HTML. Everything is escaped
@@ -13,11 +14,15 @@ const inline = (text) =>
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
-    .replace(/\[([^\]]+)\]\(((?:https:\/\/|\/)[^)\s]+)\)/g, (m, label, href) =>
-      href.startsWith("/")
-        ? `<a href="${href}" data-internal="1">${label}</a>`
-        : `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`
-    );
+    .replace(/\[([^\]]+)\]\(((?:https:\/\/|\/)[^)\s]+)\)/g, (m, label, href) => {
+      // A path in this app only if it really is one: "//x" and "/\x" are
+      // other websites, and are left as plain text.
+      if (href.startsWith("/")) {
+        const internal = safeInternalPath(href);
+        return internal ? `<a href="${internal}" data-internal="1">${label}</a>` : label;
+      }
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+    });
 
 const isTableRow = (line) => /^\s*\|.*\|\s*$/.test(line);
 const isDivider = (line) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(line);

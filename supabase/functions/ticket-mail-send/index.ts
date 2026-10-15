@@ -12,6 +12,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import nodemailer from "npm:nodemailer@10.0.9";
+import { checkMailHost } from "../_shared/net/mailHost.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -130,6 +131,8 @@ Deno.serve(async (req) => {
     const thread = ((threadIds as string[] | null) ?? []).filter(Boolean);
     const lastMessageId = thread[thread.length - 1] || null;
 
+    const badHost = await checkMailHost(mailbox.smtp_host, mailbox.smtp_port || 587, "smtp");
+    if (badHost) return json({ error: badHost }, 400);
     const transport = nodemailer.createTransport({
       host: mailbox.smtp_host,
       port: mailbox.smtp_port || 587,

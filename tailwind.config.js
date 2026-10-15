@@ -8,6 +8,12 @@ module.exports = {
     "./src/Components/PersonModal.jsx",
     // School admin → People: the list and the person panel (TypeScript).
     "./src/Pages/SchoolAdmin/people/**/*.{ts,tsx}",
+    // Marketing site pages converted to TypeScript.
+    "./src/marketing/**/*.{ts,tsx}",
+    // Tutors (TypeScript).
+    "./src/Pages/Tutors/**/*.{ts,tsx}",
+    // School admin → Grading (TypeScript).
+    "./src/Pages/SchoolAdmin/GradingPanel.tsx",
     // Schoolivio Mail (TypeScript).
     "./src/Pages/Mail/**/*.{ts,tsx}",
     // Console → Mail (TypeScript).
@@ -20,6 +26,9 @@ module.exports = {
     "./src/Pages/Results/**/*.{ts,tsx}",
     // Course pages (TypeScript).
     "./src/Components/Sections/**/*.{ts,tsx}",
+    // The exam header and the natural-display calculator (TypeScript).
+    "./src/Components/Exam/**/*.{ts,tsx}",
+    "./src/Components/calculator/**/*.{ts,tsx}",
   ],
   // Tailwind decides what to generate by scanning the files above for
   // anything that LOOKS like a class name — which includes ordinary English

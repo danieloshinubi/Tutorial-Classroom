@@ -273,6 +273,9 @@ const MailPage = () => {
       setItems(list);
       setCounts(c);
     } catch (err) {
+      if (n !== loadSeq.current) return;
+      // An empty list, not "Loading…" forever.
+      setItems([]);
       setError((err as Error).message);
     }
   }, [mailbox, folder, search, setError]);

@@ -16,6 +16,7 @@ import { askAssistant } from "../../lib/assistant";
 import Markdown from "./Markdown";
 import Chart from "./Chart";
 import { ACTIONS, describeParams, runAction } from "../../lib/assistantActions";
+import { safeInternalPath } from "../../lib/safeUrl";
 
 // A proposed action, waiting for the person: what it will do, and Confirm or
 // Cancel. Nothing has happened until Confirm (see lib/assistantActions.js).
@@ -287,7 +288,10 @@ const Assistant = () => {
 
   const go = useCallback(
     (path) => {
-      navigate(path);
+      // Only a page of this app, never another website.
+      const internal = safeInternalPath(path);
+      if (!internal) return;
+      navigate(internal);
       if (window.matchMedia("(max-width: 720px)").matches) setOpen(false);
     },
     [navigate]

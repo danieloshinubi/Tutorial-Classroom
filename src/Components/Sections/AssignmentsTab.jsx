@@ -22,6 +22,7 @@ import {
 import { useDocumentPreview } from "../DocumentPreview";
 import { useActionFeedback } from "../Toast";
 import { confirmDialog } from "../Confirm";
+import { safeHref } from "../../lib/safeUrl";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -384,7 +385,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
                   {assignment.link_url ? (
                     <a
                       className="tf-brief-link"
-                      href={assignment.link_url}
+                      href={safeHref(assignment.link_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                     >

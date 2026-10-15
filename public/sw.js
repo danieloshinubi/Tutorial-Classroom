@@ -16,7 +16,9 @@ self.addEventListener("push", (event) => {
   } catch (err) {
     data = { title: "Schoolivio", body: event.data ? event.data.text() : "" };
   }
-  const url = new URL(data.url || "/", self.location.origin);
+  // Only pages of this site: a notification never opens somewhere else.
+  let url = new URL(data.url || "/", self.location.origin);
+  if (url.origin !== self.location.origin) url = new URL("/", self.location.origin);
 
   event.waitUntil(
     (async () => {

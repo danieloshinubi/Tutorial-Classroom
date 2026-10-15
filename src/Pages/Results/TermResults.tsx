@@ -1,34 +1,39 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchReleasedResults, type Slip } from "../../lib/resultsApi";
-import { Chip } from "./resultsUi";
+import { fetchReleasedResults, gradeTone, type Slip } from "../../lib/resultsApi";
+import { useSchool } from "../../context/SchoolContext";
+import { Chip, useGradeBands } from "./resultsUi";
 
 // A pupil's released term results, on their report (Reports → a pupil).
 // Only what the school has released: the database refuses families anything
 // else, and staff see the same view here (drafts live under Results).
 
-const TermResults = ({ studentId }: { studentId: string }) => {
+// termIds: only these terms (a report for one term or session); null: all.
+const TermResults = ({ studentId, termIds = null }: { studentId: string; termIds?: string[] | null }) => {
   const [slips, setSlips] = useState<Slip[] | null>(null);
+  const { schoolId } = useSchool();
+  const bands = useGradeBands(schoolId);
   useEffect(() => {
     let live = true;
-    fetchReleasedResults(studentId)
+    if (!schoolId) return undefined;
+    fetchReleasedResults(studentId, schoolId)
       .then((r) => live && setSlips(r))
       .catch(() => live && setSlips([]));
     return () => {
       live = false;
     };
-  }, [studentId]);
+  }, [studentId, schoolId]);
 
   // Newest term first, subjects A–Z.
   const terms = useMemo(() => {
     const m = new Map<string, { name: string; at: string; rows: Slip[] }>();
-    (slips || []).forEach((s) => {
+    (slips || []).filter((s) => !termIds || termIds.includes(s.term_id)).forEach((s) => {
       if (!m.has(s.term_id)) m.set(s.term_id, { name: [s.term_name, s.session_name].filter(Boolean).join(" · "), at: s.released_at || "", rows: [] });
       m.get(s.term_id)!.rows.push(s);
     });
     return [...m.values()]
       .map((t) => ({ ...t, rows: t.rows.sort((a, b) => (a.course_title || "").localeCompare(b.course_title || "")) }))
       .sort((a, b) => b.at.localeCompare(a.at));
-  }, [slips]);
+  }, [slips, termIds]);
 
   if (!slips || !slips.length) return null;
 
@@ -63,7 +68,7 @@ const TermResults = ({ studentId }: { studentId: string }) => {
                         <td className="tw-px-3 tw-py-2 tw-text-center tw-tabular-nums tw-text-ink-2">{r.ca_score == null ? "—" : `${Number(r.ca_score)}/${r.ca_max}`}</td>
                         <td className="tw-px-3 tw-py-2 tw-text-center tw-tabular-nums tw-text-ink-2">{r.exam_score == null ? "—" : `${Number(r.exam_score)}/${r.exam_max}`}</td>
                         <td className="tw-px-3 tw-py-2 tw-text-center tw-font-semibold tw-tabular-nums tw-text-ink">{`${Number(r.total)}/${r.ca_max + r.exam_max}`}</td>
-                        <td className="tw-px-3 tw-py-2 tw-text-center">{r.grade ? <Chip tone={r.grade === "F" ? "bad" : r.grade === "A" ? "good" : "muted"}>{r.grade}</Chip> : "—"}</td>
+                        <td className="tw-px-3 tw-py-2 tw-text-center" title={bands.find((b) => b.grade === r.grade)?.remark || undefined}>{r.grade ? <Chip tone={gradeTone(r.grade, bands)}>{r.grade}</Chip> : "—"}</td>
                         <td className="tw-px-3 tw-py-2 tw-text-ink-2">{r.remark || ""}</td>
                       </tr>
                     ))}

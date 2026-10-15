@@ -6,7 +6,7 @@ import { useActionFeedback } from "../../Components/Toast";
 import { confirmDialog } from "../../Components/Confirm";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
-import { fetchSheets, fetchTerms, fetchUnits, openSheet, releaseSheet, STATUS_LABEL, type Sheet, type Status, type Term, type Unit } from "../../lib/resultsApi";
+import { fetchSheets, fetchTerms, fetchUnits, openSheet, releaseTermResults, STATUS_LABEL, type Sheet, type Status, type Term, type Unit } from "../../lib/resultsApi";
 import { Chip, Svg, I, card, statusTone } from "./resultsUi";
 
 // Results (2026-10-14): term results for exams written on paper. A teacher
@@ -37,7 +37,9 @@ const Results = () => {
     Promise.all([fetchTerms(schoolId), fetchUnits(schoolId)])
       .then(([t, u]) => {
         setTerms(t);
-        setTermId((cur) => cur || t.find((x) => x.is_current)?.id || t[0]?.id || "");
+        // This school's own term: one kept from another school would show
+        // its sheets as empty.
+        setTermId((cur) => (cur && t.some((x) => x.id === cur) ? cur : t.find((x) => x.is_current)?.id || t[0]?.id || ""));
         setUnits(u);
       })
       .catch((err: Error) => setError(err.message));
@@ -61,7 +63,9 @@ const Results = () => {
   }, [sheets]);
 
   const rows = useMemo(() => {
-    const all = (units || []).filter((u) => u.pupils > 0);
+    // Everything a teacher teaches shows under "My subjects", pupils or not;
+    // elsewhere only what has pupils to mark.
+    const all = (units || []).filter((u) => u.pupils > 0 || (view === "mine" && canTeach(u)));
     const st = (u: Unit) => sheetOf.get(u.key)?.status;
     switch (view) {
       case "mine":
@@ -77,9 +81,10 @@ const Results = () => {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { mine: 0, approve: 0, release: 0, all: 0 };
-    (units || []).filter((u) => u.pupils > 0).forEach((u) => {
-      c.all += 1;
+    (units || []).forEach((u) => {
       if (canTeach(u)) c.mine += 1;
+      if (u.pupils === 0) return;
+      c.all += 1;
       const s = sheetOf.get(u.key)?.status;
       if (s === "submitted") c.approve += 1;
       if (s === "approved") c.release += 1;
@@ -90,6 +95,7 @@ const Results = () => {
   const open = async (u: Unit) => {
     const existing = sheetOf.get(u.key);
     if (existing) return navigate(`/Results/${existing.id}`);
+    if (!u.pupils) return;
     if (!canTeach(u)) return setError("Its teacher has not started this sheet yet.");
     setBusy(u.key);
     try {
@@ -102,19 +108,30 @@ const Results = () => {
     }
   };
 
+  // Release every approved sheet this term to the whole school at once.
+  // Sheets still being marked or waiting for approval stay hidden.
+  const ready = sheets.filter((s) => s.status === "approved");
+  const pending = sheets.filter((s) => s.status !== "approved" && s.status !== "released").length;
+  const releasedCount = sheets.filter((s) => s.status === "released").length;
+  const termName = (terms || []).find((t) => t.id === termId)?.name || "this term";
+
   const releaseAll = async () => {
-    const ready = sheets.filter((s) => s.status === "approved");
     if (!ready.length) return;
-    if (!(await confirmDialog({ title: `Release ${ready.length} approved sheet${ready.length === 1 ? "" : "s"}?`, body: "Students and parents can see these results straight away, and are told.", confirmLabel: "Release", tone: "primary" }))) return;
+    const ok = await confirmDialog({
+      title: `Release all ${ready.length} approved result sheet${ready.length === 1 ? "" : "s"}?`,
+      body: `Every pupil and parent in these subjects can see their ${termName} results straight away, and is told.${pending ? ` ${pending} sheet${pending === 1 ? " is" : "s are"} not approved yet and will stay hidden.` : ""}`,
+      confirmLabel: `Release ${ready.length}`,
+      tone: "primary",
+    });
+    if (!ok) return;
+    if (!schoolId) return;
     setBusy("all");
+    // One step on the server: all or nothing, one notice per family.
     let done = 0;
-    for (const s of ready) {
-      try {
-        await releaseSheet(s.id);
-        done += 1;
-      } catch (err) {
-        setError((err as Error).message);
-      }
+    try {
+      done = await releaseTermResults(schoolId, termId);
+    } catch (err) {
+      setError((err as Error).message);
     }
     setBusy(null);
     setNotice(`${done} sheet${done === 1 ? "" : "s"} released to families.`);
@@ -171,13 +188,25 @@ const Results = () => {
                 </button>
               ))}
             </div>
-            {isLeader && view === "release" && counts.release ? (
-              <button type="button" disabled={busy === "all"} onClick={releaseAll} className="tw-inline-flex tw-items-center tw-gap-1.5 tw-rounded-full tw-border-0 tw-bg-brand tw-px-4 tw-py-2 tw-text-[13.5px] tw-font-semibold tw-text-white tw-cursor-pointer hover:tw-opacity-90 disabled:tw-opacity-50 [font-family:inherit]">
-                <Svg d={I.send} size={14} />
-                {busy === "all" ? "Releasing…" : `Release all ${counts.release}`}
-              </button>
-            ) : null}
           </div>
+
+          {/* Bulk release, on every tab, for whoever may release. */}
+          {isLeader && (ready.length || busy === "all") ? (
+            <div className={`${card} tw-flex tw-flex-wrap tw-items-center tw-gap-4 tw-border-brand tw-bg-brand-soft tw-px-5 tw-py-4`}>
+              <span className="tw-flex tw-min-w-[220px] tw-flex-1 tw-flex-col">
+                <span className="tw-text-[15px] tw-font-bold tw-text-ink">
+                  {busy === "all" ? `Releasing ${ready.length} result sheet${ready.length === 1 ? "" : "s"}…` : `${ready.length} approved result sheet${ready.length === 1 ? "" : "s"} ready for families`}
+                </span>
+                <span className="tw-text-[13px] tw-text-ink-2">
+                  {`Release them all at once for ${termName}.${releasedCount ? ` ${releasedCount} already released.` : ""}${pending ? ` ${pending} not approved yet stay hidden.` : ""}`}
+                </span>
+              </span>
+              <button type="button" disabled={busy === "all"} onClick={releaseAll} className="tw-inline-flex tw-items-center tw-gap-2 tw-rounded-full tw-border-0 tw-bg-brand tw-px-5 tw-py-2.5 tw-text-[14px] tw-font-semibold tw-text-white tw-cursor-pointer hover:tw-opacity-90 disabled:tw-opacity-60 [font-family:inherit]">
+                <Svg d={I.send} size={15} />
+                {busy === "all" ? "Releasing…" : `Release all ${ready.length}`}
+              </button>
+            </div>
+          ) : null}
 
           {terms && !terms.length ? (
             <div className={`${card} tw-p-8 tw-text-center tw-text-[14px] tw-text-ink-3`}>{"Set up the session and its terms first, under School admin → Academic calendar."}</div>
@@ -207,20 +236,27 @@ const Results = () => {
                   {list.map((u) => {
                     const s = sheetOf.get(u.key);
                     const status = s?.status as Status | undefined;
-                    const mineToMark = canTeach(u) && (!status || status === "draft" || status === "returned");
+                    const empty = !u.pupils && !s;
+                    const mineToMark = !empty && canTeach(u) && (!status || status === "draft" || status === "returned");
                     return (
                       <li key={u.key}>
                         <button
                           type="button"
                           onClick={() => open(u)}
-                          disabled={busy === u.key}
-                          className="tw-flex tw-w-full tw-flex-wrap tw-items-center tw-gap-x-4 tw-gap-y-1 tw-border-0 tw-border-t tw-border-solid tw-border-line tw-bg-transparent tw-px-5 tw-py-3 tw-text-left tw-cursor-pointer tw-transition-colors hover:tw-bg-brand-soft disabled:tw-opacity-60 [font-family:inherit]"
+                          disabled={busy === u.key || empty}
+                          className="tw-flex tw-w-full tw-flex-wrap tw-items-center tw-gap-x-4 tw-gap-y-1 tw-border-0 tw-border-t tw-border-solid tw-border-line tw-bg-transparent tw-px-5 tw-py-3 tw-text-left tw-cursor-pointer tw-transition-colors hover:tw-bg-brand-soft disabled:tw-cursor-default disabled:tw-opacity-70 disabled:hover:tw-bg-transparent [font-family:inherit]"
                         >
                           <span className="tw-flex tw-min-w-[200px] tw-flex-1 tw-flex-col">
                             <span className="tw-text-[14.5px] tw-font-semibold tw-text-ink">{u.title}</span>
-                            <span className="tw-text-[12.5px] tw-text-ink-3">{`${u.teacher ? displayName(u.teacher) : "No teacher yet"} · ${u.pupils} pupil${u.pupils === 1 ? "" : "s"}`}</span>
+                            <span className="tw-text-[12.5px] tw-text-ink-3">{`${u.teacher ? displayName(u.teacher) : "No teacher yet"} · ${u.pupils ? `${u.pupils} pupil${u.pupils === 1 ? "" : "s"}` : "no pupils"}`}</span>
                           </span>
-                          {status ? <Chip tone={statusTone(status)}>{STATUS_LABEL[status]}</Chip> : <Chip tone="muted">{"Not started"}</Chip>}
+                          {empty ? (
+                            <span className="tw-text-[12.5px] tw-text-ink-3">{u.kind === "course" ? "No pupils yet: add them to the course first" : "No pupils in this class yet"}</span>
+                          ) : status ? (
+                            <Chip tone={statusTone(status)}>{STATUS_LABEL[status]}</Chip>
+                          ) : (
+                            <Chip tone="muted">{"Not started"}</Chip>
+                          )}
                           <span className="tw-inline-flex tw-min-w-[120px] tw-items-center tw-justify-end tw-gap-1 tw-text-[13px] tw-font-semibold tw-text-brand">
                             {busy === u.key ? "Opening…" : mineToMark ? (status ? "Continue marking" : "Enter marks") : status === "submitted" && isLeader ? "Review" : status ? "View" : ""}
                             {status || mineToMark ? <Svg d={I.chevron} size={15} /> : null}

@@ -143,6 +143,12 @@ export const AuthProvider = ({ children }) => {
             const key = window.sessionStorage.key(i);
             if (key && key.startsWith("schoolivio.assistant.")) window.sessionStorage.removeItem(key);
           }
+          // Exam answers kept on this device for an unsteady connection go
+          // too: on a shared computer the next person must not read them.
+          for (let i = window.localStorage.length - 1; i >= 0; i -= 1) {
+            const key = window.localStorage.key(i);
+            if (key && key.startsWith("exam-answers:")) window.localStorage.removeItem(key);
+          }
         } catch {
           // Storage unavailable: nothing was saved.
         }

@@ -139,7 +139,7 @@ const Apply = () => {
     const attachment = attachments.find((a) => a.key === key);
     setAttachments((c) => c.filter((a) => a.key !== key));
     if (attachment?.path) {
-      await removePublicApplicationDocument(attachment.path).catch(() => {});
+      await removePublicApplicationDocument(attachment.path, attachment.token).catch(() => {});
     }
   };
 

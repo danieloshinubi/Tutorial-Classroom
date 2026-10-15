@@ -10,6 +10,12 @@
 
 import { resend } from "../_shared/mail/resend.ts";
 
+// Stored so a browser downloads it rather than showing it: an HTML or SVG
+// attachment opened straight from storage could otherwise run a script.
+const storedType = (t?: string | null) =>
+  /html|svg|xml|javascript|ecmascript/i.test(t || "") ? "application/octet-stream" : t || "application/octet-stream";
+
+
 // deno-lint-ignore no-explicit-any
 type AdminClient = any;
 
@@ -121,7 +127,7 @@ export async function receive(admin: AdminClient, school: string, key: string, d
       }
       const bytes = new Uint8Array(await res.arrayBuffer());
       const path = `${mailboxes[0]}/${envelope}/${crypto.randomUUID()}-${safeName(f.filename ?? "")}`;
-      const up = await admin.storage.from("mail").upload(path, bytes, { contentType: f.content_type || "application/octet-stream", upsert: false });
+      const up = await admin.storage.from("mail").upload(path, bytes, { contentType: storedType(f.content_type), upsert: false });
       if (up.error) {
         skipped.push(f.filename || "attachment");
         continue;

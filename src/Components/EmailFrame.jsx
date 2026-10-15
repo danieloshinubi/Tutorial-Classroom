@@ -52,6 +52,9 @@ const buildDocument = (html, blockRemote) => {
     FORBID_ATTR: ["srcset"],
   });
   const doc = new DOMParser().parseFromString(clean, "text/html");
+  // Every link opens on its own: rel="opener" in a message would otherwise
+  // hand the new page a handle back to this one.
+  doc.querySelectorAll("a[href]").forEach((a) => a.setAttribute("rel", "noopener noreferrer"));
   let blocked = 0;
   if (blockRemote) {
     doc.querySelectorAll("[src], [poster]").forEach((el) => {

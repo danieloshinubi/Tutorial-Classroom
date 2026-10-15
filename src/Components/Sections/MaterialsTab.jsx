@@ -13,6 +13,7 @@ import { Card, Button, Field, Empty, formatDate } from "../UI";
 import { useDocumentPreview } from "../DocumentPreview";
 import { useActionFeedback } from "../Toast";
 import { confirmDialog } from "../Confirm";
+import { safeHref } from "../../lib/safeUrl";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -307,7 +308,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
             ) : null}
             {material.url ? (
               <a
-                href={material.url}
+                href={safeHref(material.url)}
                 target="_blank"
                 rel="noreferrer noopener"
                 className="btn btn-secondary btn-sm"

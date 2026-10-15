@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Select } from "../../Components/UI";
+import { Select, Switch } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { confirmDialog } from "../../Components/Confirm";
 import {
@@ -123,16 +123,15 @@ const SharedEditor = ({ schoolId, start, people, domains, onDone }: {
       <ul className="tw-m-0 tw-max-h-[280px] tw-list-none tw-overflow-y-auto tw-rounded-lg tw-border tw-border-solid tw-border-line tw-bg-surface tw-p-0">
         {shown.map((s) => (
           <li key={s.key} className="tw-flex tw-flex-wrap tw-items-center tw-gap-3 tw-border-0 tw-border-b tw-border-solid tw-border-line tw-px-3 tw-py-2 last:tw-border-b-0">
-            <label className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-2 tw-text-[14px] tw-text-ink">
-              <input type="checkbox" checked={!!members[s.key]} onChange={(e) => setMembers((m) => {
+            <span className="tw-flex tw-min-w-0 tw-flex-1 tw-items-center tw-gap-2 tw-text-[14px] tw-text-ink">
+              <Switch compact checked={!!members[s.key]} onChange={(on: boolean) => setMembers((m) => {
                 const next = { ...m };
-                if (e.target.checked) next[s.key] = "full";
+                if (on) next[s.key] = "full";
                 else delete next[s.key];
                 return next;
-              })} />
-              <span className="tw-truncate">{s.label}</span>
+              })} label={s.label} />
               <span className="tw-truncate tw-text-[12px] tw-text-ink-3">{s.sub}</span>
-            </label>
+            </span>
             {members[s.key] ? (
               <div className="tw-w-[230px]">
                 <Select value={members[s.key]} onChange={(v: string) => setMembers((m) => ({ ...m, [s.key]: v as SharedAccess }))} options={ACCESS} />
@@ -233,25 +232,23 @@ const GroupEditor = ({ schoolId, start, people, shared, domains, onDone }: {
           <AddressInput value={address} onChange={setAddress} domains={domains} />
         </label>
       </div>
-      <label className="tw-mt-3 tw-flex tw-items-center tw-gap-2 tw-text-[13.5px] tw-text-ink">
-        <input type="checkbox" checked={outside} onChange={(e) => setOutside(e.target.checked)} />
-        {"Accept mail from outside the school (parents, other schools)"}
-      </label>
+      <div className="tw-mt-3">
+        <Switch checked={outside} onChange={setOutside} label="Accept mail from outside the school (parents, other schools)" />
+      </div>
       <p className="tw-m-0 tw-mb-2 tw-mt-4 tw-text-[13px] tw-font-semibold tw-text-ink-2">{`Members (${members.size})`}</p>
       {search}
       <ul className="tw-m-0 tw-max-h-[280px] tw-list-none tw-overflow-y-auto tw-rounded-lg tw-border tw-border-solid tw-border-line tw-bg-surface tw-p-0">
         {shown.map((b) => (
           <li key={b.key} className="tw-border-0 tw-border-b tw-border-solid tw-border-line tw-px-3 tw-py-2 last:tw-border-b-0">
-            <label className="tw-flex tw-items-center tw-gap-2 tw-text-[14px] tw-text-ink">
-              <input type="checkbox" checked={members.has(b.key)} onChange={(e) => setMembers((m) => {
+            <span className="tw-flex tw-items-center tw-gap-2 tw-text-[14px] tw-text-ink">
+              <Switch compact checked={members.has(b.key)} onChange={(on: boolean) => setMembers((m) => {
                 const next = new Set(m);
-                if (e.target.checked) next.add(b.key);
+                if (on) next.add(b.key);
                 else next.delete(b.key);
                 return next;
-              })} />
-              <span className="tw-truncate">{b.label}</span>
+              })} label={b.label} />
               <span className="tw-truncate tw-text-[12px] tw-text-ink-3">{b.sub}</span>
-            </label>
+            </span>
           </li>
         ))}
       </ul>

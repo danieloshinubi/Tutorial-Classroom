@@ -5,7 +5,9 @@ import {
   Route,
   Navigate,
   useParams,
+  useLocation,
 } from "react-router-dom";
+import ErrorBoundary from "./Components/ErrorBoundary";
 import { AuthProvider } from "./context/AuthContext";
 import { SchoolProvider } from "./context/SchoolContext";
 import { ToastProvider } from "./Components/Toast";
@@ -109,6 +111,13 @@ const LegacyApplicationRedirect = () => {
   return <Navigate to={`/AdmissionsWorkspace/${applicationId}`} replace />;
 };
 
+// A crash on one page shows a way out, not a blank screen; moving to another
+// page clears it.
+const RouteBoundary = ({ children }) => {
+  const { pathname } = useLocation();
+  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+};
+
 function App() {
   // admin.schoolivio.com is not a school. It gets its own application, with no
   // SchoolProvider and no tenant to resolve, rather than a page inside
@@ -144,6 +153,7 @@ function App() {
         <TrialGate>
         {/* Each module's code downloads the first time it is opened, so the
             first load carries the sign-in and shell, not every screen. */}
+        <RouteBoundary>
         <Suspense fallback={<RouteLoading />}>
         <Routes>
           <Route path="/" element={<Navigate to="/Dashboard" replace />} />
@@ -308,6 +318,7 @@ function App() {
           <Route path="*" element={<Navigate to="/Dashboard" replace />} />
         </Routes>
         </Suspense>
+        </RouteBoundary>
         </TrialGate>
         </PresenceProvider>
         </NavDataProvider>
