@@ -24,7 +24,7 @@ const actionKey = (a) => `${a.action}:${JSON.stringify(a.params)}`;
 
 const ActionCard = ({ action, secret, onConfirm, onCancel, onOpen }) => {
   const def = ACTIONS[action.action];
-  const details = describeParams(action.params);
+  const details = Array.isArray(action.display) ? action.display : describeParams(action.params);
   const questions = Array.isArray(action.params?.questions) ? action.params.questions : null;
   return (
     <div className={`ai-action is-${action.state}${def?.danger ? " is-danger" : ""}`}>
@@ -349,11 +349,11 @@ const Assistant = () => {
             const key = actionKey(event);
             const repeat = messagesRef.current.some((m) => (m.actions || []).some((a) => actionKey(a) === key && ["waiting", "running", "done"].includes(a.state)));
             if (repeat) return;
-            patchLast((m) => ({ ...m, actions: [...(m.actions || []), { id: event.id, action: event.action, params: event.params, summary: event.summary, state: "waiting" }] }));
+            patchLast((m) => ({ ...m, actions: [...(m.actions || []), { id: event.id, action: event.action, params: event.params, summary: event.summary, display: event.display, state: "waiting" }] }));
           } else if (event.type === "link") {
             patchLast((m) => ({ ...m, links: [...(m.links || []), { path: event.path, label: event.label }] }));
           } else if (event.type === "error") {
-            patchLast((m) => ({ ...m, error: event.message }));
+            patchLast((m) => ({ ...m, error: event.message, retry: Boolean(event.retry) }));
           }
         },
       });
@@ -398,6 +398,13 @@ const Assistant = () => {
     patchAction(msgIndex, action.id, { state: "cancelled" });
     // Kept in the conversation so the assistant knows, without asking it now.
     setMessages((list) => [...list, { role: "user", content: `[Cancelled] ${action.summary}`, note: true }]);
+  };
+
+  // Asks the failed question again, as if it had never failed.
+  const retry = (index) => {
+    const question = messagesRef.current[index - 1];
+    if (!question || question.role !== "user") return;
+    ask(question.typed ?? question.content, { note: Boolean(question.note), base: messagesRef.current.slice(0, index - 1) });
   };
 
   const stop = () => abortRef.current?.abort();
@@ -520,6 +527,12 @@ const Assistant = () => {
                           />
                         ))}
                         {m.error ? <p className="ai-error">{m.error}</p> : null}
+                        {m.error && m.retry && i === messages.length - 1 && !busy ? (
+                          <button type="button" className="ai-link" onClick={() => retry(i)}>
+                            {"Try again"}
+                            <Icon icon={arrowRight} size={14} />
+                          </button>
+                        ) : null}
                         {m.pending && i === messages.length - 1 && (status || !m.content) ? (
                           <p className="ai-status">
                             <span className="ai-dots" aria-hidden="true">

@@ -55,10 +55,35 @@ const provider = () => {
 // took most of a minute; switching to the next model is instant. So a busy
 // model is skipped until its cool-down ends, best model first. GROQ_MODELS
 // (comma separated) overrides the list.
-const groqModels = () =>
-  (Deno.env.get("GROQ_MODELS") || Deno.env.get("GROQ_MODEL") ||
+//
+// Other providers sit beside Groq when their keys are set (2026-10-16), so
+// one being full is not the end of an answer:
+//   Cerebras (CEREBRAS_API_KEY): the same best model with far more room,
+//     first in line; it needs a card on file before its key works.
+//   Google Gemini (GEMINI_API_KEY, free from Google AI Studio): second,
+//     after Groq's best model and before Groq's smaller ones. Two models,
+//     because Google's free tier often answers 503 "high demand" on one
+//     while the other is fine. GEMINI_MODELS (comma separated) overrides.
+// Entries are "provider:model"; a bare name is Groq's.
+const groqModels = () => {
+  const list = (Deno.env.get("GROQ_MODELS") || Deno.env.get("GROQ_MODEL") ||
     "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b,llama-3.3-70b-versatile,minimaxai/minimax-m2.7")
     .split(",").map((m) => m.trim()).filter(Boolean);
+  if (Deno.env.get("GEMINI_API_KEY")) {
+    const gemini = (Deno.env.get("GEMINI_MODELS") || "gemini-3.8-flash,gemini-3.6-flash").split(",").map((m) => m.trim()).filter(Boolean);
+    list.splice(1, 0, ...gemini.map((m) => `gemini:${m}`));
+  }
+  return Deno.env.get("CEREBRAS_API_KEY") ? ["cerebras:gpt-oss-120b", ...list] : list;
+};
+const endpointFor = (entry: string) =>
+  entry.startsWith("cerebras:")
+    ? { url: "https://api.cerebras.ai/v1/chat/completions", key: Deno.env.get("CEREBRAS_API_KEY") || "", model: entry.slice(9) }
+    : entry.startsWith("gemini:")
+    ? { url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions", key: Deno.env.get("GEMINI_API_KEY") || "", model: entry.slice(7) }
+    : { url: GROQ_URL, key: Deno.env.get("GROQ_API_KEY") || "", model: entry.replace(/^groq:/, "") };
+// The strongest models, wherever they are served from: worth a short wait,
+// and taken before Groq's smaller ones.
+const isBest = (entry: string) => /gpt-oss-120b$/.test(entry) || entry.startsWith("gemini:");
 const groqModel = () => groqModels()[0];
 const coolingUntil = new Map<string, number>();
 // Models that turned down their extra settings once are sent without them.
@@ -70,8 +95,8 @@ const groqExtras = (model: string): Record<string, unknown> => {
   // The best free model thinks properly before it answers (2026-10-16):
   // its prompt is cached, and cached tokens do not count against Groq's
   // per-minute allowance, so the extra thinking is affordable.
-  if (model === "openai/gpt-oss-120b") return { reasoning_effort: "medium" };
-  if (model.startsWith("openai/gpt-oss")) return { reasoning_effort: "low" };
+  if (isBest(model)) return { reasoning_effort: "medium" };
+  if (model.includes("gpt-oss")) return { reasoning_effort: "low" };
   if (model.startsWith("qwen/")) return { reasoning_format: "hidden" };
   return {};
 };
@@ -109,14 +134,62 @@ const thinkFilter = () => {
   };
 };
 
-// One Groq chat completion, streamed, on the first model that is not busy.
+// Gemini signs the tool calls it makes and expects the signature back on
+// later turns. Calls another model made carry no signature; Google's
+// documented stand-in lets Gemini carry on from them.
+const GEMINI_STAND_IN_SIGNATURE = "skip_thought_signature_validator";
+
+// The conversation as one provider wants it: Gemini gets the pictures and
+// a signature on every earlier tool call; the others get neither (an
+// unknown field on a message is a 400 on Groq).
+// deno-lint-ignore no-explicit-any
+const messagesFor = (model: string, messages: any[], images?: { index: number; parts: unknown[] }) => {
+  const gemini = model.startsWith("gemini:");
+  return messages.map((m, i) => {
+    let out = m;
+    if (gemini && images?.parts.length && i === images.index && typeof m.content === "string") {
+      out = { ...m, content: [{ type: "text", text: m.content }, ...images.parts] };
+    }
+    if (Array.isArray(m.tool_calls)) {
+      out = {
+        ...out,
+        // deno-lint-ignore no-explicit-any
+        tool_calls: m.tool_calls.map((tc: any) => {
+          const { extra_content, ...rest } = tc;
+          if (!gemini) return rest;
+          return extra_content?.google?.thought_signature
+            ? { ...rest, extra_content }
+            : { ...rest, extra_content: { google: { thought_signature: GEMINI_STAND_IN_SIGNATURE } } };
+        }),
+      };
+    }
+    return out;
+  });
+};
+
+const geminiOn = () => Boolean(Deno.env.get("GEMINI_API_KEY"));
+
+// One chat completion, streamed, on the first model that is not busy.
 // Text arrives through onText; the finished message (text and any tool
 // calls), its token use and the model that answered come back.
+// opts.prefer puts some providers first (e.g. ["gemini:"] when Groq can't
+// do the job); opts.images are pictures for models that can see them.
 // deno-lint-ignore no-explicit-any
-const groqComplete = async (body: Record<string, unknown>, onText: (t: string) => void, onWait: (seconds: number) => void, deadline = Date.now() + 60_000): Promise<any> => {
-  const key = Deno.env.get("GROQ_API_KEY");
-  if (!key) throw new Error("GROQ_API_KEY is not set.");
-  const models = groqModels();
+const groqComplete = async (
+  body: Record<string, unknown>,
+  onText: (t: string) => void,
+  onWait: (seconds: number) => void,
+  deadline = Date.now() + 60_000,
+  opts: { prefer?: string[]; images?: { index: number; parts: unknown[] } } = {},
+  // deno-lint-ignore no-explicit-any
+): Promise<any> => {
+  if (!Deno.env.get("GROQ_API_KEY") && !Deno.env.get("CEREBRAS_API_KEY")) throw new Error("GROQ_API_KEY is not set.");
+  const all = groqModels().filter((m) => endpointFor(m).key);
+  const preferred = (m: string) => (opts.prefer || []).some((pfx) => m.startsWith(pfx));
+  const models = [...all.filter(preferred), ...all.filter((m) => !preferred(m))];
+  // Models this one request is too big for (Groq answers 413 when a single
+  // request is over the model's per-minute allowance). Skipped, not waited for.
+  const tooBig = new Set<string>();
   let waitedMs = 0;
   const tried: string[] = [];
 
@@ -125,19 +198,23 @@ const groqComplete = async (body: Record<string, unknown>, onText: (t: string) =
     // 40% of answers came from the weaker models because the best one was
     // busy for a few seconds (2026-10-16). A short wait for it beats a
     // worse answer now.
-    const bestFree = (coolingUntil.get(models[0]) || 0) - now;
+    const usable = models.filter((m) => !tooBig.has(m));
+    const bestFree = usable.some((m) => isBest(m) && (coolingUntil.get(m) || 0) <= now)
+      ? 0
+      : Math.min(...usable.filter(isBest).map((m) => (coolingUntil.get(m) || 0) - now), Infinity);
     if (bestFree > 0 && bestFree <= 20_000 && waitedMs + bestFree <= 25_000 && now + bestFree < deadline - 30_000) {
       waitedMs += bestFree;
       onWait(Math.ceil(bestFree / 1000));
       await new Promise((r) => setTimeout(r, bestFree));
       continue;
     }
-    const model = models.find((m) => (coolingUntil.get(m) || 0) <= now);
+    const model = usable.find((m) => (coolingUntil.get(m) || 0) <= now);
+    if (!usable.length) throw new GroqLimitError(tried);
     if (!model) {
       // Every model is busy. Their waits are short (usually under 15
       // seconds), so wait for the soonest rather than give up, up to about
       // 40 seconds in all for one reply.
-      const soonest = Math.max(500, Math.min(...models.map((m) => coolingUntil.get(m) || 0)) - now);
+      const soonest = Math.max(500, Math.min(...usable.map((m) => coolingUntil.get(m) || 0)) - now);
       if (waitedMs + soonest > 25_000 || Date.now() + soonest > deadline) throw new GroqLimitError(tried);
       waitedMs += soonest;
       onWait(Math.ceil(soonest / 1000));
@@ -145,16 +222,39 @@ const groqComplete = async (body: Record<string, unknown>, onText: (t: string) =
       continue;
     }
 
-    const response = await fetch(GROQ_URL, {
+    const end = endpointFor(model);
+    const response = await fetch(end.url, {
       method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ ...body, ...(plainModels.has(model) ? {} : groqExtras(model)), model, stream: true }),
+      headers: { Authorization: `Bearer ${end.key}`, "Content-Type": "application/json" },
+      // Gemini's OpenAI-style door does not take parallel_tool_calls.
+      body: JSON.stringify({
+        ...(model.startsWith("gemini:") ? Object.fromEntries(Object.entries(body).filter(([k]) => k !== "parallel_tool_calls")) : body),
+        messages: messagesFor(model, (body.messages as unknown[]) || [], opts.images),
+        ...(plainModels.has(model) ? {} : groqExtras(model)),
+        model: end.model,
+        stream: true,
+      }),
     });
-    if (response.status === 429 || response.status === 503 || response.status === 404) {
-      const wait = Number(response.headers.get("retry-after") || "") || (response.status === 404 ? 3600 : 20);
-      tried.push(`${model} ${response.status} wait ${wait}s`);
-      coolingUntil.set(model, Date.now() + wait * 1000);
+    // A key that is refused (wrong, revoked, or an account not yet paid
+    // for) puts that provider aside for an hour; the others carry on.
+    if (response.status === 401 || response.status === 402 || response.status === 403) {
+      tried.push(`${model} ${response.status} key refused`);
+      for (const m of models) if (endpointFor(m).url === end.url) coolingUntil.set(m, Date.now() + 60 * 60 * 1000);
       await response.body?.cancel().catch(() => {});
+      continue;
+    }
+    if (response.status === 413) {
+      tried.push(`${model} 413 too big`);
+      tooBig.add(model);
+      await response.body?.cancel().catch(() => {});
+      continue;
+    }
+    if (response.status === 429 || response.status === 503 || response.status === 404) {
+      // Gemini's 503 "high demand" passes in seconds; a short pause is enough.
+      const wait = Number(response.headers.get("retry-after") || "") || (response.status === 404 ? 3600 : response.status === 503 && model.startsWith("gemini:") ? 5 : 20);
+      const why = await response.text().catch(() => "");
+      tried.push(`${model} ${response.status} wait ${wait}s ${why.slice(0, 200)}`);
+      coolingUntil.set(model, Date.now() + wait * 1000);
       continue;
     }
     if (response.status === 400) {
@@ -180,7 +280,8 @@ const groqComplete = async (body: Record<string, unknown>, onText: (t: string) =
     let finish = "";
     // deno-lint-ignore no-explicit-any
     let usage: any = null;
-    const calls: { id: string; name: string; args: string }[] = [];
+    // deno-lint-ignore no-explicit-any
+    const calls: { id: string; name: string; args: string; extra?: any }[] = [];
     for (;;) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -216,11 +317,13 @@ const groqComplete = async (body: Record<string, unknown>, onText: (t: string) =
           if (tc.id) calls[i].id = tc.id;
           if (tc.function?.name) calls[i].name += tc.function.name;
           if (tc.function?.arguments) calls[i].args += tc.function.arguments;
+          // Gemini's signature for this call, kept to send back next turn.
+          if (tc.extra_content) calls[i].extra = { ...(calls[i].extra || {}), ...tc.extra_content };
         }
         if (choice.finish_reason) finish = choice.finish_reason;
       }
     }
-    return { text, calls: calls.filter(Boolean).map((c, i) => ({ ...c, id: c.id || `call_${i}` })), finish, usage, model };
+    return { text, calls: calls.filter(Boolean).map((c, i) => ({ ...c, id: c.id || `call_${i}` })), finish, usage, model, tried };
   }
   throw new GroqLimitError(tried);
 };
@@ -228,7 +331,7 @@ const groqComplete = async (body: Record<string, unknown>, onText: (t: string) =
 class GroqLimitError extends Error {
   tried: string[];
   constructor(tried: string[] = []) {
-    super("The free AI is too busy to answer right now. Wait a minute and ask again.");
+    super("I'm answering a lot of questions at once and couldn't finish this one. Tap Try again and I'll pick it up.");
     this.tried = tried;
   }
 }
@@ -536,6 +639,12 @@ Accuracy rules (these matter more than anything else):
 - Counts come from summarize_records or the school's own functions, never from counting a list you fetched (lists stop at a limit). Staff by role: summarize_records on school_members with filters school_id = this school and is_active = true, grouped by role (staff are every role except student and parent).
 - Admissions queues: report every queue by its name on the page, including those at 0, from admissions_queues buckets: payment = Payment verification, documents = Documents to verify, screening = Screening, decision = Decision queue, clearance = Clearance in progress, action = Awaiting applicant, review = Reviews in progress, interview = Interviews scheduled.
 - Who owes: only the people and amounts debtors() returns, largest first.
+Facts first (the most important rules):
+- Fees, payroll, PAYE or any tax, store sales and stock, dates, terms, holidays, events, classes, form teachers, pupil numbers, attendance, and "is anything wrong": call school_report FIRST and answer only from what it returns. Copy its money exactly as written. Never add, multiply, convert monthly/yearly or filter by date yourself.
+- Dates and events: only what school_report calendar returns. If something is not in it, say "There's no record of that in Schoolivio." Never invent an event, a date or a name.
+- Name the period you are reporting on ("October 2026", "First Term"). If a report says found: false, say what it says.
+- When you report fees or payroll, if checks would obviously matter (for example an overpaid bill), run checks too and mention anything marked high in one line.
+- Fees: give term fees, and mention application fees separately when there are any.
 - Never mention table, column or function names to the person (no "admissions_queues", "store_sales"...). Say what the page calls it.
 - Money in the school's own currency (given below) with commas, e.g. 10,228,000 with its symbol, never spaces.
 
@@ -711,6 +820,20 @@ const TOOLS = [
     eager_input_streaming: true,
   },
   {
+    name: "school_report",
+    description: `Exact figures, worked out by Schoolivio the way its pages do, for this person. ALWAYS use this first for these topics; never add up, filter by date or calculate them yourself. Reports: fees (term_id? default current term): billed, collected, still owed, overpaid by kind of bill, application fees beside, who owes most | payroll_month (month? YYYY-MM, default this month): one month's gross, PAYE, pension (staff and school share), NHF, net, top earners | paye_estimate (monthly_gross, pension? default true, nhf_on_basic?, annual_rent?): PAYE worked exactly as Payroll does | store (from?, to? YYYY-MM-DD, default this month): sales, takings, profit, low stock | calendar (from?, to?): term dates, events and recent notices; the ONLY dates on record | classes: classes this session, form teachers, pupils per class | attendance (from?, to?, default this month): present/absent by class, pupils absent most | checks: things that look wrong (overpaid or duplicate bills, payments waiting, low stock, payroll jumps)`,
+    input_schema: {
+      type: "object",
+      properties: {
+        report: { type: "string", enum: ["fees", "payroll_month", "paye_estimate", "store", "calendar", "classes", "attendance", "checks"] },
+        term_id: { type: "string" }, month: { type: "string" }, from: { type: "string" }, to: { type: "string" },
+        monthly_gross: { type: "number" }, pension: { type: "boolean" }, nhf_on_basic: { type: "number" }, annual_rent: { type: "number" },
+      },
+      required: ["report"],
+    },
+    eager_input_streaming: true,
+  },
+  {
     name: "run_report",
     description: "Run a read-only database function (reads_only: true from find_functions) as the person, e.g. a student's report, debtors, a collection summary, account balances.",
     input_schema: { type: "object", properties: { function: { type: "string" }, args: { type: "object" } }, required: ["function"] },
@@ -743,6 +866,7 @@ const STATUS: Record<string, (input: Record<string, unknown>) => string> = {
   describe_action: () => "Checking how to do that",
   find_functions: (i) => `Looking for how to ${String(i.search || "do that")}`,
   run_report: (i) => `Running ${String(i.function || "the report").replace(/_/g, " ")}`,
+  school_report: (i) => ({ fees: "Checking the fees", payroll_month: "Checking payroll", paye_estimate: "Working out the tax", store: "Checking the store", calendar: "Checking the calendar", classes: "Checking the classes", attendance: "Checking attendance", checks: "Looking for anything wrong" } as Record<string, string>)[String(i.report)] || "Checking the figures",
 };
 
 class ToolError extends Error {}
@@ -809,6 +933,21 @@ const compact = (value: unknown): unknown => {
     return value.map(compact);
   }
   if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, compact(v)]));
+  return value;
+};
+
+// Amounts in a report come back already written as money (₦2,902,000), so
+// the model copies them instead of re-typing or re-adding them.
+const MONEY_KEY = /^(billed|collected|still_owed|overpaid|awaiting_approval|gross|paye|paye_monthly|paye_yearly|pension_staff_share|pension_school_share|pension_monthly|nhf|nhf_monthly|other_deductions|net|net_pay|net_monthly_before_other_deductions|cost_to_school|takings|profit|total|payable|paid|owes|monthly_gross|rent_relief_yearly|taxable_yearly|amount)$/;
+const SYMBOL: Record<string, string> = { NGN: "₦", GHS: "GH₵", KES: "KSh ", USD: "$", GBP: "£", EUR: "€", ZAR: "R " };
+const withMoney = (value: unknown, currency: string, key = ""): unknown => {
+  const fmt = (n: number) => `${SYMBOL[currency] ?? `${currency} `}${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  if (typeof value === "number" && MONEY_KEY.test(key)) return fmt(value);
+  if (typeof value === "string" && MONEY_KEY.test(key) && /^-?\d+(\.\d+)?$/.test(value)) return fmt(Number(value));
+  if (Array.isArray(value)) return value.map((v) => withMoney(v, currency, key));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, key === "by_payment" ? withMoney(v, currency, "amount") : withMoney(v, currency, k)]));
+  }
   return value;
 };
 
@@ -1022,12 +1161,20 @@ const assistant = async (
 
   const meta = (user.user_metadata || {}) as Record<string, string>;
   const name = [meta.first_name, meta.last_name].filter(Boolean).join(" ") || meta.full_name || user.email || "this person";
-  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Lagos" });
+  const lagosDay = (ahead: number) => {
+    const d = new Date(Date.now() + ahead * 86_400_000);
+    const label = d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Africa/Lagos" });
+    const iso = d.toLocaleDateString("en-CA", { timeZone: "Africa/Lagos" });
+    return `${label} (${iso})`;
+  };
   const context = [
     `# Right now`,
     `School: ${school.name} (school_id ${school.id}). Currency: ${school.currency || "NGN"}.`,
     `Signed in: ${name}, role ${membership.role} (user_id ${user.id}). Address them by first name only if natural.`,
-    `Today: ${today}.`,
+    `Today: ${lagosDay(0)}. Time now in Lagos: ${new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Africa/Lagos" })} (WAT, UTC+01:00).`,
+    `Coming days: ${Array.from({ length: 14 }, (_, i) => lagosDay(i + 1)).join("; ")}.`,
+    `"Next Friday" (or any weekday) means the first one AFTER today in that list. "This month" is the 1st of this month to today; "this term" is the current term below.`,
+    `Times are Lagos time. Write any date-time you put in an action as YYYY-MM-DDTHH:MM:00+01:00; a deadline given only as a day means 23:59 that day.`,
     `Current session: ${sessionRow.data ? `${sessionRow.data.name} (${sessionRow.data.starts_on} to ${sessionRow.data.ends_on})` : "none set"}.`,
     `Current term: ${termRow.data ? `${termRow.data.name} (${termRow.data.starts_on} to ${termRow.data.ends_on})` : "none set"}.`,
     `Always filter by school_id = ${school.id} on tables that have it; a person can belong to more than one school.`,
@@ -1050,6 +1197,54 @@ const assistant = async (
   // One tool call, the same for either AI. Returns what goes back to the
   // model; events for the page (charts, buttons) are sent from here.
   // deno-lint-ignore no-explicit-any
+  // What the Confirm card shows: plain labels, names instead of ids, Lagos
+  // times, Yes/No, never "kind: midterm" or a raw timestamp.
+  const LABEL_TABLE: Record<string, [string, string, string]> = {
+    course_id: ["Course", "courses", "title"],
+    class_id: ["Class", "classes", "name"],
+    session_id: ["Session", "sessions", "name"],
+    term_id: ["Term", "terms", "name"],
+    exam_id: ["Exam", "exams", "title"],
+    product_id: ["Item", "store_products", "name"],
+  };
+  const PERSON = /^(student_id|user_id|to_user_id|interviewer_user_id|form_teacher_user_id|teacher_id)$/;
+  const WORDS: Record<string, string> = { midterm: "Mid-term exam", exam: "Exam", multiple_choice: "Multiple choice", true_false: "True or false", short_answer: "Short answer", pos: "POS", transfer: "Bank transfer" };
+  const nice = (k: string) => k.replace(/_id$/, "").replace(/_/g, " ").replace(/^./, (c) => c.toUpperCase());
+  const lagosTime = (v: string) => {
+    const d = new Date(v);
+    if (Number.isNaN(d.getTime())) return v;
+    return d.toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Lagos" }) + " (Lagos)";
+  };
+  const previewFor = async (action: string, params: Record<string, unknown>): Promise<[string, string][]> => {
+    const out: [string, string][] = [];
+    for (const [k, v] of Object.entries(params)) {
+      if (v === null || v === undefined || v === "" || k === "scope_school" || k === "questions" || k === "options") continue;
+      if (LABEL_TABLE[k] && typeof v === "string") {
+        const [label, table, col] = LABEL_TABLE[k];
+        const { data } = await caller.from(table).select(col).eq("id", v).maybeSingle();
+        // deno-lint-ignore no-explicit-any
+        out.push([label, (data as any)?.[col] || "Not found — check before confirming"]);
+        continue;
+      }
+      if (PERSON.test(k) && typeof v === "string") {
+        const { data } = await caller.from("profiles").select("first_name, surname, username").eq("id", v).maybeSingle();
+        out.push([nice(k), data ? [data.first_name, data.surname].filter(Boolean).join(" ") || data.username || "Someone" : "Not found — check before confirming"]);
+        continue;
+      }
+      if (/_id$|^id$/.test(k)) continue;
+      if (k === "publish" && typeof v === "boolean") { out.push(["Students see it", v ? "Yes, straight away" : "No, saved as a draft"]); continue; }
+      if (typeof v === "boolean") { out.push([nice(k), v ? "Yes" : "No"]); continue; }
+      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) { out.push([nice(k), lagosTime(v)]); continue; }
+      if (typeof v === "string" && WORDS[v]) { out.push([nice(k), WORDS[v]]); continue; }
+      if (Array.isArray(v)) { out.push([nice(k), v.length > 6 ? `${v.length} items` : v.map(String).join(", ")]); continue; }
+      if (typeof v === "object") continue;
+      out.push([nice(k), String(v)]);
+    }
+    if (Array.isArray(params.questions)) out.push(["Questions", String(params.questions.length)]);
+    if (action === "create_exam" && !params.closes_at) out.push(["Closes", "No closing date"]);
+    return out;
+  };
+
   // One proposal per answer. A model can call propose_action twice in one
   // reply (or in parallel), and the person then saw two cards for the same
   // ticket and confirmed both (2026-10-16).
@@ -1094,6 +1289,27 @@ const assistant = async (
           .slice(0, 12)
           .map(({ f }) => ({ name: f.name, inputs: f.args, returns: f.returns.slice(0, 160), reads_only: f.reads_only, about: f.about || undefined }));
         return { error: false, content: scored.length ? JSON.stringify(scored) : "Nothing matched. Try other words, or use the record actions." };
+      }
+      if (name === "school_report") {
+        const report = String(args.report || "");
+        const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+        const month = typeof args.month === "string" && /^\d{4}-\d{2}$/.test(args.month) ? `${args.month}-01` : null;
+        const uuid = (v: unknown) => (typeof v === "string" && /^[0-9a-f-]{36}$/i.test(v) ? v : null);
+        const calls: Record<string, [string, Record<string, unknown>]> = {
+          fees: ["ai_fees", { target_school: school.id, target_term: uuid(args.term_id) }],
+          payroll_month: ["ai_payroll_month", { target_school: school.id, month_in: month }],
+          paye_estimate: ["ai_paye_estimate", { target_school: school.id, monthly_gross: Number(args.monthly_gross) || 0, pension: args.pension !== false, nhf_on_basic: Number(args.nhf_on_basic) || 0, annual_rent: Number(args.annual_rent) || 0 }],
+          store: ["ai_store", { target_school: school.id, from_date: day(args.from), to_date: day(args.to) }],
+          calendar: ["ai_calendar", { target_school: school.id, from_date: day(args.from), to_date: day(args.to) }],
+          classes: ["ai_classes", { target_school: school.id }],
+          attendance: ["ai_attendance", { target_school: school.id, from_date: day(args.from), to_date: day(args.to) }],
+          checks: ["ai_checks", { target_school: school.id }],
+        };
+        const call = calls[report];
+        if (!call) throw new ToolError(`Unknown report. Use one of: ${Object.keys(calls).join(", ")}.`);
+        const { data, error } = await caller.rpc(call[0], call[1]);
+        if (error) throw new ToolError(error.message);
+        return { error: false, content: clipJson(withMoney(data, school.currency || "NGN"), useGroq ? 9_000 : 60_000) };
       }
       if (name === "run_report") {
         const fns = await loadFunctions(admin);
@@ -1170,11 +1386,31 @@ const assistant = async (
             params.scope_school = true;
           }
         }
+        // Times the model writes without a zone, or in UTC, are Lagos time
+        // (it wrote 23:59Z for "11:59pm", which is 00:59 the next day here).
+        for (const k of Object.keys(params)) {
+          const v = params[k];
+          if (typeof v !== "string" || !/(_at|_on|^when|^date)$/.test(k)) continue;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(v) && /_at$|^when$/.test(k)) params[k] = `${v}T23:59:00+01:00`;
+          else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?Z?$/.test(v)) params[k] = `${v.replace(/Z$/, "").slice(0, 16)}:00+01:00`;
+        }
+        if (Array.isArray(params.questions)) {
+          // deno-lint-ignore no-explicit-any
+          params.questions.forEach((q: any, i: number) => {
+            const kind = String(q?.kind || "");
+            const options = Array.isArray(q?.options) ? q.options : [];
+            const right = options.filter((o: { correct?: unknown }) => o?.correct === true).length;
+            if (kind === "multiple_choice" && options.length < 2) throw new ToolError(`Question ${i + 1} needs at least two options.`);
+            if ((kind === "multiple_choice" || kind === "true_false") && right !== 1) throw new ToolError(`Question ${i + 1} has ${right} correct options; mark exactly one correct and propose again.`);
+            if (!String(q?.prompt || "").trim()) throw new ToolError(`Question ${i + 1} has no question text.`);
+          });
+        }
         const summary = String(args.summary || "").slice(0, 400);
         if (!summary) throw new ToolError("Add a one-sentence summary of what will happen.");
+        const display = await previewFor(action, params);
         if (proposed) return { error: false, content: "Not shown: one action per answer, and one is already waiting for the person. Stop here." };
         proposed = true;
-        send({ type: "action", id: crypto.randomUUID(), action, params, summary });
+        send({ type: "action", id: crypto.randomUUID(), action, params, summary, display });
         return { error: false, content: "Shown to the person as a card with Confirm and Cancel. Stop here and wait: their next message will say [Done] or [Failed] with the result." };
       }
       if (name === "open_page") {
@@ -1234,6 +1470,11 @@ const assistant = async (
     fn("open_page", "Show a button opening a Schoolivio page.", { path: { type: "string" }, label: { type: "string" } }, ["path", "label"]),
     fn("describe_action", "The params an action takes.", { action: { type: "string", enum: ACTION_NAMES } }, ["action"]),
     fn("find_functions", "Search the school's database functions by what they do.", { search: { type: "string" } }, ["search"]),
+    fn("school_report", `Exact figures from Schoolivio. ALWAYS use first for: fees (term_id? default current term): billed, collected, still owed, overpaid by kind of bill, application fees beside, who owes most | payroll_month (month? YYYY-MM, default this month): one month's gross, PAYE, pension (staff and school share), NHF, net, top earners | paye_estimate (monthly_gross, pension? default true, nhf_on_basic?, annual_rent?): PAYE worked exactly as Payroll does | store (from?, to? YYYY-MM-DD, default this month): sales, takings, profit, low stock | calendar (from?, to?): term dates, events and recent notices; the ONLY dates on record | classes: classes this session, form teachers, pupils per class | attendance (from?, to?, default this month): present/absent by class, pupils absent most | checks: things that look wrong (overpaid or duplicate bills, payments waiting, low stock, payroll jumps)`, {
+      report: { type: "string", enum: ["fees", "payroll_month", "paye_estimate", "store", "calendar", "classes", "attendance", "checks"] },
+      term_id: { type: "string" }, month: { type: "string", description: "YYYY-MM" }, from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" },
+      monthly_gross: { type: "number" }, pension: { type: "boolean" }, nhf_on_basic: { type: "number" }, annual_rent: { type: "number" },
+    }, ["report"]),
     fn("run_report", "Run a read-only function (reads_only: true) as the person.", { function: { type: "string" }, args: { type: "object" } }, ["function"]),
     fn("propose_action", "Propose ONE action; the person confirms before anything happens.", {
       action: { type: "string", enum: ACTION_NAMES },
@@ -1266,7 +1507,7 @@ Rules:
 - A person's own pay: payslips where user_id = their user_id (only approved months show; net, gross, paye, pension_employee, nhf). Never look for salaries anywhere else.
 - No first_name? Use username, or the part of the email before @.
 - Only offer pages this person's role can open. Charts: unit is a currency symbol or %, or empty.
-- Attached files show as [Attached: file-1 name (type)]; pass that ref as file_ref / image_ref in actions (question picture, application document, chat file, course material, logo, profile photo). You cannot see the files' contents on this plan; if asked what an image shows, say the free AI cannot view images and ask them to describe it.
+- Attached files show as [Attached: file-1 name (type)]; pass that ref as file_ref / image_ref in actions (question picture, application document, chat file, course material, logo, profile photo). When a picture is included with the message you can see it: use what it shows. If you cannot see one, say you can't view pictures yet and ask them to describe it.
 - To DO something (add a person, post news, set an exam, admissions steps, bills, payments, store items...), look up the ids, then call propose_action once with a one-sentence summary. If no named action fits, find_functions for the school's own function (run_report if it only reads, else propose call_function), or use create_record / update_record / delete_record on the table (describe_tables first); never refuse what the person may do. The person confirms on a card; then stop and wait for "[Done]" or "[Failed]". Never claim it is done before that. Action names: ${ACTION_NAMES.join(", ")}. Call describe_action for an action's params before proposing it.
 - Accuracy rules (these matter more than anything else):
   - Every name, number and date you state must come from a tool result in this conversation. If you do not have it, look it up or say you do not know. Never estimate, pad or invent a figure or a person.
@@ -1278,6 +1519,14 @@ Rules:
 - Answer first, briefly. Money in the school's currency, like 117,500 with its symbol; dates like 3 Oct 2026. Lists as a short markdown table.
 - Charts and buttons appear by themselves: never write chart markdown, image placeholders or tool calls as text.
 - Students: coach, don't do graded work; never reveal exam answers. Stay on school topics.
+- Show people's names, never internal codes (term_fee, midterm) or raw timestamps.
+
+Facts first (the most important rules):
+- Fees, payroll, PAYE or any tax, store sales and stock, dates, terms, holidays, events, classes, form teachers, pupil numbers, attendance, and "is anything wrong": call school_report FIRST and answer only from what it returns. Copy its money exactly as written. Never add, multiply, convert monthly/yearly or filter by date yourself.
+- Dates and events: only what school_report calendar returns. If something is not in it, say "There's no record of that in Schoolivio." Never invent an event, a date or a name.
+- Name the period you are reporting on ("October 2026", "First Term"). If a report says found: false, say what it says.
+- When you report fees or payroll, if checks would obviously matter (for example an overpaid bill), run checks too and mention anything marked high in one line.
+- Fees: give term fees, and mention application fees separately when there are any.
 
 How to think (do this every time):
 1. Work out exactly what is being asked and what would fully answer it. If one detail is truly missing (which class? which term?), ask ONE short question; otherwise assume the current term and this school and say so.
@@ -1293,8 +1542,10 @@ Actions, the right way:
 
 Examples:
 - "How many students do we have?" -> summarize_records on school_members, filters school_id = this school, role = student, is_active = true, metric count. Answer: "312 students."
-- "Who hasn't paid this term?" -> find the current term's id in terms (is_current = true), then run_report debtors(target_school, target_term). Answer with a table, largest first, and the total owed.
-- "How much have we collected?" -> run_report collection_summary(target_school, target_term). Give invoiced, collected, outstanding and the rate.
+- "Who hasn't paid this term?" / "How much have we collected?" -> school_report fees. Answer with the figures it gives, a table of who owes, largest first.
+- "This month's payroll?" -> school_report payroll_month. "PAYE on 300k?" -> school_report paye_estimate with monthly_gross 300000.
+- "When is mid-term?" / "What's coming up?" -> school_report calendar. "Pupils in JS1A?" -> school_report classes.
+- "Anything wrong?" / "Give me a summary" -> school_report checks (and fees).
 - "Open a ticket: the dashboard is not loading" -> propose_action create_ticket { subject: "Dashboard not loading", description: what they said, priority: medium } in this same reply.
 - "Show attendance this month as a chart" -> summarize_records on attendance_records (filter school_id, session_at from the 1st of this month), group_by status, date_bucket session_at by day, metric count; then show_chart.
 
@@ -1344,13 +1595,31 @@ ${context}`;
           let nudged = false;
           // The platform stops a request at 150 seconds; answer well before.
           const deadline = Date.now() + 100_000;
+
+          // Gemini takes over when Groq can't do the job (2026-10-16):
+          //   1. pictures: Groq's models can't see them, Gemini can;
+          //   2. lookups failing twice in one answer (wrong table, bad
+          //      filter, an action rejected): a stronger model finishes it;
+          //   3. an empty answer: Gemini gets the question.
+          // Only when GEMINI_API_KEY is set; if Gemini is busy or refuses,
+          // the usual models carry on as before.
+          const pictures = media
+            .filter((m) => m.media_type.startsWith("image/"))
+            .map((m) => ({ type: "image_url", image_url: { url: `data:${m.media_type};base64,${m.data}` } }));
+          const images = pictures.length ? { index: chat.length - 1, parts: pictures } : undefined;
+          let handOver: string | null = geminiOn() && pictures.length ? "pictures" : null;
+          let failedLookups = 0;
+          let emptyHandedOver = false;
+
           for (let round = 0; round < 10; round++) {
             if (req.signal.aborted) break;
+            if (handOver) console.log("assistant: gemini takes over", handOver);
             const result = await groqComplete(
               { max_tokens: 2048, temperature: 0.2, tools: groqTools, tool_choice: "auto", parallel_tool_calls: true, messages: chat },
               (t) => send({ type: "text", text: t }),
-              (seconds) => send({ type: "status", text: `Free AI is busy, answering in about ${seconds}s` }),
+              () => send({ type: "status", text: "Still working on it" }),
               deadline,
+              { prefer: handOver ? ["gemini:"] : [], images },
             );
             answeredBy = result.model || answeredBy;
             const cached = result.usage?.prompt_tokens_details?.cached_tokens || 0;
@@ -1360,20 +1629,30 @@ ${context}`;
               if (result.finish === "length") send({ type: "text", text: "\n\n(That answer was cut short. Ask me to continue.)" });
               // Smaller open models sometimes stop with nothing to say after
               // an empty lookup. Once, ask for the answer from what it found.
-              if (!result.text.trim() && !nudged) {
-                nudged = true;
-                chat.push({ role: "user", content: "Answer my question now in plain words from what you found. If the lookups returned nothing, say there is no such data you can see yet." });
-                continue;
+              if (!result.text.trim()) {
+                // 3. Nothing to say: Gemini gets the same conversation once.
+                if (geminiOn() && !emptyHandedOver && !String(result.model || "").startsWith("gemini:")) {
+                  emptyHandedOver = true;
+                  handOver = "empty answer";
+                  continue;
+                }
+                if (!nudged) {
+                  nudged = true;
+                  chat.push({ role: "user", content: "Answer my question now in plain words from what you found. If the lookups returned nothing, say there is no such data you can see yet." });
+                  continue;
+                }
               }
               break;
             }
             chat.push({
               role: "assistant",
               content: result.text || null,
-              tool_calls: result.calls.map((c: { id: string; name: string; args: string }) => ({
+              // deno-lint-ignore no-explicit-any
+              tool_calls: result.calls.map((c: { id: string; name: string; args: string; extra?: any }) => ({
                 id: c.id,
                 type: "function",
                 function: { name: c.name, arguments: c.args || "{}" },
+                ...(c.extra ? { extra_content: c.extra } : {}),
               })),
             });
             const outs = await Promise.all((result.calls as { id: string; name: string; args: string }[]).map(async (c) => {
@@ -1387,6 +1666,12 @@ ${context}`;
             }));
             for (const { c, out } of outs) {
               chat.push({ role: "tool", tool_call_id: c.id, name: c.name, content: out.error ? `Error: ${out.content}` : out.content });
+            }
+            // 2. Lookups keep failing: from the second failure on, Gemini
+            // answers, seeing what was tried and why it failed.
+            failedLookups += outs.filter(({ out }) => out.error).length;
+            if (!handOver && geminiOn() && failedLookups >= 2 && !String(result.model || "").startsWith("gemini:")) {
+              handOver = "lookups failing";
             }
             send({ type: "status", text: "" });
             // A proposal ends the turn: the person decides next. Letting the
@@ -1462,11 +1747,11 @@ ${context}`;
         failure = (err as Error).message?.slice(0, 500) || "unknown";
         const friendly =
           err instanceof GroqLimitError ? err.message
-          : err instanceof Anthropic.RateLimitError ? "The assistant is busy right now. Try again in a minute."
-          : err instanceof Anthropic.APIError ? "The assistant could not answer just now. Try again."
-          : "Something went wrong. Try again.";
+          : err instanceof Anthropic.RateLimitError ? "I'm answering a lot of questions at once and couldn't finish this one. Tap Try again and I'll pick it up."
+          : "I hit a snag on that one. Tap Try again.";
+        console.error("assistant failed", failure);
         if (err instanceof GroqLimitError) console.error("groq busy", err.tried.join(" | "));
-        send({ type: "error", message: friendly, ...(err instanceof GroqLimitError ? { detail: err.tried.join(" | ").slice(0, 900) } : {}) });
+        send({ type: "error", message: friendly, retry: true, ...(err instanceof GroqLimitError ? { detail: err.tried.join(" | ").slice(0, 900) } : {}) });
       } finally {
         await admin
           .rpc("record_ai_usage", {
