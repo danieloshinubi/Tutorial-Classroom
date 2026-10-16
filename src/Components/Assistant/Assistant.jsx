@@ -20,6 +20,8 @@ import { safeInternalPath } from "../../lib/safeUrl";
 
 // A proposed action, waiting for the person: what it will do, and Confirm or
 // Cancel. Nothing has happened until Confirm (see lib/assistantActions.js).
+const actionKey = (a) => `${a.action}:${JSON.stringify(a.params)}`;
+
 const ActionCard = ({ action, secret, onConfirm, onCancel, onOpen }) => {
   const def = ACTIONS[action.action];
   const details = describeParams(action.params);
@@ -341,6 +343,12 @@ const Assistant = () => {
           } else if (event.type === "chart") {
             patchLast((m) => ({ ...m, charts: [...(m.charts || []), event.chart] }));
           } else if (event.type === "action") {
+            // The same action again (same kind, same details) while one is
+            // waiting or already done is never shown: confirming both made two
+            // identical tickets (2026-10-16).
+            const key = actionKey(event);
+            const repeat = messagesRef.current.some((m) => (m.actions || []).some((a) => actionKey(a) === key && ["waiting", "running", "done"].includes(a.state)));
+            if (repeat) return;
             patchLast((m) => ({ ...m, actions: [...(m.actions || []), { id: event.id, action: event.action, params: event.params, summary: event.summary, state: "waiting" }] }));
           } else if (event.type === "link") {
             patchLast((m) => ({ ...m, links: [...(m.links || []), { path: event.path, label: event.label }] }));

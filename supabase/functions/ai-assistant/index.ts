@@ -57,7 +57,7 @@ const provider = () => {
 // (comma separated) overrides the list.
 const groqModels = () =>
   (Deno.env.get("GROQ_MODELS") || Deno.env.get("GROQ_MODEL") ||
-    "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b,llama-3.3-70b-versatile,llama-3.1-8b-instant,minimaxai/minimax-m2.7")
+    "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b,llama-3.3-70b-versatile,minimaxai/minimax-m2.7")
     .split(",").map((m) => m.trim()).filter(Boolean);
 const groqModel = () => groqModels()[0];
 const coolingUntil = new Map<string, number>();
@@ -67,6 +67,10 @@ const plainModels = new Set<string>();
 // Extra settings a model family needs: short reasoning (fewer tokens, faster
 // first word) and reasoning kept out of the visible text.
 const groqExtras = (model: string): Record<string, unknown> => {
+  // The best free model thinks properly before it answers (2026-10-16):
+  // its prompt is cached, and cached tokens do not count against Groq's
+  // per-minute allowance, so the extra thinking is affordable.
+  if (model === "openai/gpt-oss-120b") return { reasoning_effort: "medium" };
   if (model.startsWith("openai/gpt-oss")) return { reasoning_effort: "low" };
   if (model.startsWith("qwen/")) return { reasoning_format: "hidden" };
   return {};
@@ -118,6 +122,16 @@ const groqComplete = async (body: Record<string, unknown>, onText: (t: string) =
 
   for (let attempt = 0; attempt < models.length * 6 + 6; attempt++) {
     const now = Date.now();
+    // 40% of answers came from the weaker models because the best one was
+    // busy for a few seconds (2026-10-16). A short wait for it beats a
+    // worse answer now.
+    const bestFree = (coolingUntil.get(models[0]) || 0) - now;
+    if (bestFree > 0 && bestFree <= 20_000 && waitedMs + bestFree <= 25_000 && now + bestFree < deadline - 30_000) {
+      waitedMs += bestFree;
+      onWait(Math.ceil(bestFree / 1000));
+      await new Promise((r) => setTimeout(r, bestFree));
+      continue;
+    }
     const model = models.find((m) => (coolingUntil.get(m) || 0) <= now);
     if (!model) {
       // Every model is busy. Their waits are short (usually under 15
@@ -530,6 +544,7 @@ You can also act, through propose_action. You never act on your own: you propose
 - Look up every id first (find_records), then propose with real ids and a plain one-sentence summary of the effect ("Post 'PTA meeting on Friday' to all parents and email it").
 - One action per propose_action call. For several steps, propose the first; after the person confirms, you will see "[Done] ..." or "[Failed] ..." and can propose the next.
 - After proposing, stop and let them decide. Never say it is done until you see [Done].
+- "[Done] X" means X has happened. Never propose X again (it would happen twice); reply in one short line and propose only the NEXT step, if there is one.
 - If they only asked a question, answer it; do not propose actions they did not ask for.
 - For anything else the app does (results sheets, voiding a sale, recalculating an exam, waiving a document...), find_functions finds the school's own database function for it: run_report runs the read-only ones straight away; propose call_function for the ones that change something.
 - Attached files appear in the person's message as [Attached: file-1 name (type, size)]. Use those refs (file_ref / image_ref) in actions to put them where they belong: an exam question's picture, an application's documents, a chat message, course materials, the logo, a profile photo. Never invent a ref.
@@ -774,8 +789,31 @@ const checkTable = (table: unknown, known: Set<string>) => {
   return name;
 };
 
+// A list of records as a small table (header line, then one line per row)
+// instead of JSON that repeats every column name on every row. Only for the
+// free AI, whose lookups must fit a small space.
+const flatRow = (row: Record<string, unknown>, prefix = ""): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(row).flatMap(([k, v]) =>
+      v && typeof v === "object" && !Array.isArray(v) && !prefix ? Object.entries(flatRow(v as Record<string, unknown>, `${k}.`)) : [[`${prefix}${k}`, v]],
+    ),
+  );
+const compact = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    if (value.length >= 2 && value.every((r) => r && typeof r === "object" && !Array.isArray(r))) {
+      const rows = value.map((r) => flatRow(r as Record<string, unknown>));
+      const cols = [...new Set(rows.flatMap((r) => Object.keys(r)))];
+      const cell = (v: unknown) => (v === null || v === undefined ? "" : typeof v === "object" ? JSON.stringify(v) : String(v).replace(/[|\n]/g, " "));
+      return [cols.join(" | "), ...rows.map((r) => cols.map((c) => cell(r[c])).join(" | "))].join("\n");
+    }
+    return value.map(compact);
+  }
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, compact(v)]));
+  return value;
+};
+
 const clipJson = (value: unknown, max = 60_000) => {
-  const text = JSON.stringify(value);
+  const text = JSON.stringify(max < 20_000 ? compact(value) : value);
   return text.length > max ? `${text.slice(0, max)}… [cut short: ask for fewer columns or rows]` : text;
 };
 
@@ -1012,6 +1050,10 @@ const assistant = async (
   // One tool call, the same for either AI. Returns what goes back to the
   // model; events for the page (charts, buttons) are sent from here.
   // deno-lint-ignore no-explicit-any
+  // One proposal per answer. A model can call propose_action twice in one
+  // reply (or in parallel), and the person then saw two cards for the same
+  // ticket and confirmed both (2026-10-16).
+  let proposed = false;
   const executeTool = async (name: string, args: any, send: (e: Record<string, unknown>) => void) => {
     if (!args || typeof args !== "object") return { error: true, content: "INVALID_JSON: send the arguments again as a complete object." };
     send({ type: "status", text: (STATUS[name] || (() => "Working"))(args) });
@@ -1022,8 +1064,8 @@ const assistant = async (
         if (!found.length) throw new ToolError("None of those tables exist. Pick names from the table list.");
         return { error: false, content: JSON.stringify(found) };
       }
-      if (name === "find_records") return { error: false, content: await findRecords(caller, known, useGroq ? { ...args, limit: Math.min(Number(args.limit) || 20, 40) } : args, useGroq ? 3_500 : 60_000) };
-      if (name === "summarize_records") return { error: false, content: await summarizeRecords(caller, known, useGroq ? { ...args, limit: Math.min(Number(args.limit) || 40, 60) } : args, useGroq ? 3_500 : 60_000) };
+      if (name === "find_records") return { error: false, content: await findRecords(caller, known, useGroq ? { ...args, limit: Math.min(Number(args.limit) || 20, 40) } : args, useGroq ? 6_000 : 60_000) };
+      if (name === "summarize_records") return { error: false, content: await summarizeRecords(caller, known, useGroq ? { ...args, limit: Math.min(Number(args.limit) || 40, 60) } : args, useGroq ? 6_000 : 60_000) };
       if (name === "show_chart") {
         const labels = Array.isArray(args.labels) ? args.labels.slice(0, 60).map(String) : [];
         const series = Array.isArray(args.series)
@@ -1082,11 +1124,12 @@ const assistant = async (
             // deno-lint-ignore no-explicit-any
             return { queue: label, count: rows.length, applications: rows.map((r: any) => `${r.applicant} (${r.reference})`) };
           });
-          return { error: false, content: clipJson({ queues, all_applications: total, note: "Report each queue by this exact name and count, including zeros, then All applications." }, useGroq ? 3_500 : 60_000) };
+          return { error: false, content: clipJson({ queues, all_applications: total, note: "Report each queue by this exact name and count, including zeros, then All applications." }, useGroq ? 6_000 : 60_000) };
         }
-        return { error: false, content: clipJson(data, useGroq ? 3_500 : 60_000) };
+        return { error: false, content: clipJson(data, useGroq ? 6_000 : 60_000) };
       }
       if (name === "propose_action") {
+        if (proposed) return { error: false, content: "Not shown: one action per answer, and one is already waiting for the person. Stop here." };
         const action = String(args.action || "");
         const spec = ACTIONS[action];
         if (!spec) throw new ToolError(`Unknown action ${action}. Use one from the list.`);
@@ -1129,6 +1172,8 @@ const assistant = async (
         }
         const summary = String(args.summary || "").slice(0, 400);
         if (!summary) throw new ToolError("Add a one-sentence summary of what will happen.");
+        if (proposed) return { error: false, content: "Not shown: one action per answer, and one is already waiting for the person. Stop here." };
+        proposed = true;
         send({ type: "action", id: crypto.randomUUID(), action, params, summary });
         return { error: false, content: "Shown to the person as a card with Confirm and Cancel. Stop here and wait: their next message will say [Done] or [Failed] with the result." };
       }
@@ -1234,6 +1279,25 @@ Rules:
 - Charts and buttons appear by themselves: never write chart markdown, image placeholders or tool calls as text.
 - Students: coach, don't do graded work; never reveal exam answers. Stay on school topics.
 
+How to think (do this every time):
+1. Work out exactly what is being asked and what would fully answer it. If one detail is truly missing (which class? which term?), ask ONE short question; otherwise assume the current term and this school and say so.
+2. Plan every lookup needed and run the independent ones together in one turn.
+3. Check the results answer the question. Empty or odd? Try the other likely table or function before concluding there is nothing.
+4. Answer: the direct answer first (the number, the name, yes/no), then only the detail that helps. Offer one useful next step if there is an obvious one (a page button, a follow-up).
+
+Actions, the right way:
+- The Confirm card IS the question. When the person asks you to do something, propose it straight away; never ask "Shall I...?" in words first.
+- Exactly ONE propose_action per reply. Never propose the same thing twice.
+- After "[Done] X": X has happened. Reply in one short line; propose only the NEXT step if there is one. After "[Failed] X": say why in plain words and what to change.
+- If the person says yes/ok/go ahead to something you described but did not propose, propose it now, once.
+
+Examples:
+- "How many students do we have?" -> summarize_records on school_members, filters school_id = this school, role = student, is_active = true, metric count. Answer: "312 students."
+- "Who hasn't paid this term?" -> find the current term's id in terms (is_current = true), then run_report debtors(target_school, target_term). Answer with a table, largest first, and the total owed.
+- "How much have we collected?" -> run_report collection_summary(target_school, target_term). Give invoiced, collected, outstanding and the rate.
+- "Open a ticket: the dashboard is not loading" -> propose_action create_ticket { subject: "Dashboard not loading", description: what they said, priority: medium } in this same reply.
+- "Show attendance this month as a chart" -> summarize_records on attendance_records (filter school_id, session_at from the 1st of this month), group_by status, date_bucket session_at by day, metric count; then show_chart.
+
 Pages: /Dashboard /News /Chat /Courses /Teach /Attendance /Reports /Fees(family bills) /Payslips(own payslips, staff) /Bursary /Store /Accounts /Payroll (these four: owner, admin, bursar only) /Admissions /Support /Profile /School?tab=people|students|guardians|academic|levels|classes|fees|settings (owner/admin only)
 
 Tables with columns:
@@ -1275,7 +1339,7 @@ ${context}`;
           // deno-lint-ignore no-explicit-any
           const chat: any[] = [
             { role: "system", content: groqSystem },
-            ...turns.slice(-6).map((t) => ({ role: t.role, content: t.content.slice(0, 1500) })),
+            ...turns.slice(-10).map((t) => ({ role: t.role, content: t.content.slice(0, 2500) })),
           ];
           let nudged = false;
           // The platform stops a request at 150 seconds; answer well before.
@@ -1289,7 +1353,8 @@ ${context}`;
               deadline,
             );
             answeredBy = result.model || answeredBy;
-            input += result.usage?.prompt_tokens || 0;
+            const cached = result.usage?.prompt_tokens_details?.cached_tokens || 0;
+            input += (result.usage?.prompt_tokens || 0) - cached + Math.round(cached / 10);
             output += result.usage?.completion_tokens || 0;
             if (!result.calls.length) {
               if (result.finish === "length") send({ type: "text", text: "\n\n(That answer was cut short. Ask me to continue.)" });
