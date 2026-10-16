@@ -6,6 +6,8 @@ import { chevronLeft } from "react-icons-kit/feather/chevronLeft";
 import { chevronRight } from "react-icons-kit/feather/chevronRight";
 import { check } from "react-icons-kit/feather/check";
 import { calendar as calendarIcon } from "react-icons-kit/feather/calendar";
+import Loading from "./Loading";
+import { useScrollMemory } from "../lib/useScrollMemory";
 
 // Thin wrappers over the classes in styles/theme.css. Pages compose these so
 // spacing, colour and radius stay consistent without repeating inline styles.
@@ -27,6 +29,8 @@ export const Page = ({ title, subtitle, action, toolbar, children, wide = false,
   // .panel-top and .panel-aside to use as their sticky offset.
   const pageRef = useRef(null);
   const topRef = useRef(null);
+  // A reload or coming back puts the page where it was scrolled to.
+  useScrollMemory(pageRef);
 
   // A layout effect, not a plain effect — a sticky descendant nested inside
   // its own layout container (a grid column, e.g. .panel-aside) can get its
@@ -1084,71 +1088,27 @@ export const Skeleton = ({ width, height = 14, radius, style, className = "" }) 
 
 // Stacked lines of decreasing width — reads like a paragraph or a heading
 // plus caption, rather than identical bars.
-export const SkeletonText = ({ lines = 3, lastLineWidth = "60%" }) => (
-  <div className="skeleton-text" aria-hidden="true">
-    {Array.from({ length: lines }).map((_, i) => (
-      <Skeleton key={i} width={i === lines - 1 ? lastLineWidth : "100%"} />
-    ))}
-  </div>
-);
+// All the Skeleton* placeholders below now show the one Loading state
+// (Components/Loading.tsx): the grey boxes read as unfinished, not as
+// something loading (2026-10-16). Their names stay so no page has to change.
+export const SkeletonText = ({ compact = false }) => <Loading compact={compact} />;
 
 // Matches StatRow's own .stat-row/.stat grid exactly, so the transition
 // from skeleton to real numbers doesn't shift the layout at all.
-export const SkeletonStatRow = ({ count = 4 }) => (
-  <div className="skeleton-stat-row" aria-hidden="true">
-    {Array.from({ length: count }).map((_, i) => (
-      <div key={i} className="skeleton-stat">
-        <Skeleton width="50%" height={12} />
-        <Skeleton width="70%" height={24} />
-      </div>
-    ))}
-  </div>
-);
+export const SkeletonStatRow = () => <Loading />;
 
 // Matches table.data's own row height/padding — drop straight in wherever
 // a page currently renders <Empty>{"Loading..."}</Empty> in place of a
 // <table class="data">.
-export const SkeletonTable = ({ rows = 5, cols = 4 }) => (
-  <div className="table-wrap" aria-hidden="true">
-    <table className="data">
-      <tbody>
-        {Array.from({ length: rows }).map((_, r) => (
-          <tr key={r}>
-            {Array.from({ length: cols }).map((_, c) => (
-              <td key={c}><Skeleton /></td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-);
+export const SkeletonTable = () => <Loading />;
 
 // A grid of card-shaped blocks — for a page whose loaded content is a
 // .grid of .card elements (feature/summary cards, not a table).
-export const SkeletonCards = ({ count = 4, lines = 2 }) => (
-  <div className="skeleton-card-grid" aria-hidden="true">
-    {Array.from({ length: count }).map((_, i) => (
-      <div key={i} className="skeleton-card">
-        <Skeleton width="60%" height={16} />
-        <SkeletonText lines={lines} />
-      </div>
-    ))}
-  </div>
-);
+export const SkeletonCards = () => <Loading />;
 
 // A vertical list of avatar+text rows — notices, chat messages, tickets,
 // anything that reads top-to-bottom as one item per row rather than a table.
-export const SkeletonList = ({ rows = 4, avatar = true }) => (
-  <div aria-hidden="true">
-    {Array.from({ length: rows }).map((_, i) => (
-      <div key={i} className="skeleton-list-row">
-        {avatar ? <Skeleton width={34} height={34} radius={999} style={{ flex: "none" }} /> : null}
-        <SkeletonText lines={2} lastLineWidth="40%" />
-      </div>
-    ))}
-  </div>
-);
+export const SkeletonList = () => <Loading />;
 
 // A row of tabs that can outgrow its width — School Administration alone has
 // nine of them. Rather than leave the browser's own scrollbar as the only

@@ -13,6 +13,7 @@ import {
   bandClass,
   Select,
 } from "../../Components/UI";
+import Loading from "../../Components/Loading";
 
 // Every course in the school, in one place. Courses used to be reached through
 // a level — /Levels/100/Courses/AZ-900 — but a course's identity is its code
@@ -103,7 +104,7 @@ const Courses = () => {
         }
       >
 
-        {loading ? <Empty>{"Loading courses..."}</Empty> : null}
+        {loading ? <Loading label="Loading courses" /> : null}
 
         {!loading && courses.length === 0 ? (
           <Empty>

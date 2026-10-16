@@ -8,6 +8,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchSheets, fetchTerms, fetchUnits, openSheet, releaseTermResults, STATUS_LABEL, type Sheet, type Status, type Term, type Unit } from "../../lib/resultsApi";
 import { Chip, Svg, I, card, statusTone } from "./resultsUi";
+import { useUrlState } from "../../lib/useUrlState";
 
 // Results (2026-10-14): term results for exams written on paper. A teacher
 // opens a subject's sheet for the term and types (or pastes from Excel) each
@@ -29,7 +30,7 @@ const Results = () => {
   const [termId, setTermId] = useState("");
   const [units, setUnits] = useState<Unit[] | null>(null);
   const [sheets, setSheets] = useState<Sheet[]>([]);
-  const [view, setView] = useState<View>(isLeader ? "approve" : "mine");
+  const [view, setView] = useUrlState<View>("view", isLeader ? "approve" : "mine", ["mine", "approve", "release", "all"]);
   const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {

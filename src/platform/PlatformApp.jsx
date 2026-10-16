@@ -43,6 +43,7 @@ import PlatformBilling from "./PlatformBilling";
 import PlatformSettings from "./PlatformSettings";
 import { Page, Card, Notice, Button } from "../Components/UI";
 import { Mark } from "../Components/Logo";
+import Loading from "../Components/Loading";
 
 // The console at admin.schoolivio.com.
 //
@@ -244,7 +245,7 @@ const PlatformGate = ({ children }) => {
   useEffect(check, [check]);
 
   if (authLoading) {
-    return <p style={{ textAlign: "center", marginTop: "15%" }}>{"Loading..."}</p>;
+    return <Loading />;
   }
 
   if (!user) return <PlatformLogin />;

@@ -15,6 +15,7 @@ import {
   Button,
   displayName,
 } from "../../Components/UI";
+import Loading from "../../Components/Loading";
 
 const CourseCard = ({ course, labelFor }) => (
   <Link
@@ -98,7 +99,7 @@ const Dashboard = () => {
           )
         }
       >
-        {loading ? <Empty>{"Loading your courses..."}</Empty> : null}
+        {loading ? <Loading label="Loading your courses" /> : null}
 
         {isStaff ? (
           <section>

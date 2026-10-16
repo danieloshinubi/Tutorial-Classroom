@@ -3,6 +3,7 @@ import { Button, Select } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { markSender, senderLists, type SenderEntry } from "../../lib/mailApi";
 import { ICON, Svg, btn } from "./mailUi";
+import Loading from "../../Components/Loading";
 
 // Mail → Settings → Junk (supabase/243): senders always let into the Inbox
 // (safe, pictures shown) and senders sent straight to Junk (blocked). An
@@ -56,7 +57,7 @@ const SendersEditor = ({ mailboxId }: { mailboxId: string }) => {
         <div className="tw-text-[14px] tw-font-semibold tw-text-ink">{title}</div>
         <p className="tw-m-0 tw-mb-2 tw-text-[12.5px] tw-text-ink-3">{hint}</p>
         {list === null ? (
-          <div className="tw-text-[13px] tw-text-ink-3">{"Loading…"}</div>
+          <Loading compact />
         ) : rows.length ? (
           <ul className="tw-m-0 tw-flex tw-list-none tw-flex-col tw-gap-1 tw-p-0">
             {rows.map((e) => (

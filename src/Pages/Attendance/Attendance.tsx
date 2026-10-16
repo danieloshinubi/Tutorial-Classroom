@@ -23,6 +23,7 @@ import { analyseAttendance } from "../../lib/analysis";
 import { todayISO, daysAgoISO } from "../../lib/dates";
 import { Page, Button, Select, DatePicker, DateTimePicker, Modal, displayName, initials, formatDate, SkeletonList, SkeletonTable, type Profile } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import { useUrlState } from "../../lib/useUrlState";
 
 // Attendance, rebuilt around two plain ideas (2026-10-06):
 //
@@ -729,7 +730,7 @@ const RegisterHistory = ({ schoolId }: { schoolId: string }) => {
 };
 
 const RegisterView = ({ schoolId }: { schoolId: string }) => {
-  const [view, setView] = useState<"take" | "history">("take");
+  const [view, setView] = useUrlState<"take" | "history">("view", "take", ["take", "history"]);
   return (
     <div>
       <Explain>{"Was each pupil in the lesson? Pick the lesson, tap anyone who is absent, and save. Parents see the result straight away."}</Explain>
@@ -1116,7 +1117,7 @@ const Attendance = () => {
     { id: "mine" as const, label: "My arrivals", hint: "Your own arrival times", icon: I.me },
   ].filter((s): s is { id: Section; label: string; hint: string; icon: string } => !!s);
 
-  const [section, setSection] = useState<Section>(sections[0].id);
+  const [section, setSection] = useUrlState<Section>("section", sections[0].id, sections.map((s) => s.id));
   useEffect(() => {
     if (!sections.some((s) => s.id === section)) setSection(sections[0].id);
     // eslint-disable-next-line react-hooks/exhaustive-deps

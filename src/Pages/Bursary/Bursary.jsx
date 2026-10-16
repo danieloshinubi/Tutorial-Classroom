@@ -56,6 +56,7 @@ import {
 } from "../../Components/UI";
 import { confirmDialog, promptDialog } from "../../Components/Confirm";
 import ExportButton from "../../Components/ExportButton";
+import { useUrlState } from "../../lib/useUrlState";
 
 // Spreadsheet columns for the bursary's lists (Export to Excel).
 const DEBTOR_COLUMNS = [
@@ -1587,8 +1588,9 @@ const Bursary = () => {
   const { school, schoolId } = useSchool();
   const money = useMoney(school?.currency);
 
-  const [tab, setTab] = useState("overview");
-  const [invoiceFilter, setInvoiceFilter] = useState("all");
+  // Where the bursar was, kept in the address for a reload.
+  const [tab, setTab] = useUrlState("tab", "overview");
+  const [invoiceFilter, setInvoiceFilter] = useUrlState("invoices", "all");
   const [termId, setTermId] = useState("");
   const [terms, setTerms] = useState([]);
   const [classes, setClasses] = useState([]);

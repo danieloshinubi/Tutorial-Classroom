@@ -215,17 +215,19 @@ const News = () => {
   const [eventPlace, setEventPlace] = useState("");
   const [pinned, setPinned] = useState(false);
 
+  // Everything for the board arrives together, so the list never shows
+  // while a loader is still up above it; a refresh keeps what is on screen.
+  const userId = user?.id;
   const load = useCallback(async () => {
     if (!schoolId) return;
-    setLoading(true);
     try {
       const rows = await fetchNotices(schoolId);
-      setNotices(rows);
       const ids = rows.map((r) => r.id);
       const [byNotice, byReaction] = await Promise.all([
         fetchNoticeReplies(ids).catch(() => ({})),
-        fetchNoticeReactions(ids, user?.id, schoolId).catch(() => ({})),
+        fetchNoticeReactions(ids, userId, schoolId).catch(() => ({})),
       ]);
+      setNotices(rows);
       setReplies(byNotice);
       setReactions(byReaction);
     } catch (err) {
@@ -233,7 +235,7 @@ const News = () => {
     } finally {
       setLoading(false);
     }
-  }, [schoolId, user, setError]);
+  }, [schoolId, userId, setError]);
 
   useEffect(() => {
     load();
@@ -566,7 +568,7 @@ const News = () => {
           </Card>
         ) : null}
 
-        {loading ? <SkeletonCards count={3} lines={3} /> : null}
+        {loading && notices.length === 0 ? <SkeletonCards /> : null}
         {!loading && notices.length === 0 ? (
           <Empty>
             {canPost

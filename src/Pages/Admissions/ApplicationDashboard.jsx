@@ -44,6 +44,7 @@ import { useActionFeedback } from "../../Components/Toast";
 import AdmissionLetter from "./AdmissionLetter";
 import { todayISO } from "../../lib/dates";
 import { fetchPublicSchool } from "../../lib/publicSchool";
+import Loading from "../../Components/Loading";
 
 // country-region-data ships each country as a [name, isoCode, regions] tuple
 // (regions themselves [name, isoCode] pairs) rather than the {countryName,
@@ -810,7 +811,7 @@ const ApplicationDashboard = () => {
       <>
         <ApplicantShell school={school} />
         <Page>
-          <Empty>{"Loading your application..."}</Empty>
+          <Loading label="Loading your application" />
         </Page>
       </>
     );

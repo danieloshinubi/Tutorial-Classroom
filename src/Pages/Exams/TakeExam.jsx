@@ -44,6 +44,7 @@ import {
   formatDate,
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
+import Loading from "../../Components/Loading";
 
 const pad = (n) => String(n).padStart(2, "0");
 
@@ -381,7 +382,7 @@ const TakeExam = () => {
     return (
       <div className="shell exam-shell">
         <ExamBar />
-        <Page><Empty>{"Loading exam..."}</Empty></Page>
+        <Page><Loading label="Loading exam" /></Page>
       </div>
     );
   }

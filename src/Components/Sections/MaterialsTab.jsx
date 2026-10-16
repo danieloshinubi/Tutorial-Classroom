@@ -14,6 +14,7 @@ import { useDocumentPreview } from "../DocumentPreview";
 import { useActionFeedback } from "../Toast";
 import { confirmDialog } from "../Confirm";
 import { safeHref } from "../../lib/safeUrl";
+import Loading from "../Loading";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -269,7 +270,7 @@ const MaterialsTab = ({ courseId, canManage }) => {
         </Card>
       ) : null}
 
-      {loading ? <Empty>{"Loading materials..."}</Empty> : null}
+      {loading ? <Loading label="Loading materials" /> : null}
       {!loading && materials.length === 0 ? (
         <Empty>{"No materials have been posted for this course yet."}</Empty>
       ) : null}

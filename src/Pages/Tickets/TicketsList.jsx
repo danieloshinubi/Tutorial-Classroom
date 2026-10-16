@@ -14,6 +14,7 @@ import {
 import { Page, Button, Empty, Field, Modal, Select, SkeletonList, displayName, initials } from "../../Components/UI";
 import { useLiveTicketsListUpdates, LiveUpdateBanner } from "../../Components/LiveUpdateBanner";
 import { useActionFeedback } from "../../Components/Toast";
+import { useUrlState } from "../../lib/useUrlState";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -273,7 +274,7 @@ const TicketsList = () => {
   const [showNew, setShowNew] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
 
-  const [statusFilter, setStatusFilter] = useState("unresolved");
+  const [statusFilter, setStatusFilter] = useUrlState("status", "unresolved");
   const [groupFilter, setGroupFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [search, setSearch] = useState("");

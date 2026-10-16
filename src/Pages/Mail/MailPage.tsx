@@ -36,6 +36,8 @@ import Contacts from "./Contacts";
 import MailSettingsModal from "./MailSettingsModal";
 import { onPendingSends, sendNow, undoSend, type PendingSend } from "./sendQueue";
 import { ICON, Initials, Svg, btn, names, primaryBtn, shortWhen } from "./mailUi";
+import { useUrlState } from "../../lib/useUrlState";
+import Loading from "../../Components/Loading";
 
 // Schoolivio Mail (supabase/235), laid out like Outlook: folders on the left,
 // the folder's messages in the middle, the open conversation or the message
@@ -165,17 +167,25 @@ const MailPage = () => {
   // My own mailbox and the shared ones I can open (supabase/242).
   const [boxes, setBoxes] = useState<MailboxChoice[]>([]);
   const [people, setPeople] = useState<DirectoryEntry[]>([]);
-  const [folder, setFolder] = useState<Folder>("inbox");
+  // Folder, filter, view and the open message live in the address, so a
+  // reload opens exactly the same message in the same folder.
+  const [folder, setFolder] = useUrlState<Folder>("folder", "inbox");
   const [items, setItems] = useState<MailSummary[] | null>(null);
   const [liveTick, setLiveTick] = useState(0);
   const [counts, setCounts] = useState<Partial<Record<Folder, number>>>({});
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
-  const [openThread, setOpenThread] = useState<string | null>(null);
+  const [filter, setFilter] = useUrlState<Filter>("filter", "all", ["all", "unread", "flagged"]);
+  const [openParam, setOpenParam] = useUrlState<string>("m", "");
+  const openThread = openParam || null;
+  const setOpenThread = useCallback(
+    (next: string | null | ((cur: string | null) => string | null)) =>
+      setOpenParam((typeof next === "function" ? next(openThread) : next) || ""),
+    [openThread, setOpenParam],
+  );
   const [compose, setCompose] = useState<(ComposeStart & { key: number }) | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [view, setView] = useState<"mail" | "contacts">("mail");
+  const [view, setView] = useUrlState<"mail" | "contacts">("view", "mail", ["mail", "contacts"]);
   const [contactStart, setContactStart] = useState<Address | null>(null);
   const [extra, setExtra] = useState<DirectoryEntry[]>([]);
   const [keysOpen, setKeysOpen] = useState(false);
@@ -552,7 +562,7 @@ const MailPage = () => {
           </div>
           <div className="tw-min-h-0 tw-flex-1 tw-overflow-y-auto">
             {rows === null ? (
-              <p className="tw-m-0 tw-p-6 tw-text-[14px] tw-text-ink-3">{"Loading…"}</p>
+              <Loading compact />
             ) : rows.length === 0 ? (
               <div className="tw-flex tw-flex-col tw-items-center tw-gap-2 tw-px-6 tw-py-16 tw-text-center tw-text-ink-3">
                 <Svg d={FOLDER_ICON[folder]} size={34} />

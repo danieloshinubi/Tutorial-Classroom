@@ -26,6 +26,7 @@ import {
   type Slot,
   type TimetableSetup,
 } from "../../lib/timetableApi";
+import { useUrlState } from "../../lib/useUrlState";
 
 // The school timetable (supabase/222).
 //
@@ -90,7 +91,7 @@ const Timetable = () => {
   const [view, setView] = useState<View | null>(null);
   const [family, setFamily] = useState<FamilyMember[] | null>(null);
   const [who, setWho] = useState<string>("");
-  const [tab, setTab] = useState<"week" | "periods">("week");
+  const [tab, setTab] = useUrlState<"week" | "periods">("tab", "week", ["week", "periods"]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<CellEdit | null>(null);
   const [copyFrom, setCopyFrom] = useState("");

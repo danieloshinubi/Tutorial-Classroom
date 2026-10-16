@@ -23,6 +23,7 @@ import {
 } from "../../lib/mailSettingsApi";
 import { formatBytes } from "../../lib/mailApi";
 import { ICON, Svg, btn, primaryBtn } from "./mailUi";
+import Loading from "../../Components/Loading";
 
 // School admin → Mail settings, the admin's tools (supabase/242):
 // shared mailboxes (admissions@, bursar@) and who can open them; group
@@ -441,7 +442,7 @@ export const SafetyCard = ({ schoolId }: { schoolId: string }) => {
     save({ blocked_senders: [...(s?.blocked_senders || []), v] }, `${v} is blocked for everyone.`);
   };
 
-  if (!s) return <Section title="Safety"><div className="tw-text-[13.5px] tw-text-ink-3">{"Loading…"}</div></Section>;
+  if (!s) return <Section title="Safety"><Loading compact /></Section>;
   const field = (label: string, hint: string, el: React.ReactNode) => (
     <label className="tw-flex tw-flex-col tw-gap-1">
       <span className="tw-text-[13px] tw-font-semibold tw-text-ink-2">{label}</span>

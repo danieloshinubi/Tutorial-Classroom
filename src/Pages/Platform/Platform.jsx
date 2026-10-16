@@ -17,6 +17,7 @@ import {
 } from "../../Components/UI";
 import { useActionFeedback } from "../../Components/Toast";
 import { confirmDialog } from "../../Components/Confirm";
+import Loading from "../../Components/Loading";
 
 const slugify = (value) =>
   value
@@ -194,7 +195,7 @@ const Platform = () => {
           </Card>
         ) : null}
 
-        {loading ? <Empty>{"Loading..."}</Empty> : null}
+        {loading ? <Loading /> : null}
         {!loading && schools.length === 0 ? (
           <Empty>{"No schools yet."}</Empty>
         ) : null}

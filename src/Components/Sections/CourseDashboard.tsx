@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import Navbar from "../Navbar/Navbar";
 import ClassChat from "./ClassChat";
 import Upcoming from "./Upcoming";
@@ -11,8 +11,10 @@ import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 import { fetchCourseByCode, fetchMyEnrollment, fetchParticipants, requestEnrollment, unenroll } from "../../lib/api";
 import { courseStaff } from "../../lib/courseTeamApi";
-import { Page, Button, Badge, Empty, Tabs } from "../UI";
+import { Page, Button, Badge, Tabs } from "../UI";
 import { useActionFeedback } from "../Toast";
+import { useUrlState } from "../../lib/useUrlState";
+import Loading from "../Loading";
 
 // One course: its stream, materials, assignments, exams and people
 // (TypeScript, 2026-10-14). Who runs it is the database's answer
@@ -32,14 +34,11 @@ const CourseDashboard = () => {
   const { user } = useAuth() as { user: { id: string } | null };
   const { schoolId, labelFor } = useSchool();
   const { setError } = useActionFeedback();
-  const [searchParams] = useSearchParams();
   const [course, setCourse] = useState<Course | null>(null);
   const [membership, setMembership] = useState<{ status: string } | null>(null);
   const [canManage, setCanManage] = useState(false);
-  const [tab, setTab] = useState(() => {
-    const t = searchParams.get("tab");
-    return t && TAB_IDS.includes(t) ? t : "stream";
-  });
+  // The open tab lives in the address, so a reload stays on it.
+  const [tab, setTab] = useUrlState("tab", "stream", TAB_IDS);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(0);
@@ -70,11 +69,6 @@ const CourseDashboard = () => {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    const t = searchParams.get("tab");
-    if (t && TAB_IDS.includes(t)) setTab(t);
-  }, [searchParams]);
 
   const loadWaiting = useCallback(() => {
     if (!course?.id || !schoolId || !canManage) return setWaiting(0);
@@ -120,7 +114,7 @@ const CourseDashboard = () => {
       <div className="shell">
         <Navbar />
         <Page>
-          <Empty>{"Loading course..."}</Empty>
+          <Loading label="Loading course" />
         </Page>
       </div>
     );

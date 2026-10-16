@@ -54,6 +54,7 @@ import { Page, Button, Empty, Modal, displayName, initials } from "../../Compone
 import { ROLE_LABEL } from "../../lib/roles";
 import { usePresence } from "../../context/PresenceContext";
 import { presenceLabel } from "../../lib/presence";
+import Loading from "../../Components/Loading";
 
 // An empty Tiptap document still serialises to "<p></p>" — the same reason
 // Tickets' own composer checks text content rather than the raw HTML.
@@ -1879,7 +1880,7 @@ const ChatPage = () => {
               </div>
             ) : loading ? (
               <div className="tw-flex-1 tw-flex tw-items-center tw-justify-center">
-                <Empty>{"Loading..."}</Empty>
+                <Loading />
               </div>
             ) : (
               <>

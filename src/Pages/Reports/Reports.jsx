@@ -18,6 +18,7 @@ import {
   initials,
   formatDate,
 } from "../../Components/UI";
+import { useUrlState } from "../../lib/useUrlState";
 
 // Everyone this viewer may report on — a parent their children, a tutor the
 // students on their courses, an administrator the school — and how each is
@@ -212,7 +213,7 @@ const ReportsPage = () => {
 
   const [rows, setRows] = useState([]);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useUrlState("filter", "all");
   const [klass, setKlass] = useState("");
   const [sort, setSort] = useState("name");
   const [loading, setLoading] = useState(true);

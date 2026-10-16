@@ -4,6 +4,7 @@ import { fetchExams, updateExam, deleteExam } from "../../lib/api";
 import { Card, Button, Badge, Empty, formatDate } from "../UI";
 import { useActionFeedback } from "../Toast";
 import { confirmDialog } from "../Confirm";
+import Loading from "../Loading";
 
 // kind picks which list this renders: "exam" (the default "Exams" tab) or
 // "midterm" (the "Mid-exams" tab) — same table, same component, just a
@@ -69,7 +70,7 @@ const ExamsTab = ({ courseId, canManage, kind = "exam", schoolId }) => {
         </div>
       ) : null}
 
-      {loading ? <Empty>{"Loading exams..."}</Empty> : null}
+      {loading ? <Loading label="Loading exams" /> : null}
       {!loading && exams.length === 0 ? (
         <Empty>
           {canManage

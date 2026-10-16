@@ -6,6 +6,7 @@ module.exports = {
   content: [
     "./src/Pages/Chat/**/*.{js,jsx}",
     "./src/Components/PersonModal.jsx",
+    "./src/Components/Loading.tsx",
     // School admin → People: the list and the person panel (TypeScript).
     "./src/Pages/SchoolAdmin/people/**/*.{ts,tsx}",
     // Marketing site pages converted to TypeScript.

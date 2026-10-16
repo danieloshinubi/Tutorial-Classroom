@@ -23,6 +23,7 @@ import { useDocumentPreview } from "../DocumentPreview";
 import { useActionFeedback } from "../Toast";
 import { confirmDialog } from "../Confirm";
 import { safeHref } from "../../lib/safeUrl";
+import Loading from "../Loading";
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -338,7 +339,7 @@ const AssignmentsTab = ({ courseId, canManage }) => {
         </Card>
       ) : null}
 
-      {loading ? <Empty>{"Loading assignments..."}</Empty> : null}
+      {loading ? <Loading label="Loading assignments" /> : null}
       {!loading && assignments.length === 0 ? (
         <Empty>{"No assignments yet."}</Empty>
       ) : null}

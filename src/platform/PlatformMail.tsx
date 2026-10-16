@@ -3,6 +3,7 @@ import { Page } from "../Components/UI";
 import { useActionFeedback } from "../Components/Toast";
 import { formatBytes } from "../lib/mailApi";
 import { addSchoolDns, mailOverview, microsoftApp, saveMicrosoftApp, saveVercelToken, type MailOverview, type SchoolMail } from "../lib/platformMailApi";
+import Loading from "../Components/Loading";
 
 // Console → Mail (supabase/239). Every school's Schoolivio Mail at a glance:
 // its domain (its own, its schoolivio.com one, or none yet), whether outside
@@ -219,7 +220,7 @@ const PlatformMail = () => {
     });
   }, [data, filter, search]);
 
-  if (!data) return <Page title="Mail"><p className="tw-text-[14px] tw-text-ink-3">{"Loading…"}</p></Page>;
+  if (!data) return <Page title="Mail"><Loading /></Page>;
 
   const schools = data.schools;
   const counts = {
