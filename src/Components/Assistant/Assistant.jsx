@@ -33,8 +33,10 @@ const ActionCard = ({ action, secret, onConfirm, onCancel, onOpen }) => {
         {action.state === "done" ? <span className="ai-action-badge done">{"Done"}</span> : null}
         {action.state === "failed" ? <span className="ai-action-badge failed">{"Didn't work"}</span> : null}
         {action.state === "cancelled" ? <span className="ai-action-badge">{"Cancelled"}</span> : null}
+        {action.state === "replaced" ? <span className="ai-action-badge">{"Replaced"}</span> : null}
       </div>
       <p className="ai-action-summary">{action.summary}</p>
+      {action.state === "waiting" && def ? <p className="ai-sub">{"Nothing has been done yet. Check the details, then confirm."}</p> : null}
       {details.length ? (
         <dl className="ai-action-details">
           {details.slice(0, 8).map(([k, v]) => (
@@ -63,7 +65,7 @@ const ActionCard = ({ action, secret, onConfirm, onCancel, onOpen }) => {
       {!def ? <p className="ai-error">{"This isn't something the assistant is allowed to do."}</p> : null}
       {action.state === "waiting" && def ? (
         <div className="ai-action-buttons">
-          <button type="button" className="ai-confirm" onClick={onConfirm}>{"Confirm"}</button>
+          <button type="button" className="ai-confirm" onClick={onConfirm}>{`Confirm: ${(def.title || "do it").toLowerCase()}`}</button>
           <button type="button" className="ai-cancel" onClick={onCancel}>{"Cancel"}</button>
         </div>
       ) : null}
@@ -349,6 +351,9 @@ const Assistant = () => {
             const key = actionKey(event);
             const repeat = messagesRef.current.some((m) => (m.actions || []).some((a) => actionKey(a) === key && ["waiting", "running", "done"].includes(a.state)));
             if (repeat) return;
+            // An earlier card of the same kind still waiting is replaced, so
+            // only the latest version can be confirmed.
+            setMessages((list) => list.map((m) => (m.actions ? { ...m, actions: m.actions.map((a) => (a.state === "waiting" && a.action === event.action ? { ...a, state: "replaced" } : a)) } : m)));
             patchLast((m) => ({ ...m, actions: [...(m.actions || []), { id: event.id, action: event.action, params: event.params, summary: event.summary, display: event.display, state: "waiting" }] }));
           } else if (event.type === "link") {
             patchLast((m) => ({ ...m, links: [...(m.links || []), { path: event.path, label: event.label }] }));

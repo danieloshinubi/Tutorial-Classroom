@@ -92,7 +92,10 @@ const Cartesian = ({ chart }) => {
   const plotW = W - left - 10;
   const plotH = H - top - bottom;
   const all = chart.series.flatMap((s) => s.values.map(Number)).filter((n) => !Number.isNaN(n));
-  const max = niceMax(Math.max(0, ...all));
+  // Counts (pupils, sales) step in whole numbers: never "0.5 pupils".
+  const whole = all.every((v) => Number.isInteger(v));
+  const step = whole ? Math.max(1, Math.ceil(niceMax(Math.max(0, ...all)) / 4)) : 0;
+  const max = whole ? step * 4 : niceMax(Math.max(0, ...all));
   const y = (v) => top + plotH - (Math.max(0, Number(v) || 0) / max) * plotH;
   const n = chart.labels.length;
   const band = plotW / Math.max(1, n);

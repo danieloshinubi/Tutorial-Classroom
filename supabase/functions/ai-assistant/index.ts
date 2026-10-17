@@ -202,7 +202,7 @@ const groqComplete = async (
     const bestFree = usable.some((m) => isBest(m) && (coolingUntil.get(m) || 0) <= now)
       ? 0
       : Math.min(...usable.filter(isBest).map((m) => (coolingUntil.get(m) || 0) - now), Infinity);
-    if (bestFree > 0 && bestFree <= 20_000 && waitedMs + bestFree <= 25_000 && now + bestFree < deadline - 30_000) {
+    if (bestFree > 0 && bestFree <= 8_000 && waitedMs + bestFree <= 12_000 && now + bestFree < deadline - 20_000) {
       waitedMs += bestFree;
       onWait(Math.ceil(bestFree / 1000));
       await new Promise((r) => setTimeout(r, bestFree));
@@ -653,6 +653,8 @@ You can also act, through propose_action. You never act on your own: you propose
 - Look up every id first (find_records), then propose with real ids and a plain one-sentence summary of the effect ("Post 'PTA meeting on Friday' to all parents and email it").
 - One action per propose_action call. For several steps, propose the first; after the person confirms, you will see "[Done] ..." or "[Failed] ..." and can propose the next.
 - After proposing, stop and let them decide. Never say it is done until you see [Done].
+- "Show me first", "draft", "preview", "don't do anything yet", "let me see it": write the draft out in your answer as text and do NOT call propose_action. Propose only after they approve it ("ok", "go ahead", "create it").
+- Never write that a chart or button "has been displayed" or "is shown below"; they appear by themselves.
 - "[Done] X" means X has happened. Never propose X again (it would happen twice); reply in one short line and propose only the NEXT step, if there is one.
 - If they only asked a question, answer it; do not propose actions they did not ask for.
 - For anything else the app does (results sheets, voiding a sale, recalculating an exam, waiving a document...), find_functions finds the school's own database function for it: run_report runs the read-only ones straight away; propose call_function for the ones that change something.
@@ -821,11 +823,11 @@ const TOOLS = [
   },
   {
     name: "school_report",
-    description: `Exact figures, worked out by Schoolivio the way its pages do, for this person. ALWAYS use this first for these topics; never add up, filter by date or calculate them yourself. Reports: fees (term_id? default current term): billed, collected, still owed, overpaid by kind of bill, application fees beside, who owes most | payroll_month (month? YYYY-MM, default this month): one month's gross, PAYE, pension (staff and school share), NHF, net, top earners | paye_estimate (monthly_gross, pension? default true, nhf_on_basic?, annual_rent?): PAYE worked exactly as Payroll does | store (from?, to? YYYY-MM-DD, default this month): sales, takings, profit, low stock | calendar (from?, to?): term dates, events and recent notices; the ONLY dates on record | classes: classes this session, form teachers, pupils per class | attendance (from?, to?, default this month): present/absent by class, pupils absent most | checks: things that look wrong (overpaid or duplicate bills, payments waiting, low stock, payroll jumps)`,
+    description: `Exact figures, worked out by Schoolivio the way its pages do, for this person. ALWAYS use this first for these topics; never add up, filter by date or calculate them yourself. Reports: fees (term_id? default current term): billed, collected, still owed, overpaid by kind of bill, application fees beside, who owes most | payroll_month (month? YYYY-MM, default this month): one month's gross, PAYE, pension (staff and school share), NHF, net, top earners | paye_estimate (monthly_gross, pension? default true, nhf_on_basic?, annual_rent?): PAYE worked exactly as Payroll does | store (from?, to? YYYY-MM-DD, default this month): sales, takings, profit, low stock | calendar (from?, to?): term dates, events and recent notices; the ONLY dates on record | classes: classes this session, form teachers, pupils per class | attendance (from?, to?, default this month): present/absent by class, pupils absent most | checks: things that look wrong (overpaid or duplicate bills, payments waiting, low stock, payroll jumps) | courses: EVERY course at once: teachers, pupils, exams (published/draft, open/close), assignments and due dates, stream activity; use for any question across courses | health: the whole school at a glance (fees, payroll, attendance, store, problems, next 14 days, exams closing); use for how are we doing, a summary or a morning brief`,
     input_schema: {
       type: "object",
       properties: {
-        report: { type: "string", enum: ["fees", "payroll_month", "paye_estimate", "store", "calendar", "classes", "attendance", "checks"] },
+        report: { type: "string", enum: ["fees", "payroll_month", "paye_estimate", "store", "calendar", "classes", "attendance", "checks", "courses", "health"] },
         term_id: { type: "string" }, month: { type: "string" }, from: { type: "string" }, to: { type: "string" },
         monthly_gross: { type: "number" }, pension: { type: "boolean" }, nhf_on_basic: { type: "number" }, annual_rent: { type: "number" },
       },
@@ -866,7 +868,7 @@ const STATUS: Record<string, (input: Record<string, unknown>) => string> = {
   describe_action: () => "Checking how to do that",
   find_functions: (i) => `Looking for how to ${String(i.search || "do that")}`,
   run_report: (i) => `Running ${String(i.function || "the report").replace(/_/g, " ")}`,
-  school_report: (i) => ({ fees: "Checking the fees", payroll_month: "Checking payroll", paye_estimate: "Working out the tax", store: "Checking the store", calendar: "Checking the calendar", classes: "Checking the classes", attendance: "Checking attendance", checks: "Looking for anything wrong" } as Record<string, string>)[String(i.report)] || "Checking the figures",
+  school_report: (i) => ({ fees: "Checking the fees", payroll_month: "Checking payroll", paye_estimate: "Working out the tax", store: "Checking the store", calendar: "Checking the calendar", classes: "Checking the classes", attendance: "Checking attendance", checks: "Looking for anything wrong", courses: "Going through every course", health: "Putting the school summary together" } as Record<string, string>)[String(i.report)] || "Checking the figures",
 };
 
 class ToolError extends Error {}
@@ -951,8 +953,48 @@ const withMoney = (value: unknown, currency: string, key = ""): unknown => {
   return value;
 };
 
+// Private numbers are masked in every tool result, the way the app's own
+// pages show them (Payroll: ••••6789), whatever the model asked for: a
+// select of every column ("*") brought back a full account number
+// (2026-10-17). Secrets are removed outright.
+const MASK_KEY = /(account_number|account_no|acct_no|bank_account|rsa_pin|^tin$|bvn|^nin$|national_id|card_number|iban)/i;
+const DROP_KEY = /(secret|token|password|passcode|api_key|private_key|p256dh|refresh|access_key|signing|key_hash)/i;
+const masked = (v: unknown) => {
+  const t = String(v ?? "").replace(/\s+/g, "");
+  return t.length > 4 ? `••••${t.slice(-4)}` : t ? "••••" : t;
+};
+const scrub = (value: unknown, key = ""): unknown => {
+  if (MASK_KEY.test(key) && value !== null && value !== undefined && typeof value !== "object") return masked(value);
+  if (Array.isArray(value)) return value.map((v) => scrub(v, key));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([k]) => !DROP_KEY.test(k))
+        .map(([k, v]) => [k, scrub(v, k)]),
+    );
+  }
+  // Long digit runs inside free text (a note quoting an account number).
+  if (typeof value === "string" && /\b\d{10,}\b/.test(value) && !/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    return value.replace(/\b\d{10,}\b/g, (m) => masked(m));
+  }
+  return value;
+};
+// Empty fields cost the free models space and say nothing.
+const prune = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(prune);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => v !== null && v !== undefined && v !== "" && !(Array.isArray(v) && v.length === 0))
+        .map(([k, v]) => [k, prune(v)]),
+    );
+  }
+  return value;
+};
+
 const clipJson = (value: unknown, max = 60_000) => {
-  const text = JSON.stringify(max < 20_000 ? compact(value) : value);
+  const safe = scrub(value);
+  const text = JSON.stringify(max < 20_000 ? compact(safe) : safe);
   return text.length > max ? `${text.slice(0, max)}… [cut short: ask for fewer columns or rows]` : text;
 };
 
@@ -1304,12 +1346,14 @@ const assistant = async (
           classes: ["ai_classes", { target_school: school.id }],
           attendance: ["ai_attendance", { target_school: school.id, from_date: day(args.from), to_date: day(args.to) }],
           checks: ["ai_checks", { target_school: school.id }],
+          courses: ["ai_courses", { target_school: school.id }],
+          health: ["ai_health", { target_school: school.id }],
         };
         const call = calls[report];
         if (!call) throw new ToolError(`Unknown report. Use one of: ${Object.keys(calls).join(", ")}.`);
         const { data, error } = await caller.rpc(call[0], call[1]);
         if (error) throw new ToolError(error.message);
-        return { error: false, content: clipJson(withMoney(data, school.currency || "NGN"), useGroq ? 9_000 : 60_000) };
+        return { error: false, content: clipJson(withMoney(prune(data), school.currency || "NGN"), useGroq ? 14_000 : 60_000) };
       }
       if (name === "run_report") {
         const fns = await loadFunctions(admin);
@@ -1470,8 +1514,8 @@ const assistant = async (
     fn("open_page", "Show a button opening a Schoolivio page.", { path: { type: "string" }, label: { type: "string" } }, ["path", "label"]),
     fn("describe_action", "The params an action takes.", { action: { type: "string", enum: ACTION_NAMES } }, ["action"]),
     fn("find_functions", "Search the school's database functions by what they do.", { search: { type: "string" } }, ["search"]),
-    fn("school_report", `Exact figures from Schoolivio. ALWAYS use first for: fees (term_id? default current term): billed, collected, still owed, overpaid by kind of bill, application fees beside, who owes most | payroll_month (month? YYYY-MM, default this month): one month's gross, PAYE, pension (staff and school share), NHF, net, top earners | paye_estimate (monthly_gross, pension? default true, nhf_on_basic?, annual_rent?): PAYE worked exactly as Payroll does | store (from?, to? YYYY-MM-DD, default this month): sales, takings, profit, low stock | calendar (from?, to?): term dates, events and recent notices; the ONLY dates on record | classes: classes this session, form teachers, pupils per class | attendance (from?, to?, default this month): present/absent by class, pupils absent most | checks: things that look wrong (overpaid or duplicate bills, payments waiting, low stock, payroll jumps)`, {
-      report: { type: "string", enum: ["fees", "payroll_month", "paye_estimate", "store", "calendar", "classes", "attendance", "checks"] },
+    fn("school_report", `Exact figures from Schoolivio. ALWAYS use first for: fees (term_id? default current term): billed, collected, still owed, overpaid by kind of bill, application fees beside, who owes most | payroll_month (month? YYYY-MM, default this month): one month's gross, PAYE, pension (staff and school share), NHF, net, top earners | paye_estimate (monthly_gross, pension? default true, nhf_on_basic?, annual_rent?): PAYE worked exactly as Payroll does | store (from?, to? YYYY-MM-DD, default this month): sales, takings, profit, low stock | calendar (from?, to?): term dates, events and recent notices; the ONLY dates on record | classes: classes this session, form teachers, pupils per class | attendance (from?, to?, default this month): present/absent by class, pupils absent most | checks: things that look wrong (overpaid or duplicate bills, payments waiting, low stock, payroll jumps) | courses: EVERY course at once: teachers, pupils, exams (published/draft, open/close), assignments and due dates, stream activity; use for any question across courses | health: the whole school at a glance (fees, payroll, attendance, store, problems, next 14 days, exams closing); use for how are we doing, a summary or a morning brief`, {
+      report: { type: "string", enum: ["fees", "payroll_month", "paye_estimate", "store", "calendar", "classes", "attendance", "checks", "courses", "health"] },
       term_id: { type: "string" }, month: { type: "string", description: "YYYY-MM" }, from: { type: "string", description: "YYYY-MM-DD" }, to: { type: "string", description: "YYYY-MM-DD" },
       monthly_gross: { type: "number" }, pension: { type: "boolean" }, nhf_on_basic: { type: "number" }, annual_rent: { type: "number" },
     }, ["report"]),
@@ -1536,6 +1580,8 @@ How to think (do this every time):
 
 Actions, the right way:
 - The Confirm card IS the question. When the person asks you to do something, propose it straight away; never ask "Shall I...?" in words first.
+- "Show me first", "draft", "preview", "don't do anything yet", "let me see it": write the draft out in your answer as text and do NOT call propose_action. Propose only after they approve it ("ok", "go ahead", "create it").
+- Never write that a chart or button "has been displayed" or "is shown below"; they appear by themselves.
 - Exactly ONE propose_action per reply. Never propose the same thing twice.
 - After "[Done] X": X has happened. Reply in one short line; propose only the NEXT step if there is one. After "[Failed] X": say why in plain words and what to change.
 - If the person says yes/ok/go ahead to something you described but did not propose, propose it now, once.
@@ -1545,7 +1591,9 @@ Examples:
 - "Who hasn't paid this term?" / "How much have we collected?" -> school_report fees. Answer with the figures it gives, a table of who owes, largest first.
 - "This month's payroll?" -> school_report payroll_month. "PAYE on 300k?" -> school_report paye_estimate with monthly_gross 300000.
 - "When is mid-term?" / "What's coming up?" -> school_report calendar. "Pupils in JS1A?" -> school_report classes.
-- "Anything wrong?" / "Give me a summary" -> school_report checks (and fees).
+- "Anything wrong?" -> school_report checks. "How are we doing?" / "Give me a summary" / "Morning brief" -> school_report health.
+- "Which exams are still drafts?" / "Assignments due this week across all courses?" / "Which courses have no stream posts?" -> school_report courses (one call covers every course).
+- "What needs restocking?" / "What's in stock?" -> school_report store (stock and restock lists).
 - "Open a ticket: the dashboard is not loading" -> propose_action create_ticket { subject: "Dashboard not loading", description: what they said, priority: medium } in this same reply.
 - "Show attendance this month as a chart" -> summarize_records on attendance_records (filter school_id, session_at from the 1st of this month), group_by status, date_bucket session_at by day, metric count; then show_chart.
 
@@ -1611,14 +1659,23 @@ ${context}`;
           let failedLookups = 0;
           let emptyHandedOver = false;
 
+          // Answer within about 75 seconds: past that, one last round with no
+          // more lookups, answering from what was found (2026-10-17: questions
+          // ran to "(Stopped.)" after three or four minutes).
+          const startedAt = Date.now();
+          let finalRound = false;
           for (let round = 0; round < 10; round++) {
             if (req.signal.aborted) break;
+            if (!finalRound && (Date.now() - startedAt > 75_000 || round === 9)) {
+              finalRound = true;
+              chat.push({ role: "user", content: "Time is short: answer now from what you have found so far. If something could not be checked, say so in one line and suggest a narrower question. Do not look anything else up." });
+            }
             if (handOver) console.log("assistant: gemini takes over", handOver);
             const result = await groqComplete(
-              { max_tokens: 2048, temperature: 0.2, tools: groqTools, tool_choice: "auto", parallel_tool_calls: true, messages: chat },
+              { max_tokens: 2048, temperature: 0.2, tools: groqTools, tool_choice: finalRound ? "none" : "auto", parallel_tool_calls: true, messages: chat },
               (t) => send({ type: "text", text: t }),
               () => send({ type: "status", text: "Still working on it" }),
-              deadline,
+              finalRound ? Math.min(deadline, Date.now() + 30_000) : deadline,
               { prefer: handOver ? ["gemini:"] : [], images },
             );
             answeredBy = result.model || answeredBy;
